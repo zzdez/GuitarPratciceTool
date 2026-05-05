@@ -44,10 +44,11 @@ from download_service import DownloadService
 from music_api import MusicAPI
 
 app = FastAPI()
-SETLIST_FILE = os.path.join(get_data_dir(), "setlist.json")
+WEB_LINKS_FILE = os.path.join(get_data_dir(), "web_links.json")
+SETLIST_FILE = WEB_LINKS_FILE # V60: Backward compatibility, YouTube/Web links now unified
+SETLIST_V2_FILE = os.path.join(get_data_dir(), "setlists.json") # New real setlists
 APPS_FILE = os.path.join(get_data_dir(), "apps.json")
 LOCAL_LIB_FILE = os.path.join(get_data_dir(), "local_lib.json")
-WEB_LINKS_FILE = os.path.join(get_data_dir(), "web_links.json")
 
 library_manager = LibraryManager(LOCAL_LIB_FILE) # V55: Force same file as server
 metadata_service = MetadataService()
@@ -119,6 +120,75 @@ async def debug_log(data: Dict):
     msg = data.get("msg", "")
     logging.warning(f"[BROWSER] {msg}")
     return {"status": "ok"}
+
+@app.post("/api/midi/send_string")
+async def api_midi_send_string(data: Dict):
+    """
+    Parses a MIDI command string and sends it to all active outputs.
+    Format: "CH:1,PC:12; CH:1,CC:50,127"
+    """
+    cmd_str = data.get("command", "")
+    if not cmd_str: return {"status": "empty"}
+    
+    if not hasattr(app.state, "midi_manager") or not app.state.midi_manager:
+        raise HTTPException(status_code=500, detail="MidiManager not available")
+
+    mgr = app.state.midi_manager
+    messages = []
+    
+    try:
+        # Split by semicolon for multiple messages
+        parts = cmd_str.split(';')
+        for part in parts:
+            part = part.strip()
+            if not part: continue
+            
+            # Default values
+            channel = 0
+            msg_type = None
+            params = {}
+            
+            # Parse key:value pairs
+            kv_pairs = part.split(',')
+            for kv in kv_pairs:
+                if ':' not in kv: continue
+                key, val = kv.split(':', 1)
+                key = key.strip().upper()
+                val = val.strip()
+                
+                if key == 'CH': channel = max(0, min(15, int(val) - 1))
+                elif key == 'PC': 
+                    msg_type = 'program_change'
+                    params['program'] = max(0, min(127, int(val)))
+                elif key == 'CC':
+                    msg_type = 'control_change'
+                    params['control'] = max(0, min(127, int(val)))
+                elif key == 'VAL':
+                    params['value'] = max(0, min(127, int(val)))
+
+            if msg_type:
+                # Clean up params based on message type
+                if msg_type == 'program_change':
+                    # PC only takes 'program'
+                    final_params = {'program': params.get('program', 0)}
+                elif msg_type == 'control_change':
+                    # CC takes 'control' and 'value'
+                    final_params = {
+                        'control': params.get('control', 0),
+                        'value': params.get('value', 127)
+                    }
+                else:
+                    final_params = params
+
+                msg = mido.Message(msg_type, channel=channel, **final_params)
+                messages.append(msg)
+                print(f"[API MIDI] Broadcasting: {msg}")
+                mgr.send_raw(msg)
+                
+        return {"status": "success", "count": len(messages)}
+    except Exception as e:
+        print(f"[MIDI PARSE ERROR] {e} on '{cmd_str}'")
+        return {"status": "error", "message": str(e)}
 
 @app.on_event("startup")
 async def startup_event():
@@ -3541,6 +3611,73 @@ async def link_bidirectional(data: Dict):
         return {"status": "ok"}
 
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- SETLISTS V2 ENGINE ---
+@app.get("/api/setlists")
+async def get_setlists():
+    """V11: Charge toutes les setlists de concert."""
+    if not os.path.exists(SETLIST_V2_FILE):
+        return []
+    try:
+        with open(SETLIST_V2_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        logging.error(f"[SETLIST_V2] Erreur lecture: {e}")
+        return []
+
+@app.post("/api/setlists")
+async def save_setlist(payload: dict):
+    """V11: Crée ou met à jour une setlist."""
+    try:
+        data = []
+        if os.path.exists(SETLIST_V2_FILE):
+            with open(SETLIST_V2_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        
+        # Identification par ID
+        sl_id = payload.get("id")
+        if not sl_id:
+             import uuid
+             sl_id = f"sl_{uuid.uuid4().hex[:8]}"
+             payload["id"] = sl_id
+        
+        found = False
+        for i, it in enumerate(data):
+            if it.get("id") == sl_id:
+                data[i] = payload
+                found = True
+                break
+        
+        if not found:
+            data.append(payload)
+            
+        with open(SETLIST_V2_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
+        
+        return {"status": "ok", "id": sl_id}
+    except Exception as e:
+        logging.error(f"[SETLIST_V2] Erreur sauvegarde: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/setlists/{sl_id}")
+async def delete_setlist(sl_id: str):
+    """V11: Supprime une setlist."""
+    try:
+        if not os.path.exists(SETLIST_V2_FILE):
+             return {"status": "ok"}
+             
+        with open(SETLIST_V2_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            
+        new_data = [it for it in data if it.get("id") != sl_id]
+        
+        with open(SETLIST_V2_FILE, "w", encoding="utf-8") as f:
+            json.dump(new_data, f, indent=4, ensure_ascii=False)
+            
+        return {"status": "ok"}
+    except Exception as e:
+        logging.error(f"[SETLIST_V2] Erreur suppression: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Static Files Logic
