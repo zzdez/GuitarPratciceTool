@@ -533,6 +533,7 @@ function connectVideoWebSocket() {
         loadLocalFiles(); // Load local early for interconnection
         loadWebLinks();  // Load web links early for interconnection
         loadApps();
+        loadMidiTargets(); // V76
         checkMissingItems(); // Check for orphans on startup
     };
 
@@ -543,10 +544,12 @@ function connectVideoWebSocket() {
         } else if (msg.type === "profile_update") {
             currentProfile = msg.data;
             renderPedalboard(currentProfile);
-            const name = currentProfile ? currentProfile.name : t("web.none");
+            let name = currentProfile ? currentProfile.name : _("web.none");
+            if (name === "Global / Desktop") name = _("web.profile_global");
+            
             const profileLabel = document.getElementById("active-profile");
             if (profileLabel) {
-                profileLabel.innerText = t("web.profile_prefix") + name;
+                profileLabel.innerText = _("web.profile_prefix") + name;
             }
         } else if (msg.type === "dl_progress") {
             const bar = document.getElementById("dl-progress-bar");
@@ -758,11 +761,14 @@ function switchView(viewName) {
 
 // --- SETLISTS V2 (Concert) ---
 let allSetlists = [];
-let currentEditingSetlist = null;
+let midiTargets = {}; // V76: Store MIDI device profiles
+let currentEditingSetlist = { name: "", items: [] };
 
 async function loadAllSetlists() {
     try {
         const res = await fetch("/api/setlists");
+        // Load MIDI targets too
+        fetch("/api/midi/targets").then(r => r.json()).then(data => midiTargets = data);
         if (res.ok) {
             allSetlists = await res.json();
             renderSetlists();
@@ -881,10 +887,10 @@ function renderSetlistEditorItems() {
                         <div style="font-size:0.8em; color:#888; white-space:nowrap; text-overflow:ellipsis; overflow:hidden;">${artist}</div>
                     </div>
                     <div style="display:flex; gap:10px;">
-                        <button class="btn-icon-mini" onclick="toggleSetlistItemOptions(${idx})" title="Options"><i class="ph ph-gear"></i></button>
-                        <button class="btn-icon-mini" onclick="moveSetlistItem(${idx}, -1)" title="Monter"><i class="ph ph-caret-up"></i></button>
-                        <button class="btn-icon-mini" onclick="moveSetlistItem(${idx}, 1)" title="Descendre"><i class="ph ph-caret-down"></i></button>
-                        <button class="btn-icon-mini" onclick="removeSetlistItem(${idx})" style="color:var(--danger); opacity:0.7;" title="Retirer"><i class="ph ph-trash"></i></button>
+                        <button class="btn-icon-mini" onclick="toggleSetlistItemOptions(${idx})" title="${_('setlist.btn_options')}"><i class="ph ph-gear"></i></button>
+                        <button class="btn-icon-mini" onclick="moveSetlistItem(${idx}, -1)" title="${_('setlist.btn_up')}"><i class="ph ph-caret-up"></i></button>
+                        <button class="btn-icon-mini" onclick="moveSetlistItem(${idx}, 1)" title="${_('setlist.btn_down')}"><i class="ph ph-caret-down"></i></button>
+                        <button class="btn-icon-mini" onclick="removeSetlistItem(${idx})" style="color:var(--danger); opacity:0.7;" title="${_('setlist.btn_remove')}"><i class="ph ph-trash"></i></button>
                     </div>
                 </div>
                 
@@ -894,17 +900,17 @@ function renderSetlistEditorItems() {
                         
                         <!-- Transition Group -->
                         <div>
-                            <label style="display:block; color:#666; font-size:0.8em; margin-bottom:4px;">Transition</label>
+                            <label style="display:block; color:#666; font-size:0.8em; margin-bottom:4px;">${_('setlist.lbl_transition')}</label>
                             <select onchange="updateSetlistItemParam(${idx}, 'transition', this.value)" style="background:#111; color:#eee; border:1px solid #444; padding:4px 8px; border-radius:4px;">
-                                <option value="MANUAL" ${slot.transition === 'MANUAL' ? 'selected' : ''}>Pause (Manuel)</option>
-                                <option value="AUTO" ${slot.transition === 'AUTO' ? 'selected' : ''}>Auto (Délai)</option>
-                                <option value="IMMEDIATE" ${slot.transition === 'IMMEDIATE' ? 'selected' : ''}>Enchaîné</option>
+                                <option value="MANUAL" ${slot.transition === 'MANUAL' ? 'selected' : ''}>${_('setlist.trans_manual')}</option>
+                                <option value="AUTO" ${slot.transition === 'AUTO' ? 'selected' : ''}>${_('setlist.trans_auto')}</option>
+                                <option value="IMMEDIATE" ${slot.transition === 'IMMEDIATE' ? 'selected' : ''}>${_('setlist.trans_immediate')}</option>
                             </select>
                         </div>
 
                         <!-- Wait Time Group -->
                         <div id="wait-time-group-${idx}" style="display:${slot.transition === 'AUTO' ? 'block' : 'none'};">
-                            <label style="display:block; color:#666; font-size:0.8em; margin-bottom:4px;">Attente (sec)</label>
+                            <label style="display:block; color:#666; font-size:0.8em; margin-bottom:4px;">${_('setlist.lbl_wait_time')}</label>
                             <input type="number" value="${slot.wait_time || 5}" min="0" max="60" style="width:60px; background:#111; color:#eee; border:1px solid #444; padding:4px 8px; border-radius:4px;" onchange="updateSetlistItemParam(${idx}, 'wait_time', parseInt(this.value))">
                         </div>
 
@@ -937,7 +943,7 @@ function renderSetlistEditorItems() {
                         </div>
                         
                         <!-- MIDI ONLOAD -->
-                        <div style="flex:1; min-width:200px;">
+                        <div style="flex:1; min-width:240px;">
                             <label style="display:block; color:var(--accent); font-size:0.8em; margin-bottom:4px; font-weight:bold;">
                                 <i class="ph ph-command"></i> MIDI On-Load (V70)
                             </label>
@@ -946,17 +952,79 @@ function renderSetlistEditorItems() {
                                        onchange="updateSetlistItemParam(${idx}, 'midi_onload', this.value)"
                                        placeholder="ex: CH:1,PC:12"
                                        style="flex:1; background:#111; color:#eee; border:1px solid #444; padding:5px 8px; border-radius:4px; box-sizing:border-box;">
-                                <button class="btn-icon-mini" onclick="testSetlistMidi(${idx})" title="Tester l'envoi" style="height:31px; width:35px; background:rgba(var(--accent-rgb), 0.2); border:1px solid var(--accent);">
+                                
+                                <button class="btn-icon-mini" onclick="toggleMidiHelper(${idx})" title="${_('setlist.midi_helper_title')}" style="height:31px; width:35px; background:rgba(255,255,255,0.05); border:1px solid #444;">
+                                    <i class="ph ph-calculator"></i>
+                                </button>
+
+                                <button class="btn-icon-mini" onclick="testSetlistMidi(${idx})" title="${_('setlist.btn_test_midi')}" style="height:31px; width:35px; background:rgba(var(--accent-rgb), 0.2); border:1px solid var(--accent);">
                                     <i class="ph ph-play" style="font-size:10px;"></i>
                                 </button>
+                            </div>
+                            <!-- MIDI HELPER CONTAINER -->
+                            <div id="midi-helper-${idx}" style="display:none; margin-top:8px; padding:10px; background:rgba(255,255,255,0.05); border-radius:4px; border:1px solid #333;">
+                                <div style="display:flex; gap:8px; align-items:center;">
+                                    <select id="midi-helper-device-${idx}" onchange="updateMidiHelperActions(${idx}); calcMidiHelper(${idx})" style="flex:1; background:#000; color:#ccc; border:1px solid #444; font-size:0.8em;">
+                                        ${Object.keys(midiTargets).map(name => `<option value="${name}">${name}</option>`).join("")}
+                                        <option value="custom">${_('web.none')} / Custom</option>
+                                    </select>
+                                    <button class="btn-icon-mini" onclick="openMidiDeviceEditor(document.getElementById('midi-helper-device-${idx}').value)" title="Modifier ce profil" style="background:#222;"><i class="ph ph-gear-six"></i></button>
+                                    <button class="btn-icon-mini" onclick="openMidiDeviceEditor(null)" title="Ajouter un nouvel appareil" style="background:rgba(var(--accent-rgb), 0.2); color:var(--accent); border:1px solid var(--accent);"><i class="ph ph-plus-circle"></i></button>
+                                </div>
+
+                                <!-- ACTION SELECTOR (NEW V76) -->
+                                <div id="midi-helper-action-row-${idx}" style="display:flex; gap:8px; align-items:center; margin-top:8px;">
+                                    <span style="font-size:0.8em; color:#888;">Action:</span>
+                                    <select id="midi-helper-action-${idx}" onchange="updateMidiHelperFields(${idx}); calcMidiHelper(${idx})" style="flex:1; background:#000; color:#ccc; border:1px solid #444; font-size:0.8em;">
+                                        <!-- Populated by updateMidiHelperActions -->
+                                    </select>
+                                </div>
+
+                                <!-- DYNAMIC FIELDS (CALC, RANGE, FIXED) -->
+                                <div id="midi-helper-fields-${idx}" style="margin-top:8px; border-top:1px solid #333; padding-top:8px;">
+                                    <!-- Calculator for Presets -->
+                                    <div id="midi-helper-calc-fields-${idx}" style="display:flex; align-items:center; gap:8px;">
+                                        <span style="font-size:0.8em; color:#888;">${_('setlist.midi_helper_preset')}</span>
+                                        <input type="number" id="midi-helper-preset-${idx}" placeholder="ex: 260" 
+                                               style="width:70px; background:#000; color:var(--accent); border:1px solid #444; padding:2px 5px; border-radius:2px;"
+                                               oninput="calcMidiHelper(${idx})">
+                                    </div>
+                                    
+                                    <!-- CC Range Slider -->
+                                    <div id="midi-helper-range-fields-${idx}" style="display:none; align-items:center; gap:8px;">
+                                        <input type="range" id="midi-helper-range-${idx}" min="0" max="127" value="0" style="flex:1;" oninput="this.nextElementSibling.innerText=this.value; calcMidiHelper(${idx})">
+                                        <span style="font-size:0.8em; color:var(--accent); min-width:25px;">0</span>
+                                    </div>
+                                </div>
+                                <!-- CUSTOM FIELDS -->
+                                <div id="midi-helper-custom-fields-${idx}" style="display:none; margin-top:8px; border-top:1px solid #333; padding-top:8px; gap:10px; flex-wrap:wrap;">
+                                    <div style="flex:1; min-width:80px;">
+                                        <label style="font-size:0.7em; color:#666; display:block;">${_('setlist.midi_helper_bank_size')}</label>
+                                        <input type="number" id="midi-helper-bank-size-${idx}" value="128" oninput="calcMidiHelper(${idx})" style="width:100%; background:#000; color:#eee; border:1px solid #444; font-size:0.8em; padding:2px;">
+                                    </div>
+                                    <div style="flex:1; min-width:80px;">
+                                        <label style="font-size:0.7em; color:#666; display:block;">${_('setlist.midi_helper_offset')}</label>
+                                        <select id="midi-helper-offset-${idx}" onchange="calcMidiHelper(${idx})" style="width:100%; background:#000; color:#eee; border:1px solid #444; font-size:0.8em;">
+                                            <option value="1">${_('setlist.midi_helper_offset_1')}</option>
+                                            <option value="0">${_('setlist.midi_helper_offset_0')}</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div id="midi-helper-result-${idx}" style="margin-top:8px; font-family:monospace; color:var(--accent); font-size:0.9em; text-align:center; padding:4px; background:rgba(0,0,0,0.3); border-radius:3px;">
+                                    --
+                                </div>
+                                <div style="display:flex; gap:5px; margin-top:8px;">
+                                    <button onclick="applyMidiHelper(${idx}, 'replace')" style="flex:1; background:#444; color:#fff; border:1px solid #666; padding:4px; font-size:0.7em; cursor:pointer; text-transform:uppercase;">${_('setlist.midi_helper_apply_replace')}</button>
+                                    <button onclick="applyMidiHelper(${idx}, 'append')" title="Ajouter après (multi-commande)" style="flex:1; background:rgba(var(--accent-rgb),0.2); color:var(--accent); border:1px solid var(--accent); padding:4px; font-size:0.7em; cursor:pointer; text-transform:uppercase;">${_('setlist.midi_helper_apply_append')}</button>
+                                </div>
                             </div>
                         </div>
 
                         <!-- Repères Config -->
                         <div style="flex:1; min-width:140px; display:flex; flex-direction:column; justify-content:flex-end;">
-                            <label style="display:block; color:#666; font-size:0.8em; margin-bottom:4px;">Repères & Décomptes</label>
+                            <label style="display:block; color:#666; font-size:0.8em; margin-bottom:4px;">${_('setlist.lbl_cues')}</label>
                             <button onclick="openSetlistItemCues(${idx})" style="width:100%; background:var(--accent); color:white; border:none; padding:6px; border-radius:4px; cursor:pointer; font-weight:bold; display:flex; align-items:center; justify-content:center; gap:8px;">
-                                <i class="ph ph-bell-ringing"></i> Configurer
+                                <i class="ph ph-bell-ringing"></i> ${_('setlist.btn_configure_cues')}
                             </button>
                         </div>
 
@@ -964,11 +1032,12 @@ function renderSetlistEditorItems() {
 
                     <!-- Multipiste Overrides (Stems) -->
                     ${item && item.is_multitrack ? `
-                        <div style="margin-top:15px; padding-top:15px; border-top:1px solid #333;">
-                            <label style="display:block; color:#666; font-size:0.8em; margin-bottom:10px;">Mute Stems (Live Mix)</label>
-                            <div id="stems-override-${idx}" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap:8px;">
+                        <div style="margin-top:15px; padding-top:10px; border-top:1px solid #333;">
+                            <button onclick="this.nextElementSibling.style.display = (this.nextElementSibling.style.display==='none'?'grid':'none')" style="background:transparent; border:none; color:#666; font-size:0.8em; cursor:pointer; padding:5px 0; display:flex; align-items:center; gap:5px;">
+                                <i class="ph ph-caret-down"></i> Mute Stems (Live Mix)
+                            </button>
+                            <div id="stems-override-${idx}" style="display:none; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap:8px; margin-top:10px;">
                                 ${(() => {
-                                    // V63: Robust stem detection
                                     const stems = item.stems || item.file_list || [];
                                     if (stems.length === 0) return '<div style="color:#555; font-style:italic; font-size:0.8em;">Aucun stem détecté. Jouez le morceau une fois pour scanner le dossier.</div>';
                                     
@@ -976,7 +1045,7 @@ function renderSetlistEditorItems() {
                                         const fileName = typeof f === 'string' ? f : f.name;
                                         const isMuted = slot.muted_stems && slot.muted_stems.includes(fileName);
                                         return `
-                                            <label style="display:flex; align-items:center; gap:5px; background:rgba(0,0,0,0.3); padding:4px 8px; border-radius:4px; cursor:pointer; font-size:0.9em; ${isMuted ? 'color:var(--danger); border-color:var(--danger);' : ''} border:1px solid transparent;">
+                                            <label style="display:flex; align-items:center; gap:5px; background:rgba(0,0,0,0.3); padding:4px 8px; border-radius:4px; cursor:pointer; font-size:0.9em; ${isMuted ? 'color:var(--danger);' : ''} border:1px solid ${isMuted ? 'var(--danger)' : '#333'};">
                                                 <input type="checkbox" ${isMuted ? 'checked' : ''} onchange="toggleStemMuteOverride(${idx}, '${fileName.replace(/'/g, "\\'")}', this.checked)">
                                                 <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${fileName}">${fileName.split('.').shift()}</span>
                                             </label>
@@ -1006,6 +1075,17 @@ function toggleStemMuteOverride(idx, fileName, isMuted) {
     }
     
     renderSetlistEditorItems(); // Refresh for colors
+}
+
+function toggleMidiHelper(idx) {
+    const el = document.getElementById(`midi-helper-${idx}`);
+    if (el) {
+        const isOpening = el.style.display === 'none';
+        el.style.display = isOpening ? 'block' : 'none';
+        if (isOpening) {
+            updateMidiHelperActions(idx);
+        }
+    }
 }
 
 function toggleSetlistItemOptions(idx) {
@@ -9495,6 +9575,321 @@ function testSetlistMidi(idx) {
     sendMidiCommand(cmd);
 }
 
+// --- MIDI HELPER LOGIC (V74) ---
+function toggleMidiHelper(idx) {
+    const helper = document.getElementById(`midi-helper-${idx}`);
+    if (helper) {
+        helper.style.display = (helper.style.display === 'none') ? 'block' : 'none';
+    }
+}
+
+async function loadMidiTargets() {
+    try {
+        const res = await fetch("/api/midi/targets");
+        if (res.ok) {
+            midiTargets = await res.json();
+        }
+    } catch (e) {
+        console.error("[MIDI] Error loading targets:", e);
+    }
+}
+
+function updateMidiHelperActions(idx) {
+    const deviceName = document.getElementById(`midi-helper-device-${idx}`).value;
+    const actionSelect = document.getElementById(`midi-helper-action-${idx}`);
+    if (!actionSelect) return;
+
+    actionSelect.innerHTML = "";
+    
+    if (deviceName === "custom") {
+        actionSelect.innerHTML = `<option value="preset">Calculateur Preset (Bank/PC)</option>`;
+    } else if (midiTargets[deviceName]) {
+        const dev = midiTargets[deviceName];
+        dev.actions.forEach((act, actIdx) => {
+            const opt = document.createElement("option");
+            opt.value = actIdx;
+            opt.innerText = act.name;
+            actionSelect.appendChild(opt);
+        });
+    }
+
+    updateMidiHelperFields(idx);
+}
+
+function updateMidiHelperFields(idx) {
+    const deviceName = document.getElementById(`midi-helper-device-${idx}`).value;
+    const actionVal = document.getElementById(`midi-helper-action-${idx}`).value;
+    
+    const calcFields = document.getElementById(`midi-helper-calc-fields-${idx}`);
+    const rangeFields = document.getElementById(`midi-helper-range-fields-${idx}`);
+    const customArea = document.getElementById(`midi-helper-custom-fields-${idx}`);
+
+    // Reset visibility
+    calcFields.style.display = "none";
+    rangeFields.style.display = "none";
+    customArea.style.display = (deviceName === 'custom') ? 'flex' : 'none';
+
+    if (deviceName === "custom") {
+        calcFields.style.display = "flex";
+    } else if (midiTargets[deviceName]) {
+        const action = midiTargets[deviceName].actions[actionVal];
+        if (action.type === "calc") calcFields.style.display = "flex";
+        if (action.type === "cc_range") rangeFields.style.display = "flex";
+    }
+}
+
+async function loadMidiTargets() {
+    try {
+        const res = await fetch("/api/midi/targets");
+        if (res.ok) {
+            midiTargets = await res.json();
+        }
+    } catch (e) {
+        console.error("[MIDI] Error loading targets:", e);
+    }
+}
+
+function updateMidiHelperActions(idx) {
+    const deviceName = document.getElementById(`midi-helper-device-${idx}`).value;
+    const actionSelect = document.getElementById(`midi-helper-action-${idx}`);
+    if (!actionSelect) return;
+
+    actionSelect.innerHTML = "";
+    
+    if (deviceName === "custom") {
+        actionSelect.innerHTML = `<option value="preset">Calculateur Preset (Bank/PC)</option>`;
+    } else if (midiTargets[deviceName]) {
+        const dev = midiTargets[deviceName];
+        dev.actions.forEach((act, actIdx) => {
+            const opt = document.createElement("option");
+            opt.value = actIdx;
+            opt.innerText = act.name;
+            actionSelect.appendChild(opt);
+        });
+    }
+
+    updateMidiHelperFields(idx);
+}
+
+function updateMidiHelperFields(idx) {
+    const deviceName = document.getElementById(`midi-helper-device-${idx}`).value;
+    const actionVal = document.getElementById(`midi-helper-action-${idx}`).value;
+    
+    const calcFields = document.getElementById(`midi-helper-calc-fields-${idx}`);
+    const rangeFields = document.getElementById(`midi-helper-range-fields-${idx}`);
+    const customArea = document.getElementById(`midi-helper-custom-fields-${idx}`);
+
+    // Reset visibility
+    calcFields.style.display = "none";
+    rangeFields.style.display = "none";
+    customArea.style.display = (deviceName === 'custom') ? 'flex' : 'none';
+
+    if (deviceName === "custom") {
+        calcFields.style.display = "flex";
+    } else if (midiTargets[deviceName]) {
+        const action = midiTargets[deviceName].actions[actionVal];
+        if (action && action.type === "calc") calcFields.style.display = "flex";
+        if (action && action.type === "cc_range") rangeFields.style.display = "flex";
+    }
+}
+
+function toggleMidiHelper(idx) {
+    const el = document.getElementById(`midi-helper-${idx}`);
+    if (el) {
+        const isOpening = el.style.display === 'none';
+        el.style.display = isOpening ? 'block' : 'none';
+        if (isOpening) {
+            updateMidiHelperActions(idx);
+        }
+    }
+}
+
+function calcMidiHelper(idx) {
+    const deviceName = document.getElementById(`midi-helper-device-${idx}`).value;
+    const actionVal = document.getElementById(`midi-helper-action-${idx}`).value;
+    const resultDiv = document.getElementById(`midi-helper-result-${idx}`);
+    
+    if (deviceName === "custom") {
+        // Legacy calculation
+        const presetNum = parseInt(document.getElementById(`midi-helper-preset-${idx}`).value);
+        if (isNaN(presetNum)) { resultDiv.innerText = "--"; return; }
+        
+        const bankSize = parseInt(document.getElementById(`midi-helper-bank-size-${idx}`).value) || 128;
+        const startOffset = parseInt(document.getElementById(`midi-helper-offset-${idx}`).value);
+        
+        const zeroBased = presetNum - startOffset;
+        if (zeroBased < 0) { resultDiv.innerText = "Error: Below Offset"; return; }
+        
+        const bank = Math.floor(zeroBased / bankSize);
+        const pc = zeroBased % bankSize;
+        resultDiv.innerText = bank > 0 ? `CH:1,CC:0,VAL:${bank}; PC:${pc}` : `CH:1,PC:${pc}`;
+        return;
+    }
+
+    if (!midiTargets[deviceName]) return;
+    const dev = midiTargets[deviceName];
+    const action = dev.actions[actionVal];
+    if (!action) return;
+
+    if (action.type === "fixed") {
+        resultDiv.innerText = action.cmd;
+    } else if (action.type === "calc") {
+        const presetNum = parseInt(document.getElementById(`midi-helper-preset-${idx}`).value);
+        if (isNaN(presetNum)) { resultDiv.innerText = "--"; return; }
+        const zeroBased = presetNum - dev.start_offset;
+        const bank = Math.floor(zeroBased / dev.bank_size);
+        const pc = zeroBased % dev.bank_size;
+        const bankOffset = action.bank_val_offset || 0;
+        resultDiv.innerText = bank > 0 ? `CH:1,CC:${action.cc},VAL:${bank + bankOffset}; PC:${pc}` : `CH:1,PC:${pc}`;
+    } else if (action.type === "cc_range") {
+        const val = document.getElementById(`midi-helper-range-${idx}`).value;
+        resultDiv.innerText = `CH:1,CC:${action.cc},VAL:${val}`;
+    }
+}
+
+function applyMidiHelper(idx, mode = 'replace') {
+    const resultDiv = document.getElementById(`midi-helper-result-${idx}`);
+    const input = document.getElementById(`setlist-midi-input-${idx}`);
+    
+    const cmd = resultDiv.innerText;
+    if (cmd === "--" || cmd.startsWith("Error")) return;
+
+    if (mode === 'replace') {
+        input.value = cmd;
+    } else {
+        // Append mode
+        const current = input.value.trim();
+        if (current) {
+            input.value = current + "; " + cmd;
+        } else {
+            input.value = cmd;
+        }
+    }
+    
+    // Trigger save
+    updateSetlistItemParam(idx, 'midi_onload', input.value);
+}
+
+// --- MIDI DEVICE EDITOR (V77) ---
+let mdeCurrentDevice = null;
+let mdeActions = [];
+
+function openMidiDeviceEditor(name = null) {
+    const modal = document.getElementById('modal-midi-device-editor');
+    if (!modal) return;
+
+    if (name && midiTargets[name]) {
+        mdeCurrentDevice = name;
+        const dev = midiTargets[name];
+        document.getElementById('mde-name').value = dev.name;
+        document.getElementById('mde-channel').value = dev.channel || 1;
+        document.getElementById('mde-bank-size').value = dev.bank_size || 128;
+        document.getElementById('mde-offset').value = dev.start_offset !== undefined ? dev.start_offset : 1;
+        mdeActions = JSON.parse(JSON.stringify(dev.actions || []));
+    } else {
+        mdeCurrentDevice = null;
+        document.getElementById('mde-name').value = "";
+        document.getElementById('mde-channel').value = 1;
+        document.getElementById('mde-bank-size').value = 128;
+        document.getElementById('mde-offset').value = 1;
+        mdeActions = [];
+    }
+
+    renderMdeActions();
+    modal.showModal();
+}
+
+function renderMdeActions() {
+    const list = document.getElementById('mde-actions-list');
+    list.innerHTML = "";
+
+    mdeActions.forEach((act, i) => {
+        const row = document.createElement('div');
+        row.style.cssText = "background:#222; border:1px solid #444; border-radius:6px; padding:15px; display:flex; flex-direction:column; gap:10px;";
+        row.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <input type="text" value="${act.name}" placeholder="Nom de l'action (ex: Tuner)" oninput="mdeActions[${i}].name=this.value" style="flex:1; background:#000; color:var(--accent); border:1px solid #333; padding:5px; font-weight:bold;">
+                <button onclick="removeMdeAction(${i})" class="btn-icon-mini" style="color:var(--danger); margin-left:10px;"><i class="ph ph-x-circle"></i></button>
+            </div>
+            <div style="display:grid; grid-template-columns: 150px 1fr; gap:10px; align-items:center;">
+                <select onchange="mdeActions[${i}].type=this.value; renderMdeActions()" style="background:#111; color:#eee; border:1px solid #444; padding:4px;">
+                    <option value="fixed" ${act.type==='fixed'?'selected':''}>Commande Fixe</option>
+                    <option value="calc" ${act.type==='calc'?'selected':''}>Calculateur Preset</option>
+                    <option value="cc_range" ${act.type==='cc_range'?'selected':''}>Slider CC (Range)</option>
+                </select>
+                <div id="mde-act-fields-${i}">
+                    ${act.type === 'fixed' ? `
+                        <input type="text" value="${act.cmd||''}" placeholder="ex: CH:1,PC:122" oninput="mdeActions[${i}].cmd=this.value" style="width:100%; background:#000; border:1px solid #333; color:#ccc; padding:4px;">
+                    ` : act.type === 'calc' ? `
+                        <div style="display:flex; gap:10px; align-items:center;">
+                            <span style="font-size:0.8em; color:#888;">Bank CC (ex: 0):</span>
+                            <input type="number" value="${act.cc||0}" oninput="mdeActions[${i}].cc=parseInt(this.value)" style="width:60px; background:#000; color:white; border:1px solid #333; padding:4px;">
+                            <span style="font-size:0.8em; color:#888;">Offset Bank (ex: 0):</span>
+                            <input type="number" value="${act.bank_val_offset||0}" oninput="mdeActions[${i}].bank_val_offset=parseInt(this.value)" style="width:60px; background:#000; color:white; border:1px solid #333; padding:4px;">
+                        </div>
+                    ` : `
+                        <div style="display:flex; gap:10px; align-items:center;">
+                            <span style="font-size:0.8em; color:#888;">Numéro CC:</span>
+                            <input type="number" value="${act.cc||0}" oninput="mdeActions[${i}].cc=parseInt(this.value)" style="width:60px; background:#000; color:white; border:1px solid #333; padding:4px;">
+                        </div>
+                    `}
+                </div>
+            </div>
+        `;
+        list.appendChild(row);
+    });
+}
+
+function addMdeAction() {
+    mdeActions.push({ name: "New Action", type: "fixed", cmd: "" });
+    renderMdeActions();
+}
+
+function removeMdeAction(i) {
+    mdeActions.splice(i, 1);
+    renderMdeActions();
+}
+
+async function saveMdeDevice() {
+    const name = document.getElementById('mde-name').value.trim();
+    if (!name) return alert("Please enter a device name.");
+
+    const data = {
+        name: name,
+        channel: parseInt(document.getElementById('mde-channel').value) || 1,
+        bank_size: parseInt(document.getElementById('mde-bank-size').value) || 128,
+        start_offset: parseInt(document.getElementById('mde-offset').value),
+        actions: mdeActions
+    };
+
+    try {
+        const res = await fetch(`/api/midi/targets/${encodeURIComponent(name)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        if (res.ok) {
+            await loadMidiTargets();
+            document.getElementById('modal-midi-device-editor').close();
+            renderSetlistEditorItems(); // Refresh selects
+        }
+    } catch (e) { console.error(e); }
+}
+
+async function deleteMdeDevice() {
+    const name = document.getElementById('mde-name').value;
+    if (!name || !confirm(`Delete profile for ${name}?`)) return;
+
+    try {
+        const res = await fetch(`/api/midi/targets/${encodeURIComponent(name)}`, { method: 'DELETE' });
+        if (res.ok) {
+            await loadMidiTargets();
+            document.getElementById('modal-midi-device-editor').close();
+            renderSetlistEditorItems();
+        }
+    } catch (e) { console.error(e); }
+}
+
 function checkCues(time) {
     
     const isPlaying = (currentActivePlayer === 'local' && !document.getElementById('html5-player').paused) || 
@@ -12265,7 +12660,7 @@ function initLayoutEngine() {
                 if (nextTitleEl) nextTitleEl.innerText = nextItem ? nextItem.title : "---";
                 if (nextTrackArea) nextTrackArea.style.opacity = "1";
             } else {
-                if (nextTitleEl) nextTitleEl.innerText = (typeof t !== "undefined") ? t("web.lbl_end_of_setlist") : "END OF SETLIST";
+                if (nextTitleEl) nextTitleEl.innerText = _("web.lbl_end_of_setlist");
                 if (nextTrackArea) nextTrackArea.style.opacity = "0.3";
             }
         }

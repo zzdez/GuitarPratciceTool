@@ -35,16 +35,16 @@
             <div id="global-video-info" style="display: none; align-items: center; justify-content: center; gap: 15px; width: 100%; min-width: 0;">
                                 <div style="display:flex; align-items:center; gap:5px; max-width:40vw;">
                     <span id="global-video-title" style="font-weight: bold; font-size: 1.05em; color: white; white-space: nowrap; text-overflow: ellipsis; overflow: hidden;">Titre de la vidéo</span>
-                    <button id="btn-edit-active-media" onclick="openActiveMediaModal()" class="btn-icon-small" title="Éditer le média" style="color:#666; font-size:1.1em; background:transparent; border:none; cursor:pointer;">
+                    <button id="btn-edit-active-media" onclick="openActiveMediaModal()" class="btn-icon-small" data-i18n-title="web.btn_edit_media" title="Éditer le média" style="color:#666; font-size:1.1em; background:transparent; border:none; cursor:pointer;">
                         <i class="ph ph-note-pencil"></i>
                     </button>
-                    <button id="btn-refresh-active-media" onclick="refreshActiveMediaMetadata()" class="btn-icon-small" title="Rafraîchir l'affichage" style="color:#666; font-size:1.1em; background:transparent; border:none; cursor:pointer;">
+                    <button id="btn-refresh-active-media" onclick="refreshActiveMediaMetadata()" class="btn-icon-small" data-i18n-title="web.btn_refresh" title="Rafraîchir l'affichage" style="color:#666; font-size:1.1em; background:transparent; border:none; cursor:pointer;">
                         <i class="ph ph-arrows-clockwise"></i>
                     </button>
                 </div>
                 <div style="display: flex; gap: 8px; font-size: 0.85em; color: var(--accent); align-items: center; white-space: nowrap;">
                     <span id="global-video-bpm" class="metadata-badge" style="display: none;">🎵 <span class="val"></span> BPM</span>
-                    <div id="header-smart-scale-pill" onclick="toggleFretboard()" title="Ouvrir le Manche" style="cursor:pointer; display:flex; align-items:center; gap:5px;">
+                    <div id="header-smart-scale-pill" onclick="toggleFretboard()" data-i18n-title="web.title_fretboard" title="Ouvrir le Manche" style="cursor:pointer; display:flex; align-items:center; gap:5px;">
                         <i class="ph ph-music-notes"></i>
                         <span id="header-smart-scale-text"></span>
                     </div>
@@ -63,10 +63,10 @@
         <!-- COL 4: Status Bar / Buttons -->
         <div class="status-bar" style="display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; min-width: 300px; justify-content: flex-end; flex-shrink: 0;">
             <button id="btn-remote-native" class="btn-icon" onclick="toggleNativeRemote()" data-i18n-title="web.btn_remote" title="Télécommande"><i class="ph ph-device-mobile"></i></button>
-            <button id="btn-toggle-metronome" class="btn-icon" onclick="toggleMetronomeUI()" title="Métronome"><i class="ph ph-metronome"></i></button>
-            <button id="btn-toggle-drum-machine" class="btn-icon" onclick="openDrumModal()" title="Boîte-Rythmes"><i class="ph ph-speaker-hifi"></i></button>
-            <button id="btn-toggle-fretboard" class="btn-icon" onclick="toggleFretboard()" title="Gammes"><i class="ph ph-grid-nine"></i></button>
-            <button id="btn-global-cue-add" class="btn-icon" onclick="openCueModal()" title="Repère" style="color:#888;"><i class="ph ph-flag"></i></button>
+            <button id="btn-toggle-metronome" class="btn-icon" onclick="toggleMetronomeUI()" data-i18n-title="web.title_metronome" title="Métronome"><i class="ph ph-metronome"></i></button>
+            <button id="btn-toggle-drum-machine" class="btn-icon" onclick="openDrumModal()" data-i18n-title="web.title_drum_machine" title="Boîte-Rythmes"><i class="ph ph-speaker-hifi"></i></button>
+            <button id="btn-toggle-fretboard" class="btn-icon" onclick="toggleFretboard()" data-i18n-title="web.title_fretboard" title="Gammes"><i class="ph ph-grid-nine"></i></button>
+            <button id="btn-global-cue-add" class="btn-icon" onclick="openCueModal()" data-i18n-title="web.btn_cue_add" title="Repère" style="color:#888;"><i class="ph ph-flag"></i></button>
             
             <div class="header-separator" style="width:1px; height:18px; background:#444; margin:0 5px;"></div>
 
@@ -80,13 +80,13 @@
                 <i class="ph ph-monitor-play"></i>
             </button>
 
-            <button id="btn-live-mode" class="btn-icon" onclick="toggleLiveMode()" title="Live Performance Mode (Override)" style="color: #888;">
+            <button id="btn-live-mode" class="btn-icon" onclick="toggleLiveMode()" data-i18n-title="setlist.btn_live_mode" title="Live Performance Mode (Override)" style="color: #888;">
                 <i class="ph ph-broadcast"></i>
             </button>
-            <button id="btn-cockpit" class="btn-icon" onclick="toggleCockpitMode(true)" title="Mode Live (Cockpit)" style="color:var(--accent); font-weight:bold;"><i class="ph ph-gauge"></i></button>
-            <button id="btn-toggle-theater" class="btn-icon" onclick="toggleTheaterMode()" title="Théâtre"><i class="ph ph-corners-out"></i></button>
-            <span id="active-profile" style="white-space: nowrap; font-size: 0.8em; color: #ccc;">Profil : Global</span>
-            <button id="btn-settings" class="btn-icon" onclick="openSettingsModal()" title="Paramètres"><i class="ph ph-gear"></i></button>
+            <button id="btn-cockpit" class="btn-icon" onclick="toggleCockpitMode(true)" data-i18n-title="setlist.btn_cockpit_mode" title="Mode Live (Cockpit)" style="color:var(--accent); font-weight:bold;"><i class="ph ph-gauge"></i></button>
+            <button id="btn-toggle-theater" class="btn-icon" onclick="toggleTheaterMode()" data-i18n-title="web.btn_theater" title="Théâtre"><i class="ph ph-corners-out"></i></button>
+            <span id="active-profile" data-i18n="web.profile_prefix" style="white-space: nowrap; font-size: 0.8em; color: #ccc;">Profil : Global</span>
+            <button id="btn-settings" class="btn-icon" onclick="openSettingsModal()" data-i18n-title="web.btn_settings" title="Paramètres"><i class="ph ph-gear"></i></button>
         </div>
 
     </header>
@@ -3165,9 +3165,9 @@
     <!-- MODAL: SETLIST EDITOR (Large) -->
     <dialog id="modal-setlist-editor" style="width: 90vw; max-width: 1200px; height: 85vh;">
         <div class="modal-header">
-            <input type="text" id="edit-setlist-name" class="title-input-ghost" style="font-size:1.5em; font-weight:bold; background:transparent; border:none; color:white; width: 60%;" placeholder="Nom de la Setlist">
+            <input type="text" id="edit-setlist-name" class="title-input-ghost" style="font-size:1.5em; font-weight:bold; background:transparent; border:none; color:white; width: 60%;" data-i18n-placeholder="setlist.lbl_setlist_name_placeholder" placeholder="Nom de la Setlist">
             <div style="display:flex; gap:10px; align-items:center;">
-                <button class="btn-icon" onclick="saveCurrentSetlist()" title="Enregistrer"><i class="ph ph-floppy-disk"></i></button>
+                <button class="btn-icon" onclick="saveCurrentSetlist()" data-i18n-title="web.btn_save" title="Enregistrer"><i class="ph ph-floppy-disk"></i></button>
                 <button class="btn-close" onclick="document.getElementById('modal-setlist-editor').close()">×</button>
             </div>
         </div>
@@ -3181,11 +3181,11 @@
                     
                     <!-- Barre de Filtres de Type -->
                     <div style="display:flex; gap:5px; margin-bottom:10px;">
-                        <button class="btn-filter-mini active" onclick="setLibFilterType('all', this)" title="Tous"><i class="ph ph-squares-four"></i></button>
-                        <button class="btn-filter-mini" onclick="setLibFilterType('audio', this)" title="Audio"><i class="ph ph-music-note"></i></button>
-                        <button class="btn-filter-mini" onclick="setLibFilterType('video', this)" title="Vidéo"><i class="ph ph-video-camera"></i></button>
-                        <button class="btn-filter-mini" onclick="setLibFilterType('multitrack', this)" title="Multipiste"><i class="ph ph-layers"></i></button>
-                        <button class="btn-filter-mini" onclick="setLibFilterType('youtube', this)" title="YouTube"><i class="ph ph-youtube-logo"></i></button>
+                        <button class="btn-filter-mini active" onclick="setLibFilterType('all', this)" data-i18n-title="web.none"><i class="ph ph-squares-four"></i></button>
+                        <button class="btn-filter-mini" onclick="setLibFilterType('audio', this)" data-i18n-title="web.lbl_interconnect_audio"><i class="ph ph-music-note"></i></button>
+                        <button class="btn-filter-mini" onclick="setLibFilterType('video', this)" data-i18n-title="web.lbl_interconnect_video"><i class="ph ph-video-camera"></i></button>
+                        <button class="btn-filter-mini" onclick="setLibFilterType('multitrack', this)" data-i18n-title="web.lbl_interconnect_multitrack"><i class="ph ph-layers"></i></button>
+                        <button class="btn-filter-mini" onclick="setLibFilterType('youtube', this)" data-i18n-title="web.menu_setlist"><i class="ph ph-youtube-logo"></i></button>
                     </div>
 
                     <input type="text" id="setlist-search-lib" placeholder="..." onkeyup="filterLibForSetlist()" style="width:100%;">
@@ -3193,8 +3193,8 @@
                     <!-- Header de Tri -->
                     <div style="display:flex; padding:8px 10px; margin-top:10px; font-size:0.75em; font-weight:bold; color:#666; border-bottom:1px solid #222;">
                         <div style="width:30px;"></div> <!-- Icon placeholder -->
-                        <div style="flex:1; cursor:pointer;" onclick="setLibSort('title')">TITRE <i class="ph ph-caret-up-down"></i></div>
-                        <div style="width:120px; cursor:pointer;" onclick="setLibSort('artist')">ARTISTE <i class="ph ph-caret-up-down"></i></div>
+                        <div style="flex:1; cursor:pointer;" onclick="setLibSort('title')"><span data-i18n="setlist.col_title">TITRE</span> <i class="ph ph-caret-up-down"></i></div>
+                        <div style="width:120px; cursor:pointer;" onclick="setLibSort('artist')"><span data-i18n="setlist.col_artist">ARTISTE</span> <i class="ph ph-caret-up-down"></i></div>
                     </div>
                 </div>
                 <div id="setlist-lib-results" style="flex:1; overflow-y:auto; padding: 10px;">
@@ -3241,7 +3241,7 @@
                     <div style="font-size:0.8em; color:#666; text-transform:uppercase; font-weight:bold; letter-spacing:1px;" data-i18n="web.lbl_position">POSITION</div>
                     <div id="cockpit-setlist-pos" style="font-size:1.2em; color:#eee;">-- / --</div>
                 </div>
-                <button onclick="toggleCockpitMode(false)" style="background:rgba(255,255,255,0.05); color:#888; border:1px solid #444; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:bold; transition:all 0.2s;" data-i18n="web.btn_exit_cockpit">QUITTER</button>
+                <button onclick="toggleCockpitMode(false)" style="background:rgba(255,255,255,0.05); color:#888; border:1px solid #444; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:bold; transition:all 0.2s;" data-i18n="setlist.cockpit_quit">QUITTER</button>
             </div>
         </div>
 
@@ -3268,7 +3268,7 @@
                 <div id="cockpit-time" style="font-size:3.5em; font-family: 'JetBrains Mono', monospace; color:#eee; font-weight:bold;">00:00 / 00:00</div>
                 <div style="display:flex; gap:40px; align-items:center;">
                     <div id="cockpit-next-track" style="text-align:right;">
-                        <div style="font-size:0.8em; color:#666; text-transform:uppercase; font-weight:bold; letter-spacing:1px;" data-i18n="web.lbl_next_track">PROCHAIN TITRE</div>
+                        <div style="font-size:0.8em; color:#666; text-transform:uppercase; font-weight:bold; letter-spacing:1px;" data-i18n="setlist.cockpit_next_title">PROCHAIN TITRE</div>
                         <div id="cockpit-next-title" style="font-size:2em; color:white; font-weight:bold;">---</div>
                     </div>
                     <button onclick="nextSetlistTrack()" style="background:var(--accent); color:white; width:90px; height:90px; border-radius:50%; border:none; cursor:pointer; font-size:3em; display:flex; align-items:center; justify-content:center; box-shadow: 0 0 30px rgba(var(--accent-rgb), 0.5); transition:transform 0.2s;" onmousedown="this.style.transform='scale(0.9)'" onmouseup="this.style.transform='scale(1)'">
@@ -3286,6 +3286,62 @@
         </div>
 
     </div>
+    </div>
+
+    <!-- MIDI DEVICE EDITOR MODAL (V77) -->
+    <dialog id="modal-midi-device-editor" class="preview-modal" style="width: 800px; max-height: 85vh; background: #1a1a1a; color: #eee; border: 1px solid #444; border-radius: 12px; padding: 0; overflow: hidden; flex-direction: column;">
+        <div class="modal-header" style="padding: 20px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="margin: 0; font-size: 1.2em; color: var(--accent);"><i class="ph ph-gear"></i> MIDI Target Device Editor</h3>
+            <button onclick="document.getElementById('modal-midi-device-editor').close()" class="btn-close">×</button>
+        </div>
+        <div class="modal-body" style="padding: 25px; overflow-y: auto; flex: 1;">
+            
+            <!-- Global Config -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 25px; padding-bottom: 20px; border-bottom: 1px solid #333;">
+                <div>
+                    <label style="display:block; font-size:0.8em; color:#888; margin-bottom:5px;">Device Name</label>
+                    <input type="text" id="mde-name" placeholder="ex: Kemper Profiler" style="width:100%; background:#111; color:white; border:1px solid #444; padding:8px; border-radius:4px;">
+                </div>
+                <div>
+                    <label style="display:block; font-size:0.8em; color:#888; margin-bottom:5px;">MIDI Channel (1-16)</label>
+                    <input type="number" id="mde-channel" value="1" min="1" max="16" style="width:100%; background:#111; color:white; border:1px solid #444; padding:8px; border-radius:4px;">
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <div style="flex:1;">
+                        <label style="display:block; font-size:0.8em; color:#888; margin-bottom:5px;">Bank Size</label>
+                        <input type="number" id="mde-bank-size" value="128" style="width:100%; background:#111; color:white; border:1px solid #444; padding:8px; border-radius:4px;">
+                    </div>
+                    <div style="flex:1;">
+                        <label style="display:block; font-size:0.8em; color:#888; margin-bottom:5px;">Offset</label>
+                        <select id="mde-offset" style="width:100%; background:#111; color:white; border:1px solid #444; padding:8px; border-radius:4px; height:36px;">
+                            <option value="0">0 (0-127)</option>
+                            <option value="1">1 (1-128)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions List -->
+            <div style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+                <h4 style="margin:0; font-size:1em; color:#ccc;">MIDI Actions</h4>
+                <button onclick="addMdeAction()" class="btn-primary" style="padding: 5px 15px; font-size: 0.8em;"><i class="ph ph-plus"></i> Add Action</button>
+            </div>
+            
+            <div id="mde-actions-list" style="display: flex; flex-direction: column; gap: 10px;">
+                <!-- Dynamically populated -->
+            </div>
+
+        </div>
+        <div class="modal-footer" style="padding: 20px; border-top: 1px solid #333; display: flex; justify-content: space-between; gap: 15px;">
+            <button onclick="deleteMdeDevice()" class="btn-danger" style="padding: 10px 20px; border-radius: 6px; display:flex; align-items:center; gap:8px;">
+                <i class="ph ph-trash"></i> Delete Device
+            </button>
+            <div style="display:flex; gap:10px;">
+                <button onclick="document.getElementById('modal-midi-device-editor').close()" class="btn-text" style="padding: 10px 20px;">Cancel</button>
+                <button onclick="saveMdeDevice()" class="btn-primary" style="padding: 10px 30px; border-radius: 6px;">Save Device Profile</button>
+            </div>
+        </div>
+    </dialog>
 </body>
 
 </html>
