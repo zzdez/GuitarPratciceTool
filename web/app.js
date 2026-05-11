@@ -1198,18 +1198,18 @@ function filterLibForSetlist() {
         const category = it.category ? `<span style="font-size:9px; background:rgba(255,255,255,0.1); color:#aaa; padding:1px 4px; border-radius:3px; margin-right:6px; text-transform:uppercase;">${it.category}</span>` : "";
 
         return `
-            <div class="lib-item-mini" onclick="addMediaToSetlist('${it.uid}')" style="padding:8px 10px; margin-bottom:4px; background:rgba(255,255,255,0.02); border-radius:6px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; transition:background 0.2s; border:1px solid rgba(255,255,255,0.03);">
+            <div class="lib-item-mini" onclick="addMediaToSetlist('${it.uid}')" style="padding:6px 10px; margin-bottom:4px; background:rgba(255,255,255,0.02); border-radius:6px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; transition:background 0.2s; border:1px solid rgba(255,255,255,0.03);">
                 <div style="flex:1; overflow:hidden; display:flex; align-items:center; gap:10px;">
-                    <i class="${iconClass}" style="color:var(--accent); font-size:1.2em; min-width:20px;"></i>
+                    <i class="${iconClass}" style="color:var(--accent); font-size:1.15em; min-width:20px;"></i>
                     <div style="overflow:hidden;">
                         <div style="display:flex; align-items:center; overflow:hidden;">
                             ${category}
-                            <span style="font-weight:bold; font-size:0.85em; white-space:nowrap; text-overflow:ellipsis; overflow:hidden;">${it.title}</span>
+                            <span style="font-weight:bold; font-size:0.9em; white-space:nowrap; text-overflow:ellipsis; overflow:hidden;">${it.title}</span>
                         </div>
-                        <div style="font-size:0.75em; color:#666; white-space:nowrap; text-overflow:ellipsis; overflow:hidden;">${it.artist || "Artiste inconnu"}</div>
+                        <div style="font-size:0.8em; color:#666; white-space:nowrap; text-overflow:ellipsis; overflow:hidden;">${it.artist || "Artiste inconnu"}</div>
                     </div>
                 </div>
-                <i class="ph ph-plus-circle" style="color:var(--accent); font-size:1.3em; margin-left:10px; opacity:0.6;"></i>
+                <i class="ph ph-plus-circle" style="color:var(--accent); font-size:1.25em; margin-left:10px; opacity:0.6;"></i>
             </div>
         `;
     }).join("");

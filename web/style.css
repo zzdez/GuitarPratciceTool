@@ -3174,25 +3174,67 @@ input[type="color"].stem-color-input::-moz-color-swatch {
     border-bottom: 2px solid #333;
 }
 
-/* MINI ICON BUTTONS (V77) */
+/* MINI ICON BUTTONS (V77) - Harmonized to 31px */
 .btn-icon-mini {
     background: rgba(255,255,255,0.05);
     border: 1px solid rgba(255,255,255,0.1);
     color: #aaa;
     cursor: pointer;
-    padding: 2px 6px;
+    width: 35px;
+    height: 31px;
     font-size: 1.1em;
     transition: all 0.2s;
     border-radius: 4px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    box-sizing: border-box;
 }
 
 .btn-icon-mini:hover {
     color: white;
     background: rgba(255,255,255,0.1);
     border-color: var(--accent);
+}
+
+/* FILTER MINI BUTTONS (V80) - Harmonized to 31px */
+.btn-filter-mini {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #666;
+    cursor: pointer;
+    flex: 1;
+    height: 31px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s;
+    font-size: 1.1em;
+    box-sizing: border-box;
+}
+
+.btn-filter-mini.active {
+    background: rgba(187, 134, 252, 0.15);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.btn-filter-mini:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.1);
+    color: #aaa;
+}
+
+/* HARMONIZED SEARCH INPUT */
+#setlist-search-lib {
+    height: 31px !important;
+    background: #111 !important;
+    border: 1px solid #444 !important;
+    padding: 0 10px !important;
+    border-radius: 4px !important;
+    font-size: 0.85em !important;
+    color: #eee !important;
+    box-sizing: border-box !important;
 }
 
 /* SETLIST V2 STYLES */
