@@ -15,7 +15,7 @@ let translations = {};
 
 async function loadTranslations(lang) {
     try {
-        const res = await fetch(`/api/locales/${lang}`);
+        const res = await fetch(`/api/locales/${lang}?v=${Date.now()}`);
         if (res.ok) {
             translations = await res.json();
             currentLang = lang;
@@ -9801,36 +9801,51 @@ function openMidiDeviceEditor(name = null) {
 
 function renderMdeActions() {
     const list = document.getElementById('mde-actions-list');
+    if (!list) return;
     list.innerHTML = "";
 
     mdeActions.forEach((act, i) => {
         const row = document.createElement('div');
-        row.style.cssText = "background:#222; border:1px solid #444; border-radius:6px; padding:15px; display:flex; flex-direction:column; gap:10px;";
+        row.style.cssText = "background:#222; border:1px solid #444; border-radius:6px; padding:10px; display:flex; flex-direction:column; gap:8px; transition:all 0.2s; position:relative;";
+        
         row.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <input type="text" value="${act.name}" placeholder="Nom de l'action (ex: Tuner)" oninput="mdeActions[${i}].name=this.value" style="flex:1; background:#000; color:var(--accent); border:1px solid #333; padding:5px; font-weight:bold;">
-                <button onclick="removeMdeAction(${i})" class="btn-icon-mini" style="color:var(--danger); margin-left:10px;"><i class="ph ph-x-circle"></i></button>
+            <!-- Top Row: Name & Delete -->
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                <input type="text" value="${act.name}" placeholder="${t('web.mde.placeholder_action_name')}" oninput="mdeActions[${i}].name=this.value" style="flex:1; background:#000; color:var(--accent); border:1px solid #333; padding:6px 8px; border-radius:4px; font-weight:bold; font-size:0.9em;">
+                <button onclick="removeMdeAction(${i})" class="btn-icon-mini" style="color:var(--danger); background:rgba(207,102,121,0.1); border-color:rgba(207,102,121,0.2); width:28px; height:28px; font-size:0.85em;"><i class="ph ph-trash"></i></button>
             </div>
-            <div style="display:grid; grid-template-columns: 150px 1fr; gap:10px; align-items:center;">
-                <select onchange="mdeActions[${i}].type=this.value; renderMdeActions()" style="background:#111; color:#eee; border:1px solid #444; padding:4px;">
-                    <option value="fixed" ${act.type==='fixed'?'selected':''}>Commande Fixe</option>
-                    <option value="calc" ${act.type==='calc'?'selected':''}>Calculateur Preset</option>
-                    <option value="cc_range" ${act.type==='cc_range'?'selected':''}>Slider CC (Range)</option>
-                </select>
-                <div id="mde-act-fields-${i}">
+
+            <!-- Bottom Row: Type & Parameters -->
+            <div style="display:grid; grid-template-columns: 160px 1fr; gap:12px; align-items:center; padding-top:8px; border-top:1px solid #333;">
+                <div style="display:flex; flex-direction:column; gap:4px;">
+                    <select onchange="mdeActions[${i}].type=this.value; renderMdeActions()" style="width:100%; background:#111; color:#eee; border:1px solid #444; padding:6px; border-radius:4px; cursor:pointer; font-size:0.75em;">
+                        <option value="fixed" ${act.type==='fixed'?'selected':''}>${t('web.mde.type_fixed')}</option>
+                        <option value="calc" ${act.type==='calc'?'selected':''}>${t('web.mde.type_calc')}</option>
+                        <option value="cc_range" ${act.type==='cc_range'?'selected':''}>${t('web.mde.type_cc_range')}</option>
+                    </select>
+                </div>
+                
+                <div id="mde-act-fields-${i}" style="display:flex; align-items:center; min-width:0;">
                     ${act.type === 'fixed' ? `
-                        <input type="text" value="${act.cmd||''}" placeholder="ex: CH:1,PC:122" oninput="mdeActions[${i}].cmd=this.value" style="width:100%; background:#000; border:1px solid #333; color:#ccc; padding:4px;">
+                        <div style="display:flex; align-items:center; gap:8px; width:100%;">
+                            <i class="ph ph-terminal-window" style="color:#666; font-size:0.85em;"></i>
+                            <input type="text" value="${act.cmd||''}" placeholder="ex: CH:1,PC:122" oninput="mdeActions[${i}].cmd=this.value" style="flex:1; background:#000; border:1px solid #333; color:#ccc; padding:6px; border-radius:4px; font-family:monospace; font-size:0.8em; min-width:0;">
+                        </div>
                     ` : act.type === 'calc' ? `
-                        <div style="display:flex; gap:10px; align-items:center;">
-                            <span style="font-size:0.8em; color:#888;">Bank CC (ex: 0):</span>
-                            <input type="number" value="${act.cc||0}" oninput="mdeActions[${i}].cc=parseInt(this.value)" style="width:60px; background:#000; color:white; border:1px solid #333; padding:4px;">
-                            <span style="font-size:0.8em; color:#888;">Offset Bank (ex: 0):</span>
-                            <input type="number" value="${act.bank_val_offset||0}" oninput="mdeActions[${i}].bank_val_offset=parseInt(this.value)" style="width:60px; background:#000; color:white; border:1px solid #333; padding:4px;">
+                        <div style="display:flex; gap:15px; align-items:center; width:100%;">
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <span style="font-size:0.6em; color:#888; text-transform:uppercase; white-space:nowrap;">${t('web.mde.lbl_bank_cc')}</span>
+                                <input type="number" value="${act.cc||0}" oninput="mdeActions[${i}].cc=parseInt(this.value)" style="width:55px; background:#000; color:white; border:1px solid #333; padding:6px; border-radius:4px; font-size:0.8em;">
+                            </div>
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <span style="font-size:0.6em; color:#888; text-transform:uppercase; white-space:nowrap;">${t('web.mde.lbl_bank_offset_short')}</span>
+                                <input type="number" value="${act.bank_val_offset||0}" oninput="mdeActions[${i}].bank_val_offset=parseInt(this.value)" style="width:55px; background:#000; color:white; border:1px solid #333; padding:6px; border-radius:4px; font-size:0.8em;">
+                            </div>
                         </div>
                     ` : `
-                        <div style="display:flex; gap:10px; align-items:center;">
-                            <span style="font-size:0.8em; color:#888;">Numéro CC:</span>
-                            <input type="number" value="${act.cc||0}" oninput="mdeActions[${i}].cc=parseInt(this.value)" style="width:60px; background:#000; color:white; border:1px solid #333; padding:4px;">
+                        <div style="display:flex; align-items:center; gap:8px; width:100%;">
+                            <span style="font-size:0.6em; color:#888; text-transform:uppercase; white-space:nowrap;">${t('web.mde.lbl_cc_num')}</span>
+                            <input type="number" value="${act.cc||0}" oninput="mdeActions[${i}].cc=parseInt(this.value)" style="width:55px; background:#000; color:white; border:1px solid #333; padding:6px; border-radius:4px; font-size:0.8em;">
                         </div>
                     `}
                 </div>

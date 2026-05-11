@@ -573,7 +573,25 @@
         "lbl_end_of_setlist": "End of Setlist",
         "lbl_setlist": "Setlist",
         "lbl_position": "Position",
-        "lbl_next_part_in": "Next part in"
+        "lbl_next_part_in": "Next part in",
+        "mde": {
+            "title": "MIDI Target Device Editor",
+            "lbl_name": "Device Name",
+            "lbl_channel": "MIDI CH (1-16)",
+            "lbl_bank_offset": "Bank / Offset",
+            "lbl_actions": "MIDI Actions",
+            "btn_add_action": "Add Action",
+            "btn_delete_device": "Delete Device",
+            "btn_save": "Save Device Profile",
+            "placeholder_name": "e.g. Kemper, Helix...",
+            "placeholder_action_name": "Action Name (e.g. Tuner)",
+            "type_fixed": "Fixed Command",
+            "type_calc": "Preset Calculator",
+            "type_cc_range": "Slider CC (Range)",
+            "lbl_bank_cc": "Bank CC",
+            "lbl_bank_offset_short": "Bank Offset",
+            "lbl_cc_num": "CC Number"
+        }
     },
     "sync": {
         "title": "Cloud Sync",

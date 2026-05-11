@@ -3187,3 +3187,40 @@ input[type="color"].stem-color-input::-moz-color-swatch {
     background: #181818;
     border-bottom: 2px solid #333;
 }
+
+/* MINI ICON BUTTONS (V77) */
+.btn-icon-mini {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #aaa;
+    cursor: pointer;
+    padding: 2px 6px;
+    font-size: 1.1em;
+    transition: all 0.2s;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-icon-mini:hover {
+    color: white;
+    background: rgba(255,255,255,0.1);
+    border-color: var(--accent);
+}
+
+/* SETLIST V2 STYLES */
+.setlist-card:hover {
+    background: #252525 !important;
+    border-color: var(--accent) !important;
+    transform: translateY(-2px);
+}
+
+.lib-item-mini:hover {
+    background: rgba(255,255,255,0.08) !important;
+}
+
+.title-input-ghost:focus {
+    outline: none;
+    border-bottom: 1px solid var(--accent) !important;
+}
