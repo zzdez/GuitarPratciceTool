@@ -2719,24 +2719,10 @@ dialog::backdrop {
     gap: 10px !important;
 }
 
-.setlist-item input, 
-.setlist-item select, 
-.setlist-item button {
-    height: 28px !important;
-    font-size: 12px !important;
-}
-
-/* MIDI Helper Compact */
+/* MIDI Helper Compact (Styling now handled in app.js or harmonized) */
 [id^="midi-helper-"] {
     margin-top: 5px !important;
     padding: 6px 10px !important;
-}
-
-[id^="midi-helper-"] select,
-[id^="midi-helper-"] button,
-[id^="midi-helper-"] input {
-    height: 24px !important;
-    font-size: 11px !important;
 }
 
 #midi-helper-result-display {

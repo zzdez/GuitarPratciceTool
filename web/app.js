@@ -903,7 +903,7 @@ function renderSetlistEditorItems() {
                             <!-- Transition Group -->
                             <div style="width:140px;">
                                 <label style="display:block; color:#666; font-size:0.8em; margin-bottom:4px;">${_('setlist.lbl_transition')}</label>
-                                <select onchange="updateSetlistItemParam(${idx}, 'transition', this.value)" style="width:100%; background:#111; color:#eee; border:1px solid #444; padding:5px 8px; border-radius:4px;">
+                                <select onchange="updateSetlistItemParam(${idx}, 'transition', this.value)" style="width:100%; background:#111; color:#eee; border:1px solid #444; padding:6px 25px 6px 10px; border-radius:4px; box-sizing:border-box; font-size:13px; vertical-align:middle;">
                                     <option value="MANUAL" ${slot.transition === 'MANUAL' ? 'selected' : ''}>${_('setlist.trans_manual')}</option>
                                     <option value="AUTO" ${slot.transition === 'AUTO' ? 'selected' : ''}>${_('setlist.trans_auto')}</option>
                                     <option value="IMMEDIATE" ${slot.transition === 'IMMEDIATE' ? 'selected' : ''}>${_('setlist.trans_immediate')}</option>
@@ -913,7 +913,7 @@ function renderSetlistEditorItems() {
                             <!-- Wait Time Group -->
                             <div id="wait-time-group-${idx}" style="display:${slot.transition === 'AUTO' ? 'block' : 'none'}; width:80px;">
                                 <label style="display:block; color:#666; font-size:0.8em; margin-bottom:4px;">${_('setlist.lbl_wait_time')}</label>
-                                <input type="number" value="${slot.wait_time || 5}" min="0" max="60" style="width:100%; background:#111; color:#eee; border:1px solid #444; padding:5px 8px; border-radius:4px;" onchange="updateSetlistItemParam(${idx}, 'wait_time', parseInt(this.value))">
+                                <input type="number" value="${slot.wait_time || 5}" min="0" max="60" style="width:100%; height:31px; background:#111; color:#eee; border:1px solid #444; padding:0 8px; border-radius:4px; box-sizing:border-box; font-size:13px;" onchange="updateSetlistItemParam(${idx}, 'wait_time', parseInt(this.value))">
                             </div>
 
                             <!-- MIDI ONLOAD -->
@@ -925,31 +925,31 @@ function renderSetlistEditorItems() {
                                     <input type="text" id="setlist-midi-input-${idx}" value="${slot.midi_onload || ''}" 
                                            onchange="updateSetlistItemParam(${idx}, 'midi_onload', this.value)"
                                            placeholder="ex: CH:1,PC:12"
-                                           style="flex:1; background:#111; color:#eee; border:1px solid #444; padding:5px 8px; border-radius:4px; box-sizing:border-box;">
+                                           style="flex:1; height:31px; background:#111; color:#eee; border:1px solid #444; padding:0 10px; border-radius:4px; box-sizing:border-box; font-size:13px;">
                                     
-                                    <button class="btn-icon-mini" onclick="toggleMidiHelper(${idx})" title="${_('setlist.midi_helper_title')}" style="height:31px; width:35px; background:rgba(255,255,255,0.05); border:1px solid #444;">
+                                    <button class="btn-icon-mini" onclick="toggleMidiHelper(${idx})" title="${_('setlist.midi_helper_title')}" style="height:31px; width:35px; background:rgba(255,255,255,0.05); border:1px solid #444; display:flex; align-items:center; justify-content:center;">
                                         <i class="ph ph-calculator"></i>
                                     </button>
 
-                                    <button class="btn-icon-mini" onclick="testSetlistMidi(${idx})" title="${_('setlist.btn_test_midi')}" style="height:31px; width:35px; background:rgba(var(--accent-rgb), 0.2); border:1px solid var(--accent);">
+                                    <button class="btn-icon-mini" onclick="testSetlistMidi(${idx})" title="${_('setlist.btn_test_midi')}" style="height:31px; width:35px; background:rgba(var(--accent-rgb), 0.2); border:1px solid var(--accent); display:flex; align-items:center; justify-content:center;">
                                         <i class="ph ph-play" style="font-size:10px;"></i>
                                     </button>
                                 </div>
                                 <!-- MIDI HELPER CONTAINER -->
                                 <div id="midi-helper-${idx}" style="display:none; margin-top:8px; padding:10px; background:rgba(255,255,255,0.05); border-radius:4px; border:1px solid #333;">
                                     <div style="display:flex; gap:8px; align-items:center;">
-                                        <select id="midi-helper-device-${idx}" onchange="updateMidiHelperActions(${idx}); calcMidiHelper(${idx})" style="flex:1; background:#000; color:#ccc; border:1px solid #444; font-size:0.8em;">
+                                        <select id="midi-helper-device-${idx}" onchange="updateMidiHelperActions(${idx}); calcMidiHelper(${idx})" style="flex:1; background:#000; color:#ccc; border:1px solid #444; padding:6px 25px 6px 10px; border-radius:4px; box-sizing:border-box; font-size:13px; vertical-align:middle;">
                                             ${Object.keys(midiTargets).map(name => `<option value="${name}">${name}</option>`).join("")}
                                             <option value="custom">${_('web.none')} / Custom</option>
                                         </select>
-                                        <button class="btn-icon-mini" onclick="openMidiDeviceEditor(document.getElementById('midi-helper-device-${idx}').value)" title="Modifier ce profil" style="background:#222;"><i class="ph ph-gear-six"></i></button>
-                                        <button class="btn-icon-mini" onclick="openMidiDeviceEditor(null)" title="Ajouter un nouvel appareil" style="background:rgba(var(--accent-rgb), 0.2); color:var(--accent); border:1px solid var(--accent);"><i class="ph ph-plus-circle"></i></button>
+                                        <button class="btn-icon-mini" onclick="openMidiDeviceEditor(document.getElementById('midi-helper-device-${idx}').value)" title="Modifier ce profil" style="height:31px; width:35px; background:#222; border:1px solid #444; display:flex; align-items:center; justify-content:center;"><i class="ph ph-gear-six"></i></button>
+                                        <button class="btn-icon-mini" onclick="openMidiDeviceEditor(null)" title="Ajouter un nouvel appareil" style="height:31px; width:35px; background:rgba(var(--accent-rgb), 0.2); color:var(--accent); border:1px solid var(--accent); display:flex; align-items:center; justify-content:center;"><i class="ph ph-plus-circle"></i></button>
                                     </div>
 
                                     <!-- ACTION SELECTOR (NEW V76) -->
                                     <div id="midi-helper-action-row-${idx}" style="display:flex; gap:8px; align-items:center; margin-top:8px;">
                                         <span style="font-size:0.8em; color:#888;">Action:</span>
-                                        <select id="midi-helper-action-${idx}" onchange="updateMidiHelperFields(${idx}); calcMidiHelper(${idx})" style="flex:1; background:#000; color:#ccc; border:1px solid #444; font-size:0.8em;">
+                                        <select id="midi-helper-action-${idx}" onchange="updateMidiHelperFields(${idx}); calcMidiHelper(${idx})" style="flex:1; background:#000; color:#ccc; border:1px solid #444; padding:6px 25px 6px 10px; border-radius:4px; box-sizing:border-box; font-size:13px; vertical-align:middle;">
                                             <!-- Populated by updateMidiHelperActions -->
                                         </select>
                                     </div>
@@ -960,7 +960,7 @@ function renderSetlistEditorItems() {
                                         <div id="midi-helper-calc-fields-${idx}" style="display:flex; align-items:center; gap:8px;">
                                             <span style="font-size:0.8em; color:#888;">${_('setlist.midi_helper_preset')}</span>
                                             <input type="number" id="midi-helper-preset-${idx}" placeholder="ex: 260" 
-                                                   style="width:70px; background:#000; color:var(--accent); border:1px solid #444; padding:2px 5px; border-radius:2px;"
+                                                   style="width:80px; height:31px; background:#000; color:var(--accent); border:1px solid #444; padding:0 8px; border-radius:4px; box-sizing:border-box; font-size:13px;"
                                                    oninput="calcMidiHelper(${idx})">
                                         </div>
                                         
@@ -974,11 +974,11 @@ function renderSetlistEditorItems() {
                                     <div id="midi-helper-custom-fields-${idx}" style="display:none; margin-top:8px; border-top:1px solid #333; padding-top:8px; gap:10px; flex-wrap:wrap;">
                                         <div style="flex:1; min-width:80px;">
                                             <label style="font-size:0.7em; color:#666; display:block;">${_('setlist.midi_helper_bank_size')}</label>
-                                            <input type="number" id="midi-helper-bank-size-${idx}" value="128" oninput="calcMidiHelper(${idx})" style="width:100%; background:#000; color:#eee; border:1px solid #444; font-size:0.8em; padding:2px;">
+                                            <input type="number" id="midi-helper-bank-size-${idx}" value="128" oninput="calcMidiHelper(${idx})" style="width:100%; height:31px; background:#000; color:#eee; border:1px solid #444; padding:0 8px; border-radius:4px; box-sizing:border-box; font-size:13px;">
                                         </div>
                                         <div style="flex:1; min-width:80px;">
                                             <label style="font-size:0.7em; color:#666; display:block;">${_('setlist.midi_helper_offset')}</label>
-                                            <select id="midi-helper-offset-${idx}" onchange="calcMidiHelper(${idx})" style="width:100%; background:#000; color:#eee; border:1px solid #444; font-size:0.8em;">
+                                            <select id="midi-helper-offset-${idx}" onchange="calcMidiHelper(${idx})" style="width:100%; background:#000; color:#eee; border:1px solid #444; padding:6px 25px 6px 10px; border-radius:4px; box-sizing:border-box; font-size:13px; vertical-align:middle;">
                                                 <option value="1">${_('setlist.midi_helper_offset_1')}</option>
                                                 <option value="0">${_('setlist.midi_helper_offset_0')}</option>
                                             </select>
@@ -988,8 +988,8 @@ function renderSetlistEditorItems() {
                                         --
                                     </div>
                                     <div style="display:flex; gap:5px; margin-top:8px;">
-                                        <button onclick="applyMidiHelper(${idx}, 'replace')" style="flex:1; background:#444; color:#fff; border:1px solid #666; padding:4px; font-size:0.7em; cursor:pointer; text-transform:uppercase;">${_('setlist.midi_helper_apply_replace')}</button>
-                                        <button onclick="applyMidiHelper(${idx}, 'append')" title="Ajouter après (multi-commande)" style="flex:1; background:rgba(var(--accent-rgb),0.2); color:var(--accent); border:1px solid var(--accent); padding:4px; font-size:0.7em; cursor:pointer; text-transform:uppercase;">${_('setlist.midi_helper_apply_append')}</button>
+                                        <button onclick="applyMidiHelper(${idx}, 'replace')" style="flex:1; height:31px; background:#444; color:#fff; border:1px solid #666; border-radius:4px; font-size:0.75em; cursor:pointer; text-transform:uppercase; box-sizing:border-box; display:flex; align-items:center; justify-content:center;">${_('setlist.midi_helper_apply_replace')}</button>
+                                        <button onclick="applyMidiHelper(${idx}, 'append')" title="Ajouter après (multi-commande)" style="flex:1; height:31px; background:rgba(var(--accent-rgb),0.2); color:var(--accent); border:1px solid var(--accent); border-radius:4px; font-size:0.75em; cursor:pointer; text-transform:uppercase; box-sizing:border-box; display:flex; align-items:center; justify-content:center;">${_('setlist.midi_helper_apply_append')}</button>
                                     </div>
                                 </div>
                             </div>
@@ -1007,7 +1007,7 @@ function renderSetlistEditorItems() {
                                         style="flex:1;" 
                                         oninput="this.parentElement.previousElementSibling.querySelector('span').innerText = this.value + '%'"
                                         onchange="updateSetlistItemParam(${idx}, 'volume_override', parseInt(this.value))">
-                                    <button class="btn-icon-mini" onclick="updateSetlistItemParam(${idx}, 'volume_override', undefined); renderSetlistEditorItems();" title="Reset (Défaut)"><i class="ph ph-arrows-counter-clockwise"></i></button>
+                                    <button class="btn-icon-mini" onclick="updateSetlistItemParam(${idx}, 'volume_override', undefined); renderSetlistEditorItems();" title="Reset (Défaut)" style="height:31px; width:35px; display:flex; align-items:center; justify-content:center;"><i class="ph ph-arrows-counter-clockwise"></i></button>
                                 </div>
                             </div>
 
@@ -1021,14 +1021,14 @@ function renderSetlistEditorItems() {
                                         style="flex:1;" 
                                         oninput="this.parentElement.previousElementSibling.querySelector('span').innerText = parseFloat(this.value).toFixed(2) + 'x'"
                                         onchange="updateSetlistItemParam(${idx}, 'speed_override', parseFloat(this.value))">
-                                    <button class="btn-icon-mini" onclick="updateSetlistItemParam(${idx}, 'speed_override', undefined); renderSetlistEditorItems();" title="Reset (Défaut)"><i class="ph ph-arrows-counter-clockwise"></i></button>
+                                    <button class="btn-icon-mini" onclick="updateSetlistItemParam(${idx}, 'speed_override', undefined); renderSetlistEditorItems();" title="Reset (Défaut)" style="height:31px; width:35px; display:flex; align-items:center; justify-content:center;"><i class="ph ph-arrows-counter-clockwise"></i></button>
                                 </div>
                             </div>
                             
                             <!-- Repères Config -->
                             <div style="width:160px; display:flex; flex-direction:column; justify-content:flex-end;">
                                 <label style="display:block; color:#666; font-size:0.8em; margin-bottom:4px;">${_('setlist.lbl_cues')}</label>
-                                <button onclick="openSetlistItemCues(${idx})" style="width:100%; background:var(--accent); color:white; border:none; padding:6px; border-radius:4px; cursor:pointer; font-weight:bold; display:flex; align-items:center; justify-content:center; gap:8px;">
+                                <button onclick="openSetlistItemCues(${idx})" style="width:100%; height:31px; background:var(--accent); color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold; display:flex; align-items:center; justify-content:center; gap:8px; box-sizing:border-box;">
                                     <i class="ph ph-bell-ringing"></i> ${_('setlist.btn_configure_cues')}
                                 </button>
                             </div>
