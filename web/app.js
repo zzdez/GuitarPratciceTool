@@ -793,9 +793,20 @@ function renderSetlists() {
     
     container.innerHTML = allSetlists.map(sl => `
         <div class="setlist-card" onclick="openSetlistEditor('${sl.id}')" style="background:#1a1a1a; border:1px solid #333; border-radius:8px; padding:12px; margin-bottom:10px; cursor:pointer; transition:all 0.2s; display:flex; align-items:center; gap:12px;">
-            <button class="btn-play-setlist" onclick="event.stopPropagation(); startSetlist('${sl.id}')" style="background:var(--accent); color:black; border:none; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:1.2em;">
-                <i class="ph ph-play-fill"></i>
-            </button>
+            <div style="display:flex; gap:6px; flex-shrink:0;">
+                <!-- Normal Mode Button -->
+                <button class="btn-play-setlist" onclick="event.stopPropagation(); startSetlist('${sl.id}')" 
+                        title="Lancer (Vue Normale)" 
+                        style="background:rgba(255,255,255,0.05); color:#aaa; border:1px solid #444; width:36px; height:36px; border-radius:6px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all 0.2s;">
+                    <i class="ph ph-play"></i>
+                </button>
+                <!-- Cockpit Mode Button -->
+                <button class="btn-play-setlist-cockpit" onclick="event.stopPropagation(); startSetlistCockpit('${sl.id}')" 
+                        title="Lancer (Vue Cockpit)" 
+                        style="background:rgba(var(--accent-rgb), 0.15); color:var(--accent); border:1px solid var(--accent); width:36px; height:36px; border-radius:6px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all 0.2s;">
+                    <i class="ph ph-gauge"></i>
+                </button>
+            </div>
             <div style="flex:1; overflow:hidden;">
                 <div style="font-weight:bold; color:white; font-size:1em; white-space:nowrap; text-overflow:ellipsis; overflow:hidden;">${sl.name}</div>
                 <div style="font-size:0.8em; color:#888;">${sl.items ? sl.items.length : 0} ${t("web.lbl_items_count")}</div>
@@ -803,6 +814,15 @@ function renderSetlists() {
             <i class="ph ph-gear" style="color:#444;"></i>
         </div>
     `).join("");
+}
+
+function startSetlistCockpit(id) {
+    // 1. Launch setlist logic
+    startSetlist(id);
+    // 2. Switch to Cockpit view
+    if (typeof toggleCockpitMode === "function") {
+        toggleCockpitMode(true);
+    }
 }
 
 // --- SETLISTS V2 EDITOR ---
@@ -1292,6 +1312,7 @@ function startSetlist(id, startIndex = 0) {
     activeSetlist = sl;
     currentSetlistIndex = startIndex;
     isSetlistMode = true;
+    toggleLiveMode(true); // V80: Auto-activate Live Mode
     
     playSetlistItem(startIndex);
 }
@@ -1300,6 +1321,7 @@ function playSetlistItem(index) {
     if (!activeSetlist || !activeSetlist.items[index]) {
         console.log("Fin de la setlist.");
         isSetlistMode = false;
+        toggleLiveMode(false); // V80: Auto-deactivate Live Mode
         return;
     }
 
@@ -1389,6 +1411,7 @@ function handleMediaEnd() {
     if (nextIndex >= activeSetlist.items.length) {
         console.log("[ORCHESTRATOR] Setlist terminée.");
         isSetlistMode = false;
+        toggleLiveMode(false); // V80: Auto-deactivate Live Mode
         return;
     }
 
@@ -1434,14 +1457,16 @@ function handleMediaEnd() {
     }
 }
 
-function toggleLiveMode() {
-    window.isLiveMode = !window.isLiveMode;
+function toggleLiveMode(forceState = null) {
+    if (forceState !== null) window.isLiveMode = forceState;
+    else window.isLiveMode = !window.isLiveMode;
+
     const btn = document.getElementById("btn-live-mode");
     if (btn) {
         btn.style.color = window.isLiveMode ? "#ff5252" : "#888";
         btn.classList.toggle("active", window.isLiveMode);
     }
-    console.log("[LIVE MODE] Toggled:", window.isLiveMode);
+    console.log("[LIVE MODE] State:", window.isLiveMode);
 }
 
 // Helper pour lancer n'importe quel média par son UID
