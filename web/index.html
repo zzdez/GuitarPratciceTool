@@ -11,6 +11,159 @@
     <script src="lib/wavesurfer-multitrack.min.js"></script>
 
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <style>
+        /* Sizing Settings Modal for V21 Mappings Editor */
+        #settings-modal {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            margin: auto !important;
+            max-width: 1080px !important;
+            width: 95% !important;
+            height: 85vh !important;
+            transform: none !important;
+        }
+        #settings-modal .modal-body {
+            height: calc(85vh - 105px) !important;
+            max-height: calc(85vh - 105px) !important;
+            display: flex;
+        }
+        #settings-modal .settings-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px 15px;
+            font-size: 0.82em;
+        }
+        
+        /* High-density dashboard styles */
+        .controller-section {
+            background: #151515;
+            border: 1px solid #2d2d2d;
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 12px;
+        }
+        .controller-section h5 {
+            margin: 0 0 8px 0;
+            font-size: 0.85em;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid #2d2d2d;
+            padding-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .controller-grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 6px;
+        }
+        .controller-grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 6px;
+        }
+        .controller-form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+        .controller-form-group label {
+            font-size: 0.7em;
+            color: #888;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+        .controller-form-group input, .controller-form-group select {
+            background: #090909;
+            color: #fff;
+            border: 1px solid #333;
+            padding: 4px 6px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            height: 28px;
+            box-sizing: border-box;
+        }
+        .controller-form-group input[type="range"] {
+            padding: 0;
+            height: auto;
+        }
+        .controller-ports-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 4px;
+            max-height: 60px;
+            overflow-y: auto;
+            background: #090909;
+            border: 1px solid #333;
+            padding: 6px;
+            border-radius: 4px;
+        }
+        .controller-port-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.85em;
+            color: #ccc;
+        }
+        .controller-port-item input {
+            margin: 0;
+            width: 12px;
+            height: 12px;
+        }
+        
+        .mappings-table-container {
+            max-height: 250px;
+            overflow-y: auto;
+            border: 1px solid #2d2d2d;
+            border-radius: 4px;
+            background: #090909;
+            margin-top: 6px;
+        }
+        .mappings-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85em;
+        }
+        .mappings-table th, .mappings-table td {
+            padding: 5px 8px;
+            text-align: left;
+            border-bottom: 1px solid #202020;
+        }
+        .mappings-table th {
+            background: #181818;
+            color: #aaa;
+            text-transform: uppercase;
+            font-size: 0.8em;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+        .mappings-table tr:hover td {
+            background: #121212;
+        }
+        .mappings-actions {
+            display: flex;
+            gap: 4px;
+        }
+        .btn-micro {
+            padding: 2px 6px;
+            font-size: 0.85em;
+            height: 20px;
+            line-height: 15px;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
+    </style>
 </head>
 
 <body>
@@ -2078,12 +2231,100 @@
 
                 <!-- TAB: CONTROLLER -->
                 <div id="tab-settings-controller" class="settings-tab" style="display:none;">
-                    <h4 data-i18n="web.lbl_controller_config">Contrôleur</h4>
-                    <p class="hint" data-i18n="web.hint_controller_config" style="margin-bottom:15px;">Utilisez l'éditeur natif pour les boutons.</p>
-                    <div style="text-align:center;">
-                        <button class="btn-primary" onclick="openNativeEditor()" style="padding:10px 20px;" data-i18n="gui.btn_open_editor">
-                            Éditeur Avancé ⚙️
-                        </button>
+                    <!-- SECTION 1: MIDI HARDWARE -->
+                    <div class="controller-section">
+                        <h5 data-i18n="web.lbl_midi_hardware"><i class="ph ph-cpu"></i> Matériel & Connexion MIDI</h5>
+                        <div class="controller-grid-3">
+                            <div class="controller-form-group">
+                                <label data-i18n="web.lbl_connection_mode">Mode de Connexion</label>
+                                <select id="ctrl-connection-mode">
+                                    <option value="BLE">Bluetooth LE</option>
+                                    <option value="USB">USB / Driver Windows</option>
+                                </select>
+                            </div>
+                            <div class="controller-form-group" style="grid-column: span 2;">
+                                <label data-i18n="web.lbl_midi_device_name">Nom du Périphérique (Racine)</label>
+                                <input type="text" id="ctrl-device-name" placeholder="ex: AIRSTEP">
+                            </div>
+                        </div>
+                        <div class="controller-form-group" style="margin-top: 5px;">
+                            <label data-i18n="web.lbl_midi_outputs">Routage des Sorties MIDI (Multi-Output)</label>
+                            <div id="ctrl-outputs-list" class="controller-ports-list">
+                                <!-- Dynamic Checkboxes -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 2: PROFILES & MAPPINGS -->
+                    <div class="controller-section" style="margin-bottom: 0;">
+                        <h5 data-i18n="web.lbl_profile_management"><i class="ph ph-sliders"></i> Gestion des Profils & Mappings</h5>
+                        
+                        <!-- Profile Selection & Actions -->
+                        <div style="display:flex; justify-content: space-between; align-items: flex-end; gap: 10px; margin-bottom: 8px;">
+                            <div class="controller-form-group" style="flex:1;">
+                                <label data-i18n="web.lbl_select_profile">Sélectionner le Profil</label>
+                                <select id="ctrl-profile-select" onchange="onSelectedProfileChange()">
+                                    <!-- Dynamic Options -->
+                                </select>
+                            </div>
+                            <div style="display:flex; gap:5px;">
+                                <button class="btn-primary btn-micro" onclick="addNewProfile()" data-i18n="web.btn_new_profile">+ Nouveau</button>
+                                <button class="btn-secondary btn-micro" onclick="duplicateProfile()" data-i18n="web.btn_duplicate_profile">Dupliquer</button>
+                                <button class="btn-danger btn-micro" style="background:#ff3b30;" onclick="deleteProfile()" data-i18n="web.btn_delete_profile">Supprimer</button>
+                            </div>
+                        </div>
+
+                        <!-- Auto-Switch Context Rules -->
+                        <div style="background: #0d0d0d; border: 1px solid #222; border-radius: 4px; padding: 8px; margin-bottom: 8px;">
+                            <span style="font-size:0.75em; color:var(--accent); font-weight:600; display:block; margin-bottom: 6px; text-transform: uppercase;" data-i18n="web.lbl_rules_autoswitch">Règles d'Auto-Switch (Focalisation)</span>
+                            <div class="controller-grid-3">
+                                <div class="controller-form-group">
+                                    <label data-i18n="web.lbl_target_process">Processus Cible</label>
+                                    <div style="display:flex; gap:4px;">
+                                        <input type="text" id="ctrl-target-process" placeholder="ex: chrome.exe" oninput="markProfileDirty()" style="flex:1;">
+                                        <button class="btn-secondary btn-micro" onclick="captureActiveProcess()" title="Capturer le processus actif" style="height:28px; width:28px; padding:0; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                                            <i class="ph ph-crosshair" style="font-size:1.1em;"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="controller-form-group">
+                                    <label data-i18n="web.lbl_window_title_regex">Titre Fenêtre (Regex)</label>
+                                    <div style="display:flex; gap:4px;">
+                                        <input type="text" id="ctrl-window-filter" placeholder="ex: .*YouTube.*" oninput="markProfileDirty()" style="flex:1;">
+                                        <button class="btn-secondary btn-micro" onclick="captureActiveWindowTitle()" title="Capturer la fenêtre active" style="height:28px; width:28px; padding:0; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                                            <i class="ph ph-crosshair" style="font-size:1.1em;"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="controller-form-group">
+                                    <label><span data-i18n="web.lbl_master_vol_sys">Volume Master</span> (<span id="ctrl-volume-val">100</span>%)</label>
+                                    <div style="display:flex; align-items:center; gap:8px; height: 28px;">
+                                        <input type="range" id="ctrl-target-volume" min="0" max="100" value="100" style="flex:1;" oninput="updateVolumeLabel(); markProfileDirty();">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Mappings Table -->
+                        <div style="display:flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+                            <span style="font-size:0.75em; color:#888; font-weight:600; text-transform: uppercase;" data-i18n="web.lbl_mappings_list">Liste des Mappings (Boutons Physiques)</span>
+                            <button class="btn-primary btn-micro" onclick="openMappingEditor(null)" data-i18n="web.btn_add_mapping">+ Ajouter un Mapping</button>
+                        </div>
+                        <div class="mappings-table-container">
+                            <table class="mappings-table">
+                                <thead>
+                                    <tr>
+                                        <th data-i18n="web.col_mapping_name">Nom</th>
+                                        <th data-i18n="web.col_mapping_midi">Entrée MIDI</th>
+                                        <th data-i18n="web.col_mapping_action">Action Exécutée</th>
+                                        <th style="width: 80px;" data-i18n="web.col_mapping_opts">Options</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="ctrl-mappings-body">
+                                    <!-- Dynamic Rows -->
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
@@ -2108,6 +2349,86 @@
         <div class="modal-footer" style="padding:10px 15px;">
             <button class="btn-text" onclick="closeSettingsModal()" data-i18n="web.btn_cancel">Annuler</button>
             <button class="btn-primary" onclick="saveSettings()" data-i18n="web.btn_save">Enregistrer</button>
+        </div>
+    </dialog>
+
+    <!-- MAPPING EDITOR MODAL -->
+    <dialog id="modal-mapping-editor" class="small-modal" style="max-width: 450px;">
+        <div class="modal-header">
+            <h3 id="mapping-editor-title" data-i18n="web.modal_mapping_title_add">Ajouter un Mapping MIDI</h3>
+            <button onclick="closeMappingEditor()" class="btn-close">×</button>
+        </div>
+        <div class="modal-body" style="padding: 15px; display: flex; flex-direction: column; gap: 12px; font-size: 0.85em;">
+            <div class="controller-form-group">
+                <label data-i18n="web.lbl_mapping_desc">Description du Bouton / Action</label>
+                <input type="text" id="map-name" placeholder="ex: Play / Pause" required>
+            </div>
+            
+            <div class="controller-grid-2">
+                <div class="controller-form-group">
+                    <label data-i18n="web.lbl_mapping_midi_cc">MIDI CC (Numéro)</label>
+                    <input type="number" id="map-cc" min="0" max="127" placeholder="ex: 50" required>
+                </div>
+                <div class="controller-form-group">
+                    <label data-i18n="web.lbl_mapping_midi_ch">Canal MIDI (1-16)</label>
+                    <input type="number" id="map-channel" min="1" max="16" value="1" required>
+                </div>
+            </div>
+
+            <div class="controller-form-group">
+                <label data-i18n="web.lbl_mapping_action_type">Type d'Action</label>
+                <select id="map-action-type" onchange="onMappingTypeChange()">
+                    <option value="keystroke">Raccourci Clavier Physique (Simulation)</option>
+                    <option value="internal">Commande Interne (Moteur Airstep)</option>
+                    <option value="midi_out">Envoi Message MIDI Out</option>
+                </select>
+            </div>
+
+            <!-- Fields for Keyboard Hotkey / scan codes -->
+            <div id="map-field-keystroke" class="controller-form-group">
+                <label data-i18n="web.lbl_mapping_action_val">Valeur / Raccourci Clavier</label>
+                <div style="display:flex; gap:6px;">
+                    <input type="text" id="map-key-name" placeholder="ex: ctrl+alt+space" style="flex:1;">
+                    <button id="btn-record-key" class="btn-secondary" style="height:28px; padding:0 10px; font-size:0.85em;" onclick="recordHardwareKey()">
+                        <i class="ph ph-record"></i> <span data-i18n="web.btn_rec_key">REC</span>
+                    </button>
+                </div>
+                <span id="record-key-status" class="hint" style="color:var(--accent); display:none; margin-top:2px;"></span>
+                <!-- Hidden inputs for scan codes -->
+                <input type="hidden" id="map-scan-code">
+                <input type="hidden" id="map-modifier-scan-codes">
+            </div>
+
+            <!-- Fields for Internal Commands -->
+            <div id="map-field-internal" class="controller-form-group" style="display:none;">
+                <label data-i18n="web.lbl_mapping_action_val">Commande Interne</label>
+                <select id="map-internal-cmd">
+                    <option value="media_play_pause">Play / Pause Média</option>
+                    <option value="media_prev_chapter">Chapitre Précédent</option>
+                    <option value="media_next_chapter">Chapitre Suivant</option>
+                    <option value="media_seek_backward">Reculer de 5 secondes</option>
+                    <option value="media_seek_forward">Avancer de 5 secondes</option>
+                    <option value="media_speed_down">Ralentir Vitesse (-0.05x)</option>
+                    <option value="media_speed_up">Accélérer Vitesse (+0.05x)</option>
+                    <option value="media_pitch_down">Diminuer Pitch (-0.1 demi-tons)</option>
+                    <option value="media_pitch_up">Augmenter Pitch (+0.1 demi-tons)</option>
+                    <option value="media_loop_toggle">Activer / Désactiver Boucle</option>
+                    <option value="media_loop_prev">Boucle Sauvegardée Précédente</option>
+                    <option value="media_loop_next">Boucle Sauvegardée Suivante</option>
+                    <option value="profile_next">Profil Suivant</option>
+                    <option value="profile_prev">Profil Précédent</option>
+                </select>
+            </div>
+
+            <!-- Fields for MIDI Out message -->
+            <div id="map-field-midi" class="controller-form-group" style="display:none;">
+                <label data-i18n="web.lbl_mapping_action_val">Message MIDI Out (Hex ou CC)</label>
+                <input type="text" id="map-midi-out-val" placeholder="ex: CC 50 127 ou 90 3C 7F">
+            </div>
+        </div>
+        <div class="modal-footer" style="padding:10px 15px;">
+            <button class="btn-text" onclick="closeMappingEditor()" data-i18n="web.btn_cancel">Annuler</button>
+            <button class="btn-primary" onclick="saveMapping()" data-i18n="web.btn_save">Enregistrer</button>
         </div>
     </dialog>
 

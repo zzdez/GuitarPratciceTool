@@ -42,6 +42,7 @@ from library_manager import LibraryManager
 from metadata_service import MetadataService
 from download_service import DownloadService
 from music_api import MusicAPI
+from device_manager import DEFAULT_AIRSTEP_DEF
 
 app = FastAPI()
 WEB_LINKS_FILE = os.path.join(get_data_dir(), "web_links.json")
@@ -696,18 +697,28 @@ async def get_status():
         is_connected = app.state.midi_manager.is_connected
 
     active_profile_name = "Global / Aucun"
+    active_profile = None
     if hasattr(app.state, "action_handler") and app.state.action_handler.current_profile:
-         active_profile_name = app.state.action_handler.current_profile.get("name", "Global / Aucun")
-    elif hasattr(app.state, "profile_manager") and app.state.profile_manager:
-         # Fallback if needed, but ActionHandler tracks the live context
-         pass
+         active_profile = app.state.action_handler.current_profile
+         active_profile_name = active_profile.get("name", "Global / Aucun")
+
+    device_def = None
+    if hasattr(app.state, "active_device_def"):
+         device_def = app.state.active_device_def
+    elif hasattr(app.state, "device_manager") and app.state.device_manager:
+         device_def = app.state.device_manager.get_definition_for_port(config_manager.get("midi_device_name"))
+    
+    if not device_def:
+         device_def = DEFAULT_AIRSTEP_DEF
 
     return {
         "status": "ok",
         "device_name": config_manager.get("midi_device_name", _("web.none")),
         "connection_mode": config_manager.get("connection_mode", "MIDO"),
         "is_connected": is_connected,
-        "active_profile_name": active_profile_name
+        "active_profile_name": active_profile_name,
+        "active_profile": active_profile,
+        "device_def": device_def
     }
 
 @app.get("/api/metronome/sounds")
@@ -1102,8 +1113,9 @@ async def add_app(app_def: Dict):
 async def get_midi_outputs():
     """Returns list of MIDI output ports with status."""
     try:
-        from midi_engine import MidiManager
-        return MidiManager.get_ports_status()
+        if hasattr(app.state, "midi_manager") and app.state.midi_manager:
+            return app.state.midi_manager.get_ports_status()
+        return []
     except Exception as e:
         # Fallback if method missing or error
         return [{"name": "Error: " + str(e), "selected": False, "connected": False, "available": False}]
@@ -1128,7 +1140,9 @@ async def get_settings():
         "autoreplay": config_manager.get("autoreplay", False),
         "sidebar_autohide": config_manager.get("sidebar_autohide", False),
         "sidebar_default_hidden": config_manager.get("sidebar_default_hidden", False),
-        "sidebar_hover_trigger": config_manager.get("sidebar_hover_trigger", False)
+        "sidebar_hover_trigger": config_manager.get("sidebar_hover_trigger", False),
+        "connection_mode": config_manager.get("connection_mode", "BLE"),
+        "midi_device_name": config_manager.get("midi_device_name", "AIRSTEP")
     }
 
 @app.get("/api/locales/{lang}")
@@ -2878,6 +2892,124 @@ async def get_profiles(request: Request):
         return request.app.state.profiles
     return []
 
+@app.post("/api/profiles")
+async def save_profile(request: Request):
+    """Enregistre ou crée un profil utilisateur."""
+    if not hasattr(request.app.state, "profile_manager"):
+        raise HTTPException(status_code=500, detail="ProfileManager not available")
+    try:
+        profile_data = await request.json()
+        name = profile_data.get("name")
+        if not name:
+            raise HTTPException(status_code=400, detail="Profile name required")
+        
+        pm = request.app.state.profile_manager
+        success = pm.save_profile(profile_data)
+        if success:
+            # Synchronise l'ActionHandler si actif
+            if hasattr(request.app.state, "action_handler"):
+                ah = request.app.state.action_handler
+                if ah.current_profile and ah.current_profile.get("name") == name:
+                    ah.set_current_profile(profile_data)
+            return {"status": "ok", "profile": profile_data}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to save profile")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/profiles/{name}")
+async def delete_profile(name: str, request: Request):
+    """Supprime un profil utilisateur."""
+    if not hasattr(request.app.state, "profile_manager"):
+        raise HTTPException(status_code=500, detail="ProfileManager not available")
+    try:
+        pm = request.app.state.profile_manager
+        success = pm.delete_profile(name)
+        if success:
+            return {"status": "ok"}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to delete profile")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/active_window")
+async def get_active_window(request: Request):
+    """Returns the currently active window title and process name."""
+    try:
+        if hasattr(request.app.state, "action_handler") and request.app.state.action_handler:
+            ah = request.app.state.action_handler
+            process_name = ah.get_active_process_name()
+            window_title = ah.get_active_window_title()
+
+            # Auto-restore/raise the native app window to the front after capture!
+            if hasattr(request.app.state, "open_settings_callback") and request.app.state.open_settings_callback:
+                request.app.state.open_settings_callback()
+
+            return {
+                "status": "ok",
+                "process_name": process_name,
+                "window_title": window_title
+            }
+        return {"status": "error", "message": "ActionHandler not ready"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/settings/record_key")
+async def record_key():
+    """Temporairement écoute le clavier global pour enregistrer les touches et scan codes."""
+    import keyboard
+    import time
+    import asyncio
+    
+    res = None
+    start_time = time.time()
+    timeout = 6.0 # 6 seconds timeout
+
+    def listen_key():
+        nonlocal res
+        pressed_scancodes = set()
+        
+        while time.time() - start_time < timeout:
+            event = keyboard.read_event(suppress=False)
+            if event.event_type == keyboard.KEY_DOWN:
+                pressed_scancodes.add(event.scan_code)
+                is_mod = keyboard.is_modifier(event.scan_code) or event.name in ['right alt', 'alt gr', 'right ctrl', 'right shift', 'ctrl', 'shift', 'alt', 'windows']
+                if not is_mod:
+                    current_modifiers_sc = [sc for sc in pressed_scancodes if sc != event.scan_code]
+                    mod_names = []
+                    def safe_is_pressed(k):
+                        try: return keyboard.is_pressed(k)
+                        except: return False
+                    
+                    if safe_is_pressed('ctrl'): mod_names.append('ctrl')
+                    if safe_is_pressed('shift'): mod_names.append('shift')
+                    if safe_is_pressed('alt'): mod_names.append('alt')
+                    if safe_is_pressed('right alt') or safe_is_pressed('alt gr'): mod_names.append('alt gr')
+                    if safe_is_pressed('windows'): mod_names.append('windows')
+                    
+                    mod_names = sorted(list(set(mod_names)))
+                    full_name = "+".join(mod_names + [event.name])
+                    
+                    res = {
+                        "status": "ok",
+                        "scan_code": event.scan_code,
+                        "modifier_scan_codes": current_modifiers_sc,
+                        "name": full_name
+                    }
+                    return
+            time.sleep(0.01)
+
+    try:
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, listen_key)
+        
+        if res:
+            return res
+        else:
+            return {"status": "timeout"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 # Placeholder for device/profile management if needed by frontend
 # Currently ProfileManager loads from disk.
 
@@ -3740,6 +3872,11 @@ async def delete_setlist(sl_id: str):
     except Exception as e:
         logging.error(f"[SETLIST_V2] Erreur suppression: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/remote")
+async def get_remote_page():
+    """Serves the remote widget page."""
+    return FileResponse(os.path.join(web_path, "remote.html"))
 
 # Static Files Logic
 if getattr(sys, 'frozen', False):

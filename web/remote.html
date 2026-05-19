@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MIDI-KBD Remote</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #111111;
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            border: 1px solid #333333;
+            border-radius: 8px;
+            height: 100vh;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* CUSTOM TITLEBAR */
+        .titlebar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #181818;
+            height: 32px;
+            padding: 0 10px;
+            border-bottom: 1px solid #222;
+            user-select: none;
+            -webkit-app-region: drag; /* Native Chromium drag */
+        }
+
+        .titlebar-title {
+            font-size: 11px;
+            font-weight: bold;
+            color: #888888;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .titlebar-title i {
+            color: var(--accent, #00E5FF);
+        }
+
+        .titlebar-controls {
+            display: flex;
+            gap: 4px;
+            -webkit-app-region: no-drag;
+        }
+
+        .titlebar-btn {
+            background: transparent;
+            border: none;
+            color: #666;
+            width: 22px;
+            height: 22px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            transition: all 0.15s ease;
+        }
+
+        .titlebar-btn:hover {
+            background: #333333;
+            color: #ffffff;
+        }
+
+        .titlebar-btn.close:hover {
+            background: #E81123;
+            color: #ffffff;
+        }
+
+        /* CONTENT */
+        .remote-content {
+            flex: 1;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 8px;
+            min-height: 0;
+        }
+
+        .profile-badge {
+            font-size: 11px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            padding: 3px 8px;
+            width: fit-content;
+            color: #ccc;
+            margin-bottom: 4px;
+        }
+
+        /* PEDALBOARD GRID */
+        .pedalboard-grid {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            gap: 6px;
+            flex: 1;
+        }
+
+        .pedal-btn-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            min-width: 0;
+        }
+
+        .pedal-physical-idx {
+            font-size: 8px;
+            font-weight: bold;
+            color: #555;
+            text-transform: uppercase;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            width: 100%;
+            text-align: center;
+        }
+
+        .pedal-btn {
+            width: 100%;
+            height: 38px;
+            background: #222222;
+            border: 1px solid #333333;
+            border-radius: 5px;
+            color: #888888;
+            font-size: 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s ease;
+            position: relative;
+            box-sizing: border-box;
+        }
+
+        .pedal-btn.active {
+            background: var(--btn-color, #2B7DE9);
+            border-color: var(--btn-color-hover, #1A5CB8);
+            color: #ffffff;
+        }
+
+        .pedal-btn.active:hover {
+            filter: brightness(1.2);
+        }
+
+        .pedal-btn.disabled {
+            background: #141414;
+            border-color: #1a1a1a;
+            color: #333333;
+            cursor: not-allowed;
+        }
+
+        /* LED flash animation */
+        .pedal-btn.flash {
+            animation: flash-led 0.15s ease-out;
+        }
+
+        @keyframes flash-led {
+            0% {
+                background: #00E5FF;
+                box-shadow: 0 0 15px #00E5FF;
+                color: #000;
+            }
+            100% {
+                background: var(--btn-color, #2B7DE9);
+                color: #ffffff;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- CUSTOM TITLEBAR -->
+    <div class="titlebar" id="custom-titlebar">
+        <div class="titlebar-title">
+            <i class="ph ph-device-mobile-camera"></i>
+            <span>MidiKbd Floating Remote</span>
+        </div>
+        <div class="titlebar-controls">
+            <button class="titlebar-btn" onclick="minimizeRemote()" title="Minimiser"><i class="ph ph-minus"></i></button>
+            <button class="titlebar-btn close" onclick="closeRemote()" title="Fermer"><i class="ph ph-x"></i></button>
+        </div>
+    </div>
+
+    <!-- CONTENT -->
+    <div class="remote-content">
+        <div class="profile-badge" id="active-profile-badge">
+            <i class="ph ph-user-focus"></i> Profil : Global
+        </div>
+        <div class="pedalboard-grid" id="remote-pedalboard">
+            <!-- Dynamically populated by JS -->
+        </div>
+    </div>
+
+    <!-- QWebChannel JS Bridge -->
+    <script src="qrc:///qtwebchannel/qwebchannel.js" onerror="console.warn('Qt WebChannel not available')"></script>
+    
+    <script>
+        let bridge = null;
+        let activeProfile = null;
+        let deviceDef = null;
+        let ws = null;
+
+        // Initialize WebChannel
+        if (typeof QWebChannel !== 'undefined') {
+            new QWebChannel(qt.webChannelTransport, function (channel) {
+                bridge = channel.objects.pywebview; // Expose as 'pywebview' for continuity
+                console.log("Qt WebChannel loaded successfully.");
+                initRemote();
+            });
+        } else {
+            console.warn("Using standalone HTTP backup mode.");
+            // Fallback for standalone browsing
+            initRemote();
+        }
+
+        async function initRemote() {
+            // Setup titlebar mouse dragging backup if needed
+            setupTitlebarDragging();
+
+            // Load initial states
+            await fetchStatus();
+
+            // Connect WebSocket for live LED flashes
+            connectWebSocket();
+
+            // Periodically refresh status just in case
+            setInterval(fetchStatus, 3000);
+        }
+
+        // Custom window dragging backup via bridge
+        function setupTitlebarDragging() {
+            const titlebar = document.getElementById("custom-titlebar");
+            let isDragging = false;
+            let startX, startY;
+
+            titlebar.addEventListener("mousedown", (e) => {
+                if (e.target.closest(".titlebar-controls")) return; // Don't drag from buttons
+                isDragging = true;
+                startX = e.screenX;
+                startY = e.screenY;
+                if (bridge && bridge.start_drag) {
+                    bridge.start_drag();
+                }
+            });
+
+            window.addEventListener("mousemove", (e) => {
+                if (!isDragging) return;
+                if (bridge && bridge.move_drag) {
+                    bridge.move_drag(e.screenX, e.screenY);
+                }
+            });
+
+            window.addEventListener("mouseup", () => {
+                isDragging = false;
+            });
+        }
+
+        // Window controls
+        function minimizeRemote() {
+            if (bridge && bridge.minimize) {
+                bridge.minimize();
+            } else {
+                console.log("Minimize clicked");
+            }
+        }
+
+        function closeRemote() {
+            if (bridge && bridge.close) {
+                bridge.close();
+            } else {
+                console.log("Close clicked");
+            }
+        }
+
+        // Fetch current active profile & device def
+        async function fetchStatus() {
+            try {
+                const res = await fetch("/api/status");
+                const status = await res.json();
+                
+                activeProfile = status.active_profile;
+                deviceDef = status.device_def;
+                
+                // Update profile badge
+                const badge = document.getElementById("active-profile-badge");
+                badge.innerHTML = `<i class="ph ph-user-focus"></i> Profil : ${status.active_profile_name || 'Global'}`;
+
+                renderPedalboard();
+            } catch (err) {
+                console.error("Error fetching status:", err);
+            }
+        }
+
+        // Helper to match icons
+        function getIconForName(name) {
+            const n = name.toLowerCase();
+            if (n.includes("play") && n.includes("pause")) return "ph-play-pause";
+            if (n.includes("play")) return "ph-play";
+            if (n.includes("pause")) return "ph-pause";
+            if (n.includes("stop")) return "ph-stop";
+            if (n.includes("rec")) return "ph-record";
+            if (n.includes("prev") || n.includes("rewind") || n.includes("back")) return "ph-skip-back";
+            if (n.includes("next") || n.includes("forward")) return "ph-skip-forward";
+            if (n.includes("loop")) return "ph-arrows-clockwise";
+            if (n.includes("mute")) return "ph-speaker-slash";
+            if (n.includes("vol") || n.includes("audio")) return "ph-speaker-high";
+            if (n.includes("pan")) return "ph-arrows-left-right";
+            if (n.includes("speed") || n.includes("tempo") || n.includes("bpm")) return "ph-timer";
+            if (n.includes("pitch") || n.includes("key") || n.includes("tune")) return "ph-music-notes";
+            if (n.includes("metro")) return "ph-metronome";
+            if (n.includes("marker")) return "ph-map-pin";
+            if (n.includes("up")) return "ph-arrow-up";
+            if (n.includes("down")) return "ph-arrow-down";
+            if (n.includes("left")) return "ph-arrow-left";
+            if (n.includes("right")) return "ph-arrow-right";
+            if (n.includes("enter") || n.includes("ok")) return "ph-check";
+            if (n.includes("undo")) return "ph-arrow-counter-clockwise";
+            if (n.includes("redo")) return "ph-arrow-clockwise";
+            return "ph-lightning";
+        }
+
+        // Render pedalboard grid
+        function renderPedalboard() {
+            const grid = document.getElementById("remote-pedalboard");
+            grid.innerHTML = "";
+
+            if (!deviceDef || !deviceDef.buttons) {
+                grid.innerHTML = `<div style="grid-column: span 10; text-align: center; font-size: 12px; color: #555; padding-top: 10px;">Aucun périphérique connecté</div>`;
+                return;
+            }
+
+            const buttonsDef = deviceDef.buttons;
+            const mappingMap = {};
+            if (activeProfile && activeProfile.mappings) {
+                activeProfile.mappings.forEach(m => {
+                    if (m.midi_cc !== undefined) {
+                        mappingMap[m.midi_cc] = m;
+                    }
+                });
+            }
+
+            buttonsDef.forEach((btnData, i) => {
+                const cc = btnData.cc;
+                const defaultLabel = btnData.label;
+
+                // Clean label
+                let shortLbl = defaultLabel.replace("Bouton ", "").replace("Button ", "").replace("Footswitch ", "");
+                if (shortLbl.includes("(")) shortLbl = shortLbl.split("(")[0].trim();
+                
+                if (defaultLabel.includes("Long Press")) {
+                    let base = defaultLabel.replace("Long Press ", "").trim();
+                    if (base.includes("(")) base = base.split("(")[0].trim();
+                    shortLbl = `${base} (Hold)`;
+                }
+
+                const mapping = mappingMap[cc];
+                const container = document.createElement("div");
+                container.className = "pedal-btn-container";
+
+                // Physical label
+                const idxLabel = document.createElement("div");
+                idxLabel.className = "pedal-physical-idx";
+                idxLabel.innerText = shortLbl;
+                container.appendChild(idxLabel);
+
+                // Button element
+                const btn = document.createElement("button");
+                btn.id = `pedal-btn-${cc}`;
+
+                if (mapping) {
+                    btn.className = "pedal-btn active";
+                    const iconClass = mapping.custom_icon || getIconForName(mapping.name || "");
+                    btn.innerHTML = `<i class="ph ${iconClass}"></i>`;
+                    btn.onclick = () => triggerAction(cc, activeProfile.name);
+                } else {
+                    btn.className = "pedal-btn disabled";
+                    btn.innerHTML = "";
+                }
+
+                container.appendChild(btn);
+                grid.appendChild(container);
+            });
+        }
+
+        // Trigger action via backend REST API
+        async function triggerAction(cc, profileName) {
+            // Flash immediately visually
+            flashButton(cc);
+
+            try {
+                // Focus switch + execute
+                await fetch("/api/trigger", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        key: cc.toString(),
+                        profile_name: profileName
+                    })
+                });
+            } catch (err) {
+                console.error("Error triggering action:", err);
+            }
+        }
+
+        // Visual flash LED
+        function flashButton(cc) {
+            const btn = document.getElementById(`pedal-btn-${cc}`);
+            if (btn && btn.classList.contains("active")) {
+                btn.classList.add("flash");
+                setTimeout(() => {
+                    btn.classList.remove("flash");
+                }, 150);
+            }
+        }
+
+        // WebSocket for listening to real physical MIDI inputs (for visual sync / LED mirrors)
+        function connectWebSocket() {
+            const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+            const wsUrl = `${protocol}//${window.location.host}/ws`;
+            
+            ws = new WebSocket(wsUrl);
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === "midi_in") {
+                        // MIDI format: { cc, value, channel }
+                        const cc = data.cc;
+                        const val = data.value;
+                        if (val > 0) {
+                            flashButton(cc);
+                        }
+                    }
+                } catch (err) {
+                    // Ignore parsing issues
+                }
+            };
+
+            ws.onclose = () => {
+                // Reconnect after 3 seconds
+                setTimeout(connectWebSocket, 3000);
+            };
+
+            ws.onerror = (err) => {
+                ws.close();
+            };
+        }
+    </script>
+</body>
+</html>

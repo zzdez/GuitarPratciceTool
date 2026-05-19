@@ -1515,6 +1515,12 @@ class SyncManager:
 
     def generate_bootstrapper_script(self):
         """Creates updater.bat that kills AirstepStudio, moves buffer files to root, and restarts."""
+        import sys
+        import os
+        exe_name = os.path.basename(sys.executable)
+        if not exe_name.lower().endswith(".exe"):
+            exe_name = "GuitarPracticeTool.exe"
+
         bat_script = f"""@echo off
 timeout /t 2 /nobreak > nul
 echo Updating AirstepStudio...
@@ -1527,7 +1533,7 @@ rmdir /s /q "{self.update_buffer_dir}"
 
 :: Restart AirstepStudio
 cd /d "{self.local_dir}"
-start "" MidiKbdControlStudio.exe
+start "" {exe_name}
 
 :: Self-destruct
 del "%~f0"

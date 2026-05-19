@@ -81,16 +81,22 @@ class ContextMonitor(threading.Thread):
                 if self.manual_override_profile:
                     matched_profile = self.manual_override_profile
                 else:
-                    # --- BLACKLIST CHECK ---
                     active_process = self.action_handler.get_active_process_name().lower()
                     active_title = self.action_handler.get_active_window_title().lower()
 
-                    blacklist_apps = ["python.exe", "airstepsmartcontrol.exe", "airstepstudio.exe"]
-                    # Fix: Allow "Midi-Kbd Control Studio" (Web) but block "Midi-Kbd Control Studio" (Native) if needed, 
-                    # Actually original was "airstep smart control" (native) vs "airstep studio" (web).
-                    # Now both might be Midi-Kbd Control Studio. Let's make sure the native window is blacklisted.
-                    if (active_process in blacklist_apps) or ("midi-kbd control studio" in active_title and "web" not in active_title.lower() and "youtube" not in active_title.lower() and "audio" not in active_title.lower() and "video" not in active_title.lower() and "generic" not in active_title.lower()):
-                        # Ignored self-focus. Keep previous profile.
+                    # --- DYNAMIC PROCESS DETECTION & BLACKLIST CHECK ---
+                    import sys
+                    import os
+                    our_self_name = os.path.basename(sys.executable).lower()
+                    our_processes = {"python.exe", "pythonw.exe", "airstepsmartcontrol.exe", "airstepstudio.exe", "midikbdcontrolstudio.exe", "midikbd_control_studio.exe", "guitarpracticetool.exe", "guitar_practice_tool.exe", our_self_name}
+                    
+                    is_our_process = (active_process in our_processes)
+                    
+                    # We are in a web media mode if the window title has the player mode suffix (youtube, audio, video, generic, etc.)
+                    is_web_media_active = any(kw in active_title for kw in ["web", "youtube", "audio", "video", "generic"])
+                    
+                    # We ignore self-focus ONLY if it's our own native app window without any web media player active (e.g. settings modal is open)
+                    if is_our_process and not is_web_media_active:
                         time.sleep(self.interval)
                         continue
 

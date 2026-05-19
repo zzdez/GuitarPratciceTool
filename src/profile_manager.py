@@ -24,6 +24,7 @@ class ProfileManager:
         self.profiles = []
         self.ensure_profile_dir()
         self.ensure_web_profiles()
+        self.load_all_profiles()
 
     def ensure_profile_dir(self):
         if not os.path.exists(PROFILE_DIR):

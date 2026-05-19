@@ -16,11 +16,6 @@
         },
         "cover": "${APP_DIR}/Medias/Multipistes/Back In Black-E minor-94bpm-440hz",
         "linked_ids": [
-            "lib_07958f7d",
-            "lib_5ac1f945",
-            "lib_81a07c0f",
-            "set_563181ff",
-            "set_566044c4",
             "web_563181ff",
             "web_566044c4"
         ],
@@ -43,10 +38,7 @@
             "tuning": "standard"
         },
         "cover": "D:\\Music\\03 - ZZ Top - Rough Boy-A-79bpm-440hz.mp3",
-        "linked_ids": [
-            "lib_0e39e9c6",
-            "lib_3ad1bd02"
-        ],
+        "linked_ids": [],
         "uid": "web_46feb126",
         "shared_with_group": true
     },
@@ -85,9 +77,7 @@
             "tuning": "eb"
         },
         "cover": "https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/be/35/7e/be357e95-b2fe-73c8-e86a-1893b4dc8e79/00670211021486.rgb.jpg/600x600bb.jpg",
-        "linked_ids": [
-            "lib_5b66df40"
-        ],
+        "linked_ids": [],
         "uid": "web_5334300b"
     },
     {
@@ -126,7 +116,6 @@
         },
         "cover": "https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/ff/d2/5c/ffd25c4b-28f6-e3e0-428a-093e45ff5e53/886443673465.jpg/600x600bb.jpg",
         "linked_ids": [
-            "lib_5e78c329",
             "web_cc550314"
         ],
         "uid": "web_e52d495b"
@@ -148,7 +137,6 @@
         },
         "cover": "https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/ff/d2/5c/ffd25c4b-28f6-e3e0-428a-093e45ff5e53/886443673465.jpg/600x600bb.jpg",
         "linked_ids": [
-            "lib_5e78c329",
             "web_e52d495b"
         ],
         "uid": "web_cc550314"
@@ -169,9 +157,7 @@
             "tuning": "standard"
         },
         "cover": "https://is1-ssl.mzstatic.com/image/thumb/Music/v4/ed/b9/29/edb9298e-206c-a76f-035a-75f86aa03dd6/ACDC_LetThereBeRock_G010002882113W_1500x1500.jpg/600x600bb.jpg",
-        "linked_ids": [
-            "lib_e857c66f"
-        ],
+        "linked_ids": [],
         "uid": "web_3b5d08c2",
         "shared_with_group": true
     },
@@ -306,11 +292,6 @@
         "autoreplay": false,
         "uid": "web_563181ff",
         "linked_ids": [
-            "lib_07958f7d",
-            "lib_5ac1f945",
-            "lib_81a07c0f",
-            "set_563181ff",
-            "set_566044c4",
             "web_566044c4",
             "web_e9415b42"
         ],
@@ -347,11 +328,6 @@
         "autoreplay": false,
         "uid": "web_566044c4",
         "linked_ids": [
-            "lib_07958f7d",
-            "lib_5ac1f945",
-            "lib_81a07c0f",
-            "set_563181ff",
-            "set_566044c4",
             "web_563181ff",
             "web_e9415b42"
         ],
@@ -387,8 +363,6 @@
         "autoplay": false,
         "autoreplay": false,
         "uid": "web_e6b20a57",
-        "linked_ids": [
-            "lib_1304df43"
-        ]
+        "linked_ids": []
     }
 ]

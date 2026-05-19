@@ -1,0 +1,89 @@
+{
+    "name": "GPT Web Studio",
+    "app_context": "MIDI-KBD Control Studio",
+    "window_title_filter": "",
+    "mappings": [
+        {
+            "name": "Play / Pause",
+            "trigger_type": "keyboard",
+            "trigger_key": "space",
+            "trigger_modifiers": [],
+            "action_type": "command",
+            "action_value": "media_play_pause",
+            "custom_icon": "⏯"
+        },
+        {
+            "name": "Reculer (5s)",
+            "trigger_type": "keyboard",
+            "trigger_key": "left",
+            "trigger_modifiers": [],
+            "action_type": "command",
+            "action_value": "media_rewind",
+            "custom_icon": "⏪"
+        },
+        {
+            "name": "Avancer (5s)",
+            "trigger_type": "keyboard",
+            "trigger_key": "right",
+            "trigger_modifiers": [],
+            "action_type": "command",
+            "action_value": "media_forward",
+            "custom_icon": "⏩"
+        },
+        {
+            "name": "Boucle Précédente",
+            "trigger_type": "keyboard",
+            "trigger_key": "left",
+            "trigger_modifiers": ["shift"],
+            "action_type": "command",
+            "action_value": "media_loop_prev",
+            "custom_icon": "⏮"
+        },
+        {
+            "name": "Boucle Suivante",
+            "trigger_type": "keyboard",
+            "trigger_key": "right",
+            "trigger_modifiers": ["shift"],
+            "action_type": "command",
+            "action_value": "media_loop_next",
+            "custom_icon": "⏭"
+        },
+        {
+            "name": "Vitesse +",
+            "trigger_type": "keyboard",
+            "trigger_key": "up",
+            "trigger_modifiers": [],
+            "action_type": "command",
+            "action_value": "media_speed_up",
+            "custom_icon": "⚡"
+        },
+        {
+            "name": "Vitesse -",
+            "trigger_type": "keyboard",
+            "trigger_key": "down",
+            "trigger_modifiers": [],
+            "action_type": "command",
+            "action_value": "media_speed_down",
+            "custom_icon": "🐢"
+        },
+        {
+            "name": "Boucle ON/OFF",
+            "trigger_type": "keyboard",
+            "trigger_key": "r",
+            "trigger_modifiers": [],
+            "action_type": "command",
+            "action_value": "media_loop_toggle",
+            "custom_icon": "🔁"
+        },
+        {
+            "name": "Redémarrer",
+            "trigger_type": "keyboard",
+            "trigger_key": "0",
+            "trigger_modifiers": [],
+            "action_type": "command",
+            "action_value": "media_restart",
+            "custom_icon": "⏪"
+        }
+    ],
+    "shortcuts_text": "Profil par défaut pour contrôler le studio GPT avec le clavier de l'ordinateur."
+}

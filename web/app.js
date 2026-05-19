@@ -1954,15 +1954,126 @@ function playWebLink(index) {
     const link = webLinks[index];
     if (!link) return;
     
-    // Open in browser
-    fetch(`/api/open_external?url=${encodeURIComponent(link.url)}`);
-    
-    // Update active highlight (visual only)
     window.currentSource = 'web_links';
     window.currentPlayingIndex = index;
+    
+    // Sync UI Highlight immediately
     renderWebLinks();
     
-    // Trigger Interconnection UI
+    // STOP ALL MEDIA first
+    stopAllMedia();
+    
+    const ytDiv = document.getElementById("player");
+    const genFrame = document.getElementById("generic-player");
+    const html5 = document.getElementById("html5-player");
+    
+    // Reset Containers
+    const videoContainer = document.getElementById("video-container");
+    const audioContainer = document.getElementById("audio-player-container");
+    const multitrackContainer = document.getElementById("multitrack-container");
+    videoContainer.style.display = "flex";
+    audioContainer.style.display = "none";
+    if (multitrackContainer) multitrackContainer.style.display = "none";
+    
+    // Reset all Players
+    ytDiv.style.display = "none";
+    genFrame.style.display = "none";
+    html5.style.display = "none";
+    const controlsContainer = document.getElementById("video-controls-container");
+    if (controlsContainer) controlsContainer.style.display = "none";
+    
+    if (player && player.stopVideo) player.stopVideo();
+    html5.pause(); html5.src = "";
+    genFrame.src = "";
+    
+    // Volume Default logic
+    const trackVolume = (link.volume !== undefined) ? parseInt(link.volume, 10) : 100;
+    const normalizedVolume = trackVolume / 100;
+    if (html5) html5.volume = normalizedVolume;
+    
+    // Reset Volume Slider
+    const audioVolSlider = document.getElementById("audio-volume");
+    if (audioVolSlider) { audioVolSlider.value = normalizedVolume; const avp = document.getElementById("audio-volume-percent"); if (avp) avp.innerText = trackVolume + "%"; }
+    const videoVolSlider = document.getElementById("video-volume");
+    if (videoVolSlider) { videoVolSlider.value = normalizedVolume; const vvp = document.getElementById("video-volume-percent"); if (vvp) vvp.innerText = trackVolume + "%"; }
+    
+    if (typeof syncVolumeToModals === 'function') syncVolumeToModals(trackVolume);
+    
+    function getProfile(item, def) {
+        return (item.target_profile && item.target_profile !== "Auto") ? item.target_profile : def;
+    }
+    
+    if (link.open_mode === "external") {
+        fetch(`/api/open_external?url=${encodeURIComponent(link.url)}`);
+        setMode("GENERIC", getProfile(link, link.profile_name));
+    } else if (link.open_mode === "iframe" && link.id) {
+        // YouTube Iframe
+        setMode("YOUTUBE", getProfile(link, "Web YouTube")); // Context Switch
+        
+        ytDiv.style.display = "block";
+        currentActivePlayer = 'youtube';
+        
+        updateHeaderVisibility(true);
+        
+        const globalTitle = document.getElementById("global-video-title");
+        if (globalTitle) globalTitle.innerText = link.title || link.url;
+        
+        const globalBpm = document.getElementById("global-video-bpm");
+        if (globalBpm) {
+            if (link.bpm) { globalBpm.style.display = "inline"; globalBpm.querySelector(".val").innerText = link.bpm; } else { globalBpm.style.display = "none"; }
+        }
+        
+        const globalCover = document.getElementById("global-video-cover");
+        if (globalCover) {
+            globalCover.style.display = "block";
+            globalCover.src = link.thumbnail || `https://i.ytimg.com/vi/${link.id}/mqdefault.jpg`;
+            globalCover.onerror = () => { globalCover.style.display = "none"; };
+        }
+        
+        const timeline = document.getElementById("video-timeline-container");
+        if (timeline) {
+            timeline.style.display = "flex";
+            const slider = document.getElementById("video-seek-slider");
+            if (slider) {
+                slider.oninput = () => {
+                    if (player && typeof player.getDuration === "function") {
+                        const dur = player.getDuration();
+                        if (dur > 0) {
+                            const time = (slider.value / 100) * dur;
+                            player.seekTo(time, true);
+                            updateTimelineUI(time);
+                        }
+                    }
+                };
+            }
+        }
+        
+        if (controlsContainer) controlsContainer.style.display = "flex";
+        
+        const vPitch = document.getElementById("video-pitch-control-inline");
+        if (vPitch) vPitch.style.display = "none";
+        
+        if (player && (typeof player.loadVideoById === "function" || typeof player.cueVideoById === "function")) {
+            const isAutoplay = link.autoplay !== undefined ? link.autoplay : (currentSettings.autoplay || false);
+            if (isAutoplay) {
+                player.loadVideoById(link.id);
+            } else {
+                player.cueVideoById(link.id);
+            }
+            player.setVolume(trackVolume);
+        } else {
+            console.warn("YouTube Player not ready yet. Video ID queued:", link.id);
+        }
+    } else {
+        // Generic / Direct URL
+        setMode("GENERIC", getProfile(link, "Web Generic"));
+        updateHeaderVisibility(false);
+        const smartUrl = getEmbedUrl(link.url);
+        genFrame.style.display = "block";
+        genFrame.src = smartUrl;
+    }
+    
+    loadLoopsForTrack(link);
     updateInterconnectionUI(link);
 }
 
@@ -2650,6 +2761,19 @@ async function openSettingsModal() {
 
         renderSettingsFolders();
 
+        // Populate V21 MIDI & Connection Settings
+        const connMode = document.getElementById("ctrl-connection-mode");
+        if (connMode) connMode.value = currentSettings.connection_mode || "BLE";
+
+        const devName = document.getElementById("ctrl-device-name");
+        if (devName) devName.value = currentSettings.midi_device_name || "AIRSTEP";
+
+        // Load Output Ports List
+        renderMidiOutputsList();
+
+        // Load Profiles & Mappings
+        loadProfiles();
+
         // Show Modal
         document.getElementById("settings-modal").showModal();
         switchSettingsTab('general'); // Reset to first tab
@@ -2823,8 +2947,28 @@ async function saveSettings() {
         currentSettings.fretboard_autoclose = fbAutoClose.checked;
     }
 
-    // Sidebar Settings (Now handled via toggleSidebarOption in header)
-    // - Deleted from here to avoid overwriting on-the-fly choices -
+    // Harvest V21 MIDI Settings
+    const connMode = document.getElementById("ctrl-connection-mode");
+    if (connMode) currentSettings.connection_mode = connMode.value;
+
+    const devName = document.getElementById("ctrl-device-name");
+    if (devName) currentSettings.midi_device_name = devName.value;
+
+    const activeProfileSelect = document.getElementById("ctrl-profile-select");
+    if (activeProfileSelect) currentSettings.active_profile_name = activeProfileSelect.value;
+
+    // Harvest checked MIDI output names
+    const checkedPorts = [];
+    const checkboxes = document.querySelectorAll('input[name="midi-output-checkbox"]:checked');
+    checkboxes.forEach(cb => {
+        checkedPorts.push(cb.value);
+    });
+    currentSettings.midi_output_names = checkedPorts;
+
+    // Save Active Profile as well
+    if (activeProfile) {
+        saveCurrentProfile(true);
+    }
 
     try {
         await fetch("/api/settings", {
@@ -2845,9 +2989,10 @@ async function saveSettings() {
 }
 
 async function openNativeEditor() {
-    // Calls the server route which triggers Tkinter
-    closeSettingsModal(); // Close web modal to avoid confusion
-    await fetch("/api/open_native_editor", { method: "POST" });
+    // Deprecated native editor redirect to V21 web controller tab
+    if (!currentSettings) await loadSettings();
+    openSettingsModal();
+    switchSettingsTab('controller');
 }
 
 let currentEditSharedStatus = false;
@@ -8126,10 +8271,35 @@ function applyAutoTag(item) {
 async function loadProfiles() {
     try {
         const res = await fetch("/api/profiles");
-        availableProfiles = await res.json();
-    } catch (e) { availableProfiles = []; }
-
-    populateProfileSelects();
+        if (res.ok) {
+            profilesList = await res.json();
+            availableProfiles = profilesList;
+            
+            populateProfileSelects();
+            populateProfileSelect();
+            
+            // Try to select active profile
+            let activeName = (typeof currentSettings !== "undefined" && currentSettings) ? (currentSettings.active_profile_name || "") : "";
+            if (!activeName && profilesList.length > 0) {
+                activeName = profilesList[0].name;
+            }
+            
+            if (activeName) {
+                const select = document.getElementById("ctrl-profile-select");
+                if (select) {
+                    select.value = activeName;
+                    selectProfileForEditing(activeName);
+                }
+            }
+        } else {
+            availableProfiles = [];
+            profilesList = [];
+        }
+    } catch (e) {
+        console.error("Error loading profiles", e);
+        availableProfiles = [];
+        profilesList = [];
+    }
 }
 
 function populateProfileSelects() {
@@ -12897,4 +13067,535 @@ function autoFitColumn(colType) {
     console.log(`[LAYOUT] Final Auto-width for ${colType}: ${maxWidth}px`);
     document.documentElement.style.setProperty(`--col-${colType}-width`, `${maxWidth}px`);
     localStorage.setItem(`col_${colType}_width`, `${maxWidth}px`);
+}
+
+// ==========================================
+// V21: MIDI CONTROLLER & PROFILE EDITOR ENGINE
+// ==========================================
+let profilesList = []; // Cache all profiles
+let activeProfile = null; // Current active profile object
+let isProfileDirty = false;
+let currentEditingMappingIndex = null; // null for add, number for edit
+
+// Load all profiles from server
+// Load all profiles from server is now merged in the main loadProfiles above
+
+// Populate the profiles dropdown
+function populateProfileSelect() {
+    const select = document.getElementById("ctrl-profile-select");
+    if (!select) return;
+    select.innerHTML = "";
+    profilesList.forEach(p => {
+        const opt = document.createElement("option");
+        opt.value = p.name;
+        opt.textContent = p.name;
+        select.appendChild(opt);
+    });
+}
+
+// Select a profile to edit and load its mappings
+function selectProfileForEditing(name) {
+    activeProfile = profilesList.find(p => p.name === name);
+    if (!activeProfile) {
+        // Fallback or empty
+        activeProfile = { name: name, app_context: "", window_title_filter: "", target_volume: 100, mappings: [] };
+    }
+    
+    isProfileDirty = false;
+    
+    // Populate form fields
+    document.getElementById("ctrl-target-process").value = activeProfile.app_context || "";
+    document.getElementById("ctrl-window-filter").value = activeProfile.window_title_filter || "";
+    
+    const vol = activeProfile.target_volume !== undefined ? activeProfile.target_volume : 100;
+    document.getElementById("ctrl-target-volume").value = vol;
+    document.getElementById("ctrl-volume-val").textContent = vol;
+    
+    renderMappingsTable();
+}
+
+// Render the high-density mappings list
+function renderMappingsTable() {
+    const tbody = document.getElementById("ctrl-mappings-body");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+    
+    const mappings = activeProfile.mappings || [];
+    if (mappings.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#666;" data-i18n="web.lbl_no_mappings">Aucun mapping défini pour ce profil</td></tr>`;
+        if (typeof translatePage !== "undefined") translatePage(tbody);
+        return;
+    }
+    
+    mappings.forEach((map, index) => {
+        const tr = document.createElement("tr");
+        
+        // Entrée MIDI (Channel + CC)
+        const midiText = `Ch ${map.midi_channel || 1} - CC ${map.midi_cc}`;
+        
+        // Formating Action Executed
+        let actionText = "";
+        if (map.type === "keystroke") {
+            const keyDesc = map.key_name || `ScanCode: ${map.main_scan_code}`;
+            actionText = `<span style="color:var(--accent); font-weight:600;"><i class="ph ph-keyboard"></i> Clavier: ${keyDesc}</span>`;
+        } else if (map.type === "internal") {
+            actionText = `<span style="color:#00bcd4; font-weight:600;"><i class="ph ph-lightning"></i> Interne: ${map.internal_command}</span>`;
+        } else if (map.type === "midi_out") {
+            actionText = `<span style="color:#4caf50; font-weight:600;"><i class="ph ph-export"></i> MIDI Out: ${map.midi_out_value}</span>`;
+        }
+        
+        tr.innerHTML = `
+            <td style="font-weight:600; color:#fff;">${map.name || 'Bouton ' + (index+1)}</td>
+            <td><code>${midiText}</code></td>
+            <td>${actionText}</td>
+            <td class="mappings-actions">
+                <button class="btn-secondary btn-micro" onclick="openMappingEditor(${index})" title="Modifier"><i class="ph ph-pencil-simple"></i></button>
+                <button class="btn-danger btn-micro" style="background:#ff3b30;" onclick="deleteMapping(${index})" title="Supprimer"><i class="ph ph-trash"></i></button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+// Mark profile dirty
+function markProfileDirty() {
+    isProfileDirty = true;
+}
+
+// Update Volume Label in UI
+function updateVolumeLabel() {
+    const val = document.getElementById("ctrl-target-volume").value;
+    document.getElementById("ctrl-volume-val").textContent = val;
+}
+
+// Triggered when dropdown value changes
+function onSelectedProfileChange() {
+    const name = document.getElementById("ctrl-profile-select").value;
+    // Check if dirty before switching
+    if (isProfileDirty && activeProfile) {
+        if (confirm("Le profil actuel a des modifications non enregistrées. Enregistrer avant de changer ?")) {
+            saveCurrentProfile(true);
+        }
+    }
+    selectProfileForEditing(name);
+}
+
+// Add New Profile
+function addNewProfile() {
+    const name = prompt("Nom du nouveau profil :");
+    if (!name) return;
+    
+    // Check duplicates
+    if (profilesList.some(p => p.name.toLowerCase() === name.toLowerCase())) {
+        alert("Ce nom de profil existe déjà !");
+        return;
+    }
+    
+    const newP = {
+        name: name,
+        app_context: "",
+        window_title_filter: "",
+        target_volume: 100,
+        mappings: []
+    };
+    
+    profilesList.push(newP);
+    populateProfileSelect();
+    document.getElementById("ctrl-profile-select").value = name;
+    selectProfileForEditing(name);
+    isProfileDirty = true;
+    saveCurrentProfile();
+}
+
+// Duplicate Profile
+function duplicateProfile() {
+    if (!activeProfile) return;
+    const name = prompt("Nom du profil dupliqué :", activeProfile.name + " (Copie)");
+    if (!name) return;
+    
+    if (profilesList.some(p => p.name.toLowerCase() === name.toLowerCase())) {
+        alert("Ce nom de profil existe déjà !");
+        return;
+    }
+    
+    // Deep copy mappings
+    const clonedMappings = JSON.parse(JSON.stringify(activeProfile.mappings || []));
+    const newP = {
+        name: name,
+        app_context: activeProfile.app_context || "",
+        window_title_filter: activeProfile.window_title_filter || "",
+        target_volume: activeProfile.target_volume !== undefined ? activeProfile.target_volume : 100,
+        mappings: clonedMappings
+    };
+    
+    profilesList.push(newP);
+    populateProfileSelect();
+    document.getElementById("ctrl-profile-select").value = name;
+    selectProfileForEditing(name);
+    isProfileDirty = true;
+    saveCurrentProfile();
+}
+
+// Delete Profile
+async function deleteProfile() {
+    if (!activeProfile) return;
+    if (activeProfile.name === "Global" || activeProfile.name === "Default") {
+        alert("Impossible de supprimer le profil système principal.");
+        return;
+    }
+    
+    if (!confirm(`Voulez-vous vraiment supprimer le profil "${activeProfile.name}" ?`)) return;
+    
+    try {
+        const res = await fetch(`/api/profiles/${encodeURIComponent(activeProfile.name)}`, {
+            method: "DELETE"
+        });
+        if (res.ok) {
+            profilesList = profilesList.filter(p => p.name !== activeProfile.name);
+            populateProfileSelect();
+            if (profilesList.length > 0) {
+                document.getElementById("ctrl-profile-select").value = profilesList[0].name;
+                selectProfileForEditing(profilesList[0].name);
+            }
+        } else {
+            alert("Erreur lors de la suppression du profil.");
+        }
+    } catch (e) {
+        console.error(e);
+        alert("Erreur réseau lors de la suppression.");
+    }
+}
+
+// Save Current Active Profile to Disk
+async function saveCurrentProfile(silent = false) {
+    if (!activeProfile) return;
+    
+    // Gather form values
+    activeProfile.app_context = document.getElementById("ctrl-target-process").value.trim();
+    activeProfile.window_title_filter = document.getElementById("ctrl-window-filter").value.trim();
+    activeProfile.target_volume = parseInt(document.getElementById("ctrl-target-volume").value);
+    
+    try {
+        const res = await fetch("/api/profiles", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(activeProfile)
+        });
+        if (res.ok) {
+            isProfileDirty = false;
+            if (!silent) {
+                console.log(`[PROFILE] Profil "${activeProfile.name}" enregistré avec succès !`);
+            }
+        } else {
+            console.error("Failed to save profile on backend");
+        }
+    } catch (e) {
+        console.error("Network error saving profile", e);
+    }
+}
+
+// ==========================================
+// MAPPING EDITOR MODAL CONTROLS
+// ==========================================
+function openMappingEditor(index) {
+    currentEditingMappingIndex = index;
+    const modal = document.getElementById("modal-mapping-editor");
+    
+    // Reset inputs
+    document.getElementById("map-name").value = "";
+    document.getElementById("map-cc").value = "";
+    document.getElementById("map-channel").value = "1";
+    document.getElementById("map-action-type").value = "keystroke";
+    
+    // Keystroke fields
+    document.getElementById("map-key-name").value = "";
+    document.getElementById("map-scan-code").value = "";
+    document.getElementById("map-modifier-scan-codes").value = "";
+    
+    // Internal & Midi
+    document.getElementById("map-internal-cmd").value = "media_play_pause";
+    document.getElementById("map-midi-out-val").value = "";
+    
+    // Reset key capture state
+    document.getElementById("record-key-status").style.display = "none";
+    document.getElementById("btn-record-key").disabled = false;
+    document.getElementById("btn-record-key").innerHTML = `<i class="ph ph-record"></i> REC`;
+    
+    // If edit mode, load existing values
+    if (index !== null && activeProfile && activeProfile.mappings) {
+        const map = activeProfile.mappings[index];
+        document.getElementById("mapping-editor-title").textContent = t("web.modal_mapping_title_edit");
+        
+        document.getElementById("map-name").value = map.name || "";
+        document.getElementById("map-cc").value = map.midi_cc !== undefined ? map.midi_cc : "";
+        document.getElementById("map-channel").value = map.midi_channel !== undefined ? map.midi_channel : "1";
+        document.getElementById("map-action-type").value = map.type || "keystroke";
+        
+        if (map.type === "keystroke") {
+            document.getElementById("map-key-name").value = map.key_name || "";
+            document.getElementById("map-scan-code").value = map.main_scan_code || "";
+            document.getElementById("map-modifier-scan-codes").value = map.modifier_scan_codes ? map.modifier_scan_codes.join(",") : "";
+        } else if (map.type === "internal") {
+            document.getElementById("map-internal-cmd").value = map.internal_command || "media_play_pause";
+        } else if (map.type === "midi_out") {
+            document.getElementById("map-midi-out-val").value = map.midi_out_value || "";
+        }
+    } else {
+        document.getElementById("mapping-editor-title").textContent = t("web.modal_mapping_title_add");
+    }
+    
+    onMappingTypeChange();
+    modal.showModal();
+}
+
+function closeMappingEditor() {
+    document.getElementById("modal-mapping-editor").close();
+}
+
+function onMappingTypeChange() {
+    const type = document.getElementById("map-action-type").value;
+    
+    // Toggle field visibility
+    document.getElementById("map-field-keystroke").style.display = type === "keystroke" ? "flex" : "none";
+    document.getElementById("map-field-internal").style.display = type === "internal" ? "flex" : "none";
+    document.getElementById("map-field-midi").style.display = type === "midi_out" ? "flex" : "none";
+}
+
+// Record Hardware Key using python backend keyboard hook
+async function recordHardwareKey() {
+    const btn = document.getElementById("btn-record-key");
+    const status = document.getElementById("record-key-status");
+    
+    btn.disabled = true;
+    btn.innerHTML = `<i class="ph ph-spinner ph-spin"></i> ...`;
+    status.style.display = "block";
+    status.textContent = t("web.hint_rec_key", "Appuyez sur une touche...");
+    
+    try {
+        const res = await fetch("/api/settings/record_key", { method: "POST" });
+        if (res.ok) {
+            const data = await res.json();
+            if (data.status === "ok") {
+                document.getElementById("map-key-name").value = data.name;
+                document.getElementById("map-scan-code").value = data.scan_code;
+                document.getElementById("map-modifier-scan-codes").value = data.modifier_scan_codes ? data.modifier_scan_codes.join(",") : "";
+                
+                status.textContent = `Enregistré : ${data.name}`;
+                setTimeout(() => { status.style.display = "none"; }, 1500);
+            } else if (data.status === "timeout") {
+                status.textContent = "Temps écoulé (Pas de touche)";
+                setTimeout(() => { status.style.display = "none"; }, 1500);
+            } else {
+                status.textContent = `Erreur : ${data.message || 'Inconnue'}`;
+            }
+        }
+    } catch (e) {
+        console.error(e);
+        status.textContent = "Erreur réseau";
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i class="ph ph-record"></i> REC`;
+    }
+}
+
+// Save Mapping from Modal to Active Profile
+function saveMapping() {
+    const name = document.getElementById("map-name").value.trim();
+    const cc = parseInt(document.getElementById("map-cc").value);
+    const ch = parseInt(document.getElementById("map-channel").value);
+    const type = document.getElementById("map-action-type").value;
+    
+    if (!name || isNaN(cc) || isNaN(ch)) {
+        alert("Veuillez remplir le nom, le canal et le MIDI CC.");
+        return;
+    }
+    
+    const mapping = {
+        name: name,
+        midi_cc: cc,
+        midi_channel: ch,
+        type: type
+    };
+    
+    if (type === "keystroke") {
+        mapping.key_name = document.getElementById("map-key-name").value.trim();
+        const sc = document.getElementById("map-scan-code").value;
+        if (sc) {
+            mapping.main_scan_code = parseInt(sc);
+        }
+        const msc = document.getElementById("map-modifier-scan-codes").value;
+        if (msc) {
+            mapping.modifier_scan_codes = msc.split(",").map(x => parseInt(x));
+        }
+    } else if (type === "internal") {
+        mapping.internal_command = document.getElementById("map-internal-cmd").value;
+    } else if (type === "midi_out") {
+        mapping.midi_out_value = document.getElementById("map-midi-out-val").value.trim();
+    }
+    
+    if (!activeProfile.mappings) activeProfile.mappings = [];
+    
+    if (currentEditingMappingIndex !== null) {
+        // Edit existing
+        activeProfile.mappings[currentEditingMappingIndex] = mapping;
+    } else {
+        // Add new
+        activeProfile.mappings.push(mapping);
+    }
+    
+    markProfileDirty();
+    renderMappingsTable();
+    closeMappingEditor();
+    saveCurrentProfile(); // Save instantly to disk
+}
+
+// Delete Mapping from Active Profile
+function deleteMapping(index) {
+    if (!confirm("Voulez-vous vraiment supprimer ce mapping ?")) return;
+    
+    activeProfile.mappings.splice(index, 1);
+    markProfileDirty();
+    renderMappingsTable();
+    saveCurrentProfile(); // Save instantly to disk
+}
+
+// Render Dynamic list of MIDI Outputs
+async function renderMidiOutputsList() {
+    const container = document.getElementById("ctrl-outputs-list");
+    if (!container) return;
+    container.innerHTML = "";
+    
+    try {
+        const res = await fetch("/api/midi/outputs");
+        if (res.ok) {
+            const ports = await res.json();
+            if (ports.length === 0) {
+                container.innerHTML = `<span style="color:#666; font-size:0.9em;">Aucun port de sortie disponible</span>`;
+                return;
+            }
+            
+            // Get currently active output ports in settings
+            const activePorts = currentSettings.midi_output_names || [];
+            
+            ports.forEach(p => {
+                const item = document.createElement("div");
+                item.className = "controller-port-item";
+                
+                // Color depending on state
+                let color = "#bbb";
+                let iconClass = "ph ph-plugs";
+                if (p.connected) {
+                    color = "var(--accent)";
+                    iconClass = "ph ph-plugs-connected ph-spin-slow";
+                } else if (!p.available) {
+                    color = "#ff9500"; // Absent / Warn
+                }
+                
+                const isChecked = activePorts.includes(p.name) ? "checked" : "";
+                
+                item.innerHTML = `
+                    <label style="display:flex; align-items:center; gap:5px; margin:0; cursor:pointer; color:${color};">
+                        <input type="checkbox" name="midi-output-checkbox" value="${p.name}" ${isChecked}>
+                        <i class="${iconClass}"></i> ${p.name}
+                    </label>
+                `;
+                container.appendChild(item);
+            });
+        }
+    } catch (e) {
+        console.error("Error loading MIDI outputs", e);
+    }
+}
+
+// Capture active process name from backend (with 3s delay and countdown)
+async function captureActiveProcess() {
+    const btn = document.querySelector('button[onclick="captureActiveProcess()"]');
+    const originalHTML = btn ? btn.innerHTML : '<i class="ph ph-crosshair" style="font-size:1.1em;"></i>';
+    
+    if (btn) btn.disabled = true;
+    
+    let countdown = 3;
+    const interval = setInterval(() => {
+        if (btn) {
+            btn.innerHTML = `<span style="font-size:0.9em; font-weight:bold; color:#ff9800;">${countdown}</span>`;
+        }
+        countdown--;
+        if (countdown < 0) {
+            clearInterval(interval);
+        }
+    }, 1000);
+
+    // Sleep for 3 seconds (allowing the user to switch focus to target app)
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    try {
+        const res = await fetch("/api/active_window");
+        if (res.ok) {
+            const data = await res.json();
+            if (data.status === "ok" && data.process_name) {
+                const input = document.getElementById("ctrl-target-process");
+                if (input) {
+                    input.value = data.process_name;
+                    markProfileDirty();
+                }
+            } else {
+                alert("Impossible de capturer le processus actif (vérifiez si l'application tourne).");
+            }
+        }
+    } catch (e) {
+        console.error("Error capturing active process", e);
+    } finally {
+        if (btn) {
+            btn.innerHTML = originalHTML;
+            btn.disabled = false;
+        }
+    }
+}
+
+// Capture active window title from backend (with 3s delay and countdown)
+async function captureActiveWindowTitle() {
+    const btn = document.querySelector('button[onclick="captureActiveWindowTitle()"]');
+    const originalHTML = btn ? btn.innerHTML : '<i class="ph ph-crosshair" style="font-size:1.1em;"></i>';
+    
+    if (btn) btn.disabled = true;
+    
+    let countdown = 3;
+    const interval = setInterval(() => {
+        if (btn) {
+            btn.innerHTML = `<span style="font-size:0.9em; font-weight:bold; color:#ff9800;">${countdown}</span>`;
+        }
+        countdown--;
+        if (countdown < 0) {
+            clearInterval(interval);
+        }
+    }, 1000);
+
+    // Sleep for 3 seconds (allowing the user to switch focus to target app)
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    try {
+        const res = await fetch("/api/active_window");
+        if (res.ok) {
+            const data = await res.json();
+            if (data.status === "ok" && data.window_title) {
+                const input = document.getElementById("ctrl-window-filter");
+                if (input) {
+                    let title = data.window_title;
+                    // Escape regex characters and propose a wildcard match
+                    let escaped = title.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+                    input.value = ".*" + escaped + ".*";
+                    markProfileDirty();
+                }
+            } else {
+                alert("Impossible de capturer la fenêtre active.");
+            }
+        }
+    } catch (e) {
+        console.error("Error capturing active window title", e);
+    } finally {
+        if (btn) {
+            btn.innerHTML = originalHTML;
+            btn.disabled = false;
+        }
+    }
 }

@@ -1,0 +1,50 @@
+<dialog id="modal-midi-device-editor" class="modern-modal" style="width: 850px; max-height: 85vh; border: 1px solid #444; flex-direction: column;">
+        <div class="modal-header" style="padding: 12px 18px;">
+            <h3 style="color: var(--accent); font-size: 1em; margin:0;"><i class="ph ph-gear"></i> <span data-i18n="web.mde.title">MIDI Target Device Editor</span></h3>
+            <button onclick="document.getElementById('modal-midi-device-editor').close()" class="btn-close" style="width:28px; height:28px; font-size:1.1em;">×</button>
+        </div>
+        <div class="modal-body" style="padding: 15px; flex: 1;">
+            
+            <!-- Global Config -->
+            <div style="display: grid; grid-template-columns: 1fr 120px 150px; gap: 15px; margin-bottom: 18px; padding-bottom: 18px; border-bottom: 1px solid #333;">
+                <div>
+                    <label style="display:block; font-size:0.65em; color:#888; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;" data-i18n="web.mde.lbl_name">Device Name</label>
+                    <input type="text" id="mde-name" data-i18n-placeholder="web.mde.placeholder_name" placeholder="ex: Kemper Profiler" style="width:100%; background:#000; color:white; border:1px solid #444; padding:8px 10px; border-radius:4px; box-sizing:border-box; font-size:0.85em;">
+                </div>
+                <div>
+                    <label style="display:block; font-size:0.65em; color:#888; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;" data-i18n="web.mde.lbl_channel">MIDI CH (1-16)</label>
+                    <input type="number" id="mde-channel" value="1" min="1" max="16" style="width:100%; background:#000; color:white; border:1px solid #444; padding:8px; border-radius:4px; box-sizing:border-box; font-size:0.85em;">
+                </div>
+                <div>
+                    <label style="display:block; font-size:0.65em; color:#888; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;" data-i18n="web.mde.lbl_bank_offset">Bank / Offset</label>
+                    <div style="display:flex; gap:8px;">
+                        <input type="number" id="mde-bank-size" value="128" style="width: 55px; flex: none; background:#000; color:white; border:1px solid #444; padding:8px 2px; border-radius:4px; box-sizing:border-box; font-size:0.85em; text-align:center;">
+                        <select id="mde-offset" style="flex:1; background:#000; color:white; border:1px solid #444; padding:0 4px; border-radius:4px; height:33px; box-sizing:border-box; font-size:0.85em;">
+                            <option value="0">0</option>
+                            <option value="1">1</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions List Header -->
+            <div style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+                <h4 style="margin:0; font-size:0.85em; color:#bbb;"><i class="ph ph-list-bullets"></i> <span data-i18n="web.mde.lbl_actions">MIDI Actions</span></h4>
+                <button onclick="addMdeAction()" class="btn-primary" style="padding: 5px 12px; font-size: 0.75em;"><i class="ph ph-plus"></i> <span data-i18n="web.mde.btn_add_action">Add Action</span></button>
+            </div>
+            
+            <div id="mde-actions-list" style="display: flex; flex-direction: column; gap: 10px;">
+                <!-- Dynamically populated via app.js -->
+            </div>
+
+        </div>
+        <div class="modal-footer" style="background: #111; padding: 12px 18px;">
+            <button onclick="deleteMdeDevice()" class="btn-danger" style="margin-right: auto; padding: 6px 12px; font-size: 0.75em; border-radius:4px;">
+                <i class="ph ph-trash"></i> <span data-i18n="web.mde.btn_delete_device">Delete Device</span>
+            </button>
+            <button onclick="document.getElementById('modal-midi-device-editor').close()" class="btn-text" style="padding: 6px 15px; font-size:0.8em;" data-i18n="web.btn_close_no_save">Cancel</button>
+            <button onclick="saveMdeDevice()" class="btn-primary" style="padding: 8px 25px; font-size: 0.85em; font-weight: bold; border-radius:4px;">
+                <i class="ph ph-check"></i> <span data-i18n="web.mde.btn_save">Save Device Profile</span>
+            </button>
+        </div>
+    </dialog>

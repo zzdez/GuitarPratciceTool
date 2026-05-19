@@ -250,7 +250,12 @@ class ActionHandler:
         active_title = raw_title.lower()
         active_process = self.get_active_process_name().lower()
         
-        # self.log(f"MATCHING: App='{active_process}' Title='{raw_title}'")
+        # V21: Dynamic "our own app" detection to support executable renaming
+        import sys
+        import os
+        our_self_name = os.path.basename(sys.executable).lower()
+        our_processes = {"python.exe", "pythonw.exe", "airstepsmartcontrol.exe", "airstepstudio.exe", "midikbdcontrolstudio.exe", "midikbd_control_studio.exe", "guitarpracticetool.exe", "guitar_practice_tool.exe", our_self_name}
+        is_our_process = (active_process in our_processes)
 
         best_profile = None
         best_score = -1
@@ -264,16 +269,38 @@ class ActionHandler:
 
             match_app = True
             if app_filter:
-                match_app = (app_filter in active_process)
+                # If we are focused on our own process, we bypass app_context (like "chrome.exe") 
+                # for any internal Web profiles (Web YouTube, Web Audio, etc.)
+                if is_our_process and p.get('name', '').startswith("Web "):
+                    match_app = True
+                else:
+                    match_app = (app_filter in active_process)
 
             match_title = True
-            if title_filter:
-                match_title = title_filter in active_title
+            if is_our_process and p.get('name', '').startswith("Web "):
+                # Agnostic web player mode matching: bypass the hardcoded title filter check
+                # to support app renaming (ex: "Midi-Kbd Control Studio" to "Guitar Practice Tool")
+                p_name = p.get('name', '').lower()
+                if "youtube" in active_title:
+                    match_title = ("youtube" in p_name)
+                elif "audio" in active_title:
+                    match_title = ("audio" in p_name)
+                elif "video" in active_title:
+                    match_title = ("video" in p_name)
+                else:
+                    match_title = ("generic" in p_name)
+            elif title_filter:
+                match_title = (title_filter in active_title)
 
             if match_app and match_title:
                 score = 0
                 if app_filter: score += 1
                 if title_filter: score += 2
+                
+                # Boost score for perfect Web mode matching
+                if is_our_process and p.get('name', '').startswith("Web "):
+                    score += 5
+                    
                 if score > best_score:
                     best_score = score
                     best_profile = p

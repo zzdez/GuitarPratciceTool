@@ -1,0 +1,132 @@
+<dialog id="settings-modal">
+        <div class="modal-header">
+            <h3 data-i18n="web.modal_settings_title">Réglages</h3>
+            <button onclick="closeSettingsModal()" class="btn-close">×</button>
+        </div>
+        <div class="modal-body" style="padding:0; display:flex;">
+            <!-- SIDE NAV -->
+            <div class="settings-nav">
+                <button class="nav-btn active" onclick="switchSettingsTab('general')"
+                    data-i18n="web.tab_general">Général</button>
+                <button class="nav-btn" onclick="switchSettingsTab('library')"
+                    data-i18n="web.tab_library">Médiathèque</button>
+                <button class="nav-btn" onclick="switchSettingsTab('storage')"
+                    data-i18n="web.tab_storage">Stockage</button>
+                <button class="nav-btn" onclick="switchSettingsTab('controller')"
+                    data-i18n="web.tab_controller">Contrôleur</button>
+            </div>
+
+            <!-- CONTENT -->
+            <div class="settings-content">
+                <!-- TAB: GENERAL -->
+                <div id="tab-settings-general" class="settings-tab">
+                    <div class="settings-row" style="justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <h4 data-i18n="web.lbl_lang_choice" style="margin:0; border:none; padding:0; font-size:0.8em;">Langue / Language</h4>
+                        <select id="setting-language" onchange="changeLanguage()" style="height:20px; width:120px; padding:2px; font-size:0.8em; margin:0;">
+                            <option value="fr">Français</option>
+                            <option value="en">English</option>
+                        </select>
+                    </div>
+
+                    <div style="display:flex; gap:10px; margin-bottom: 8px;">
+                        <div class="settings-row" style="flex:1; justify-content: space-between; align-items: center; margin-bottom: 0;">
+                            <h4 data-i18n="web.lbl_playback_options" style="margin:0; border:none; padding:0; font-size:0.8em;">Options de Lecture</h4>
+                            <div style="display:flex; gap:10px; align-items:center;">
+                                <label style="display:flex; align-items:center; gap:5px; margin:0;">
+                                    <input type="checkbox" id="setting-autoplay" style="width:13px; height:13px;">
+                                    <span data-i18n="web.lbl_autoplay" style="font-size:0.75em;">Auto</span>
+                                </label>
+                                <label style="display:flex; align-items:center; gap:5px; margin:0;">
+                                    <input type="checkbox" id="setting-autoreplay" style="width:13px; height:13px;">
+                                    <span data-i18n="web.lbl_autoreplay" style="font-size:0.75em;">Boucle</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="settings-row" style="flex:1; justify-content: space-between; align-items: center; margin-bottom: 0;">
+                            <h4 data-i18n="web.lbl_fretboard_style" style="margin:0; border:none; padding:0; font-size:0.8em;">Style Fretboard</h4>
+                            <div style="display:flex; gap:6px; align-items:center;">
+                                <select id="setting-fretboard-skin" onchange="changeFretboardSkin()" style="height:20px; width:90px; padding:2px; font-size:0.75em;">
+                                    <option value="flat" data-i18n="web.fretboard_flat">Plat</option>
+                                    <option value="wood" data-i18n="web.fretboard_wood">Bois</option>
+                                </select>
+                                <label style="display:flex; align-items:center; gap:5px; margin:0;">
+                                    <input type="checkbox" id="setting-fretboard-autoclose" style="width:13px; height:13px;">
+                                    <span data-i18n="web.lbl_fretboard_auto_close" style="font-size:0.75em;">Auto-Close</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h4 data-i18n="web.lbl_youtube_api">Clé API YouTube</h4>
+                    <div class="settings-control-group" style="padding:4px 8px; margin-bottom:8px;">
+                        <input type="password" id="setting-youtube-key" data-i18n-placeholder="web.placeholder_youtube_api" style="height:22px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:2px;">
+                            <p class="hint" data-i18n="web.msg_api_info" style="margin:0; font-size:0.7em;">Raccourci titres/images.</p>
+                            <a href="https://console.cloud.google.com/" target="_blank" style="color:var(--accent); text-decoration:none; font-size:0.7em;" data-i18n="web.link_get_api_key">Clé API ↗</a>
+                        </div>
+                    </div>
+
+                    <h4 data-i18n="web.lbl_music_apis">APIs Musique (BPM & Ton.)</h4>
+                    <div class="settings-control-group" style="padding:4px 8px; margin-bottom:8px;">
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+                            <div>
+                                <label data-i18n="web.lbl_spotify_client_id" style="font-size:0.7em;">ID Spotify</label>
+                                <input type="password" id="setting-spotify-client-id" placeholder="..." style="height:20px;">
+                            </div>
+                            <div>
+                                <label data-i18n="web.lbl_spotify_client_secret" style="font-size:0.7em;">Secret Spotify</label>
+                                <input type="password" id="setting-spotify-client-secret" placeholder="..." style="height:20px;">
+                            </div>
+                        </div>
+                        <div style="margin-top:4px; padding-top:4px; border-top:1px solid #333;">
+                            <label data-i18n="web.lbl_getsong_api_key" style="font-size:0.7em;">GetSongBPM Key</label>
+                            <input type="password" id="setting-getsong-api-key" placeholder="..." style="height:20px;">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB: LIBRARY -->
+                <div id="tab-settings-library" class="settings-tab" style="display:none;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <h4 data-i18n="web.lbl_local_folders" style="margin:0; border:none;">Dossiers Locaux</h4>
+                        <button class="btn-secondary" onclick="addLibraryFolder()" style="padding:4px 8px; font-size:0.8em;">+ Ajouter</button>
+                    </div>
+                    <div id="settings-folder-list" class="folder-list" style="max-height:250px;"></div>
+                    <p class="hint" data-i18n="web.hint_local_folders">Scan auto (MP3, WAV, etc.)</p>
+                </div>
+
+                <!-- TAB: CONTROLLER -->
+                <div id="tab-settings-controller" class="settings-tab" style="display:none;">
+                    <h4 data-i18n="web.lbl_controller_config">Contrôleur</h4>
+                    <p class="hint" data-i18n="web.hint_controller_config" style="margin-bottom:15px;">Utilisez l'éditeur natif pour les boutons.</p>
+                    <div style="text-align:center;">
+                        <button class="btn-primary" onclick="openNativeEditor()" style="padding:10px 20px;" data-i18n="gui.btn_open_editor">
+                            Éditeur Avancé ⚙️
+                        </button>
+                    </div>
+                </div>
+
+                <!-- TAB: STORAGE -->
+                <div id="tab-settings-storage" class="settings-tab" style="display:none;">
+                    <h4 data-i18n="web.lbl_portability">Portabilité & Migration</h4>
+                    <div class="settings-control-group">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div style="flex:1;">
+                                <strong style="font-size:0.85em;" data-i18n="web.lbl_consolidate">Consolider</strong>
+                                <p class="hint" data-i18n="web.hint_consolidate" style="margin:0;">Copie tout en local.</p>
+                            </div>
+                            <button class="btn-primary" onclick="consolidateLibrary()" data-i18n="web.btn_consolidate_run" style="padding:6px 12px; font-size:0.8em;">Consolider</button>
+                        </div>
+                    </div>
+                    
+                    <h4 data-i18n="web.lbl_missing_media" style="color:#cf6679; border-bottom-color:#442222;">Médias Déconnectés</h4>
+                    <p class="hint" data-i18n="web.hint_missing_media">Utilisez la loupe rouge pour réparer.</p>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer" style="padding:10px 15px;">
+            <button class="btn-text" onclick="closeSettingsModal()" data-i18n="web.btn_cancel">Annuler</button>
+            <button class="btn-primary" onclick="saveSettings()" data-i18n="web.btn_save">Enregistrer</button>
+        </div>
+    </dialog>

@@ -12,7 +12,7 @@ pyinstaller
 winsdk
 bleak-winrt
 requests
-customtkinter
+PySide6
 packaging
 mutagen
 yt-dlp

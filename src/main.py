@@ -1,5 +1,12 @@
 import sys
 import os
+
+# V21: Bypass same-origin, CORS and iframe SAMEORIGIN/CSP constraints globally for Songsterr embedding
+# Only set environment flags if this is the main GUI process
+if "--multiprocessing-fork" not in "".join(sys.argv):
+    os.environ["QTWEBENGINE_DISABLE_CONTENT_SECURITY_POLICY"] = "1"
+    os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--disable-web-security --allow-running-insecure-content"
+
 import threading
 import webbrowser
 import uvicorn
@@ -154,34 +161,11 @@ def main():
     # 2c. Wiring Folder Selection (Thread-Safe)
     def select_folder_wrapper():
         """Ouvre askdirectory dans le thread principal et renvoie le résultat"""
-        result = {"path": None}
-        event = threading.Event()
-        
-        def _ask():
-            try:
-                from tkinter import filedialog, Toplevel
-                
-                # Z-Order Fix: Create TopLevel parent
-                top = Toplevel(app)
-                top.withdraw() 
-                top.attributes('-topmost', True)
-
-                # Ensure window is visible or use root
-                path = filedialog.askdirectory(parent=top, title="Sélectionner un dossier")
-                
-                top.destroy()
-                
-                if path:
-                    result["path"] = path
-            except Exception as e:
-                print(f"Dialog Error: {e}")
-            finally:
-                event.set()
-        
-        if app:
-            app.after(0, _ask)
-            event.wait() # Wait for UI thread to process
-            return result["path"]
+        if app and hasattr(app, "dialog_helper"):
+            ctx = {"event": threading.Event(), "path": None}
+            app.dialog_helper.select_folder_signal.emit(ctx)
+            ctx["event"].wait()
+            return ctx["path"]
         return None
 
     fastapi_app.state.select_folder_callback = select_folder_wrapper
@@ -189,45 +173,11 @@ def main():
     # 2d. Wiring File Selection (Thread-Safe)
     def select_file_wrapper():
         """Ouvre askopenfilename dans le thread principal et renvoie le résultat"""
-        result = {"path": None}
-        event = threading.Event()
-        
-        def _ask_file():
-            try:
-                from tkinter import filedialog, Toplevel
-                
-                # Create a temporary top-level window to act as parent
-                # This allow us to set 'topmost' so the dialog appears above the browser
-                top = Toplevel(app)
-                top.withdraw() 
-                top.attributes('-topmost', True)
-                
-                # Restore filetypes now that we know it wasn't the crash cause
-                # Use simplified list just in case
-                path = filedialog.askopenfilename(
-                    parent=top,
-                    title="Ajouter un fichier",
-                    filetypes=[("Media", "*.mp3 *.wav *.flac *.m4a *.mp4 *.mkv *.webm *.ogg"), ("All", "*.*")]
-                )
-                
-                top.destroy()
-                
-                if path:
-                    result["path"] = path
-            except Exception as e:
-                print(f"Dialog Error: {e}")
-            finally:
-                event.set()
-        
-        if app:
-            app.after(0, _ask_file)
-            
-            # Timeout safety
-            is_set = event.wait(timeout=10.0) 
-            if not is_set:
-                print("Dialog Callback Timeout")
-            
-            return result["path"]
+        if app and hasattr(app, "dialog_helper"):
+            ctx = {"event": threading.Event(), "path": None}
+            app.dialog_helper.select_file_signal.emit(ctx)
+            ctx["event"].wait()
+            return ctx["path"]
         return None
 
     fastapi_app.state.select_file_callback = select_file_wrapper
@@ -261,4 +211,13 @@ def main():
 
 if __name__ == "__main__":
     multiprocessing.freeze_support()
+    
+    # V21: Bypass same-origin, CORS and iframe SAMEORIGIN/CSP constraints globally for Songsterr embedding
+    # Only modify sys.argv if we are in the main GUI process (not in multiprocessing spawned forks)
+    if "--multiprocessing-fork" not in "".join(sys.argv):
+        if "--disable-web-security" not in sys.argv:
+            sys.argv.append("--disable-web-security")
+        if "--allow-running-insecure-content" not in sys.argv:
+            sys.argv.append("--allow-running-insecure-content")
+            
     main()

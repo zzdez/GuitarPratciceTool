@@ -789,10 +789,20 @@ dialog {
     border: 1px solid #333;
     border-radius: 8px;
     padding: 0;
-    width: 95%;
-    max-width: 920px;
+    width: 95% !important;
+    max-width: 920px !important;
+    height: fit-content !important;
     /* Wider modal */
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    
+    /* V21: Prevent native HTML5 dialog jumping/shaking in Qt WebEngine when clicking dropdowns or focus changes */
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    margin: auto !important;
+    transform: none !important;
 }
 
 dialog::backdrop {
