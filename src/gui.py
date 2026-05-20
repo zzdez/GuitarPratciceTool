@@ -926,7 +926,7 @@ class MappingDialog(ctk.CTkToplevel):
 
 # VirtualPedalboard replaced by CompactPedalboardFrame from remote_gui.py
 
-class MidiKbdApp(ctk.CTk):
+class GuitarPracticeApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title(_("gui.main_title"))
@@ -1758,7 +1758,7 @@ class MidiKbdApp(ctk.CTk):
                         except: pass
                     
                     # Restart logic for EXE update
-                    if res['pull'] and any("MidiKbdControlStudio.exe" in p for p in res['pull']):
+                    if res['pull'] and any("GuitarPracticeTool.exe" in p for p in res['pull']):
                         script = mgr.generate_bootstrapper_script()
                         import tkinter.messagebox
                         if tkinter.messagebox.askyesno("Mise à jour disponible", "Une nouvelle version de l'application a été téléchargée. Voulez-vous redémarrer pour l'installer ?"):
@@ -2652,7 +2652,7 @@ class MidiKbdApp(ctk.CTk):
                     pystray.Menu.SEPARATOR,
                     pystray.MenuItem(_("gui.menu_quit"), self.quit_app)
                 )
-                self.tray_icon = pystray.Icon("MidiKbdControlStudio", image, "Midi-Kbd Control Studio", menu)
+                self.tray_icon = pystray.Icon("GuitarPracticeTool", image, "GuitarPracticeTool", menu)
                 self.tray_icon.run()
             except Exception as e:
                 self.log_debug(f"Erreur Tray: {e}")

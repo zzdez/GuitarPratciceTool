@@ -26,7 +26,7 @@ from utils import get_app_dir, get_data_dir, to_portable_path, resolve_portable_
 from i18n import _
 
 # Configure Logging
-log_path = os.path.join(os.getcwd(), 'midikbd_debug.log')
+log_path = os.path.join(get_app_dir(), 'guitarpracticetool_debug.log')
 print(f"DIAGNOSTIC: Logging to {log_path}")
 logging.basicConfig(
     filename=log_path,

@@ -714,15 +714,15 @@ function setMode(mode, forcedProfileName = null) {
     currentMode = mode;
 
     // --- CRITICAL: Update Window Title for ContextMonitor Auto-Detect ---
-    // Universal Logic: "Midi-Kbd Control Studio - [Profile Name]"
+    // Universal Logic: "GuitarPracticeTool - [Profile Name]"
     if (forcedProfileName) {
-        document.title = `Midi-Kbd Control Studio - ${forcedProfileName}`;
+        document.title = `GuitarPracticeTool - ${forcedProfileName}`;
     } else {
         // Fallback for hardcoded modes if no profile name provided
-        if (mode === "YOUTUBE") document.title = "Midi-Kbd Control Studio - YouTube";
-        else if (mode === "AUDIO") document.title = "Midi-Kbd Control Studio - Audio";
-        else if (mode === "VIDEO") document.title = "Midi-Kbd Control Studio - Video";
-        else document.title = "Midi-Kbd Control Studio";
+        if (mode === "YOUTUBE") document.title = "GuitarPracticeTool - YouTube";
+        else if (mode === "AUDIO") document.title = "GuitarPracticeTool - Audio";
+        else if (mode === "VIDEO") document.title = "GuitarPracticeTool - Video";
+        else document.title = "GuitarPracticeTool";
     }
 
     // Notify Backend
@@ -3392,7 +3392,7 @@ function connectVideoWebSocket() {
             websocket.send(JSON.stringify({
                 type: "set_mode",
                 mode: currentMode,
-                target_profile: document.title.replace("Midi-Kbd Control Studio - ", "")
+                target_profile: document.title.replace("GuitarPracticeTool - ", "")
             }));
         }
     };
@@ -4671,9 +4671,9 @@ function setMode(mode, targetProfile) {
     // UPDATE DOCUMENT TITLE for ContextMonitor
     // This ensures the native app detects the context change even if WS fails
     if (targetProfile) {
-        document.title = "Midi-Kbd Control Studio - " + targetProfile;
+        document.title = "GuitarPracticeTool - " + targetProfile;
     } else {
-        document.title = "Midi-Kbd Control Studio - Web Generic"; // Fallback
+        document.title = "GuitarPracticeTool - Web Generic"; // Fallback
     }
 
     // Also notify backend

@@ -1,7 +1,7 @@
 {
     "gui": {
-        "title": "MidiKbd Control Studio",
-        "main_title": "MIDI-KBD Control Studio",
+        "title": "GuitarPracticeTool",
+        "main_title": "GuitarPracticeTool",
         "tab_dashboard": "Dashboard",
         "tab_settings": "Réglages",
         "status_wait": "En attente...",

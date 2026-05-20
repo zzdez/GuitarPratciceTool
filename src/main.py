@@ -29,7 +29,7 @@ if parent_dir not in sys.path:
 # --- IMPORTS ---
 from server import app as fastapi_app
 from config_manager import ConfigManager
-from gui import MidiKbdApp
+from gui import GuitarPracticeApp
 from midi_engine import MidiManager
 from utils import get_app_dir
 import maintenance
@@ -50,8 +50,8 @@ def start_uvicorn(host, port):
 def main():
     global app, server_thread
 
-    print("--- Démarrage MidiKbd Control Studio ---")
-    print("DISCLAIMER: MidiKbd Control Studio est un outil d'interopérabilité.")
+    print("--- Démarrage GuitarPracticeTool ---")
+    print("DISCLAIMER: GuitarPracticeTool est un outil d'interopérabilité.")
     print("L'utilisateur est seul responsable de l'usage des fonctions de téléchargement,")
     print("conformément aux lois sur la copie privée et aux droits d'auteur de son pays.")
 
@@ -78,7 +78,7 @@ def main():
         print(f"Maintenance Error: {e}")
 
     # 2. Interface Graphique (GUI) - Doit être créée dans le Main Thread
-    app = MidiKbdApp()
+    app = GuitarPracticeApp()
     
     if is_light_mode:
         # Mode Light : On ouvre directement la Remote et on affiche le Tray
@@ -104,15 +104,15 @@ def main():
         server_thread.start()
         print("Serveur Web démarré.")
     
-        # Context Monitor start is inside MidiKbdApp.__init__. 
+        # Context Monitor start is inside GuitarPracticeApp.__init__. 
         # We need to STOP it if light mode.
         if hasattr(app, 'context_monitor') and app.context_monitor:
             # Note: ContextMonitor was started in app.__init__. We should stop it here.
             # Better architecture would be to start it here, but checking existing code...
-            # It IS started in MidiKbdApp.__init__.
+            # It IS started in GuitarPracticeApp.__init__.
              pass 
     else:
-        # Stop the monitor that started automatically in MidiKbdApp
+        # Stop the monitor that started automatically in GuitarPracticeApp
         if hasattr(app, 'context_monitor') and app.context_monitor:
             print("Arrêt du ContextMonitor pour Light Mode.")
             app.context_monitor.stop()
@@ -239,8 +239,8 @@ def main():
     if hasattr(app, 'context_monitor'):
         fastapi_app.state.context_monitor = app.context_monitor
 
-    # 4. MIDI Engine is now managed by MidiKbdApp internally automatically.
-    # See MidiKbdApp.start_engine() and MidiKbdApp.__init__()
+    # 4. MIDI Engine is now managed by GuitarPracticeApp internally automatically.
+    # See GuitarPracticeApp.start_engine() and GuitarPracticeApp.__init__()
 
 
     # 5. Ouverture Navigateur (Désactivé : Mode Service)
