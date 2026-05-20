@@ -3270,3 +3270,92 @@ input[type="color"].stem-color-input::-moz-color-swatch {
     outline: none;
     border-bottom: 1px solid var(--accent) !important;
 }
+
+/* USERSCRIPTS / PLUGINS premium styling */
+.plugin-item {
+    background: #141414;
+    border: 1px solid #252525;
+    border-radius: 6px;
+    padding: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    position: relative;
+    user-select: none;
+}
+
+.plugin-item:hover {
+    background: #1d1d1d;
+    border-color: #3d3d3d;
+}
+
+.plugin-item.active-item {
+    border-color: var(--accent);
+    background: rgba(187, 134, 252, 0.04);
+}
+
+.plugin-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+}
+
+.plugin-item-name {
+    font-weight: bold;
+    font-size: 0.85em;
+    color: #eee;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+}
+
+.plugin-item-desc {
+    font-size: 0.75em;
+    color: #888;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.plugin-item-pattern {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.7em;
+    color: var(--accent);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    background: rgba(187, 134, 252, 0.05);
+    padding: 2px 4px;
+    border-radius: 3px;
+    align-self: flex-start;
+}
+
+.plugin-item-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 2px;
+}
+
+.plugin-status-badge {
+    font-size: 0.7em;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-weight: 600;
+}
+
+.plugin-status-active {
+    background: rgba(3, 218, 198, 0.15);
+    color: var(--success);
+    border: 1px solid rgba(3, 218, 198, 0.3);
+}
+
+.plugin-status-inactive {
+    background: rgba(255, 255, 255, 0.05);
+    color: #666;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}

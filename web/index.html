@@ -2147,7 +2147,10 @@
                     data-i18n="web.tab_storage">Stockage</button>
                 <button class="nav-btn" onclick="switchSettingsTab('controller')"
                     data-i18n="web.tab_controller">Contrôleur</button>
+                <button class="nav-btn" onclick="switchSettingsTab('plugins')"
+                    data-i18n="web.tab_plugins">Plugins / Scripts</button>
             </div>
+
 
             <!-- CONTENT -->
             <div class="settings-content">
@@ -2343,6 +2346,73 @@
                     
                     <h4 data-i18n="web.lbl_missing_media" style="color:#cf6679; border-bottom-color:#442222;">Médias Déconnectés</h4>
                     <p class="hint" data-i18n="web.hint_missing_media">Utilisez la loupe rouge pour réparer.</p>
+                </div>
+
+                <!-- TAB: PLUGINS -->
+                <div id="tab-settings-plugins" class="settings-tab" style="display:none; height:100%;">
+                    <div style="display:flex; height:100%; gap:15px; align-items:stretch;">
+                        <!-- Left Panel: Plugins list -->
+                        <div style="width:250px; display:flex; flex-direction:column; border-right:1px solid #2d2d2d; padding-right:15px; flex-shrink:0;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                <h4 style="margin:0; border:none; padding:0; font-size:0.9em;"><i class="ph ph-plug"></i> Plugins Actifs</h4>
+                                <button class="btn-primary btn-micro" onclick="createNewUserScript()" style="padding: 2px 6px;">+ Nouveau</button>
+                            </div>
+                            <div id="plugins-list-container" style="flex:1; overflow-y:auto; background:#090909; border:1px solid #2d2d2d; border-radius:4px; padding:6px; display:flex; flex-direction:column; gap:8px;">
+                                <!-- Dynamic Plugin Items -->
+                            </div>
+                            <!-- Helper / Template Import -->
+                            <div style="margin-top:10px; border-top:1px solid #2d2d2d; padding-top:10px; display:flex; flex-direction:column; gap:5px;">
+                                <span style="font-size:0.75em; color:#888;">Modèles d'exemples :</span>
+                                <div style="display:flex; gap:5px;">
+                                    <button class="btn-secondary btn-micro" style="flex:1;" onclick="importPluginTemplate('songsterr')">Songsterr AdBlock</button>
+                                    <button class="btn-secondary btn-micro" style="flex:1;" onclick="importPluginTemplate('youtube')">YouTube Loop</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right Panel: Script Editor -->
+                        <div id="plugin-editor-pane" style="flex:1; display:none; flex-direction:column; gap:10px;">
+                            <h4 id="plugin-editor-title" style="margin:0; border:none; padding:0; font-size:0.9em; color:var(--accent);">Éditer le Script</h4>
+                            <div class="controller-grid-2">
+                                <div class="controller-form-group">
+                                    <label>Nom du Plugin</label>
+                                    <input type="text" id="plugin-edit-name" placeholder="ex: AdBlocker Songsterr" oninput="markPluginFormDirty()">
+                                </div>
+                                <div class="controller-form-group">
+                                    <label>Filtre d'URL (Pattern Glob ou * pour tout)</label>
+                                    <input type="text" id="plugin-edit-pattern" placeholder="ex: *://*.songsterr.com/*" oninput="markPluginFormDirty()">
+                                </div>
+                            </div>
+                            <div class="controller-form-group">
+                                <label>Description</label>
+                                <input type="text" id="plugin-edit-desc" placeholder="A quoi sert ce script..." oninput="markPluginFormDirty()">
+                            </div>
+                            <div class="controller-form-group" style="flex:1; display:flex; flex-direction:column;">
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <label style="margin:0;">Code JavaScript (Standard ES6)</label>
+                                    <select id="plugin-edit-runat" onchange="markPluginFormDirty()" style="font-size:0.8em; height:20px; padding:2px; margin:0;">
+                                        <option value="document_ready">Document Ready (Après chargement DOM)</option>
+                                        <option value="document_creation">Document Creation (Avant scripts de la page)</option>
+                                    </select>
+                                </div>
+                                <div style="flex:1; position:relative; min-height:220px; margin-top:5px; border:1px solid #333; border-radius:4px; overflow:hidden;">
+                                    <textarea id="plugin-edit-code" placeholder="// Saisissez votre code JavaScript ici..." 
+                                              style="width:100%; height:100%; box-sizing:border-box; background:#070707; color:#22c55e; border:none; padding:12px; font-family:'Courier New', Courier, monospace; font-size:1.1em; line-height:1.4; resize:none; outline:none;" 
+                                              oninput="markPluginFormDirty()"></textarea>
+                                </div>
+                            </div>
+                            <div style="display:flex; justify-content:flex-end; gap:8px;">
+                                <button id="btn-plugin-delete" class="btn-danger btn-micro" style="background:#ff3b30;" onclick="deleteCurrentUserScript()">Supprimer</button>
+                                <button id="btn-plugin-save" class="btn-primary btn-micro" style="padding: 4px 15px;" onclick="saveCurrentUserScript()">Sauvegarder</button>
+                            </div>
+                        </div>
+
+                        <!-- No Script Selected Placeholder -->
+                        <div id="plugin-editor-placeholder" style="flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; color:#555; gap:10px;">
+                            <i class="ph ph-plug-zap" style="font-size:4em; color:#333;"></i>
+                            <span>Sélectionnez un plugin à gauche ou créez-en un nouveau pour commencer à l'éditer.</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

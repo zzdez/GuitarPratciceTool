@@ -2818,6 +2818,8 @@ function switchSettingsTab(tabName) {
     document.getElementById("tab-settings-library").style.display = "none";
     document.getElementById("tab-settings-storage").style.display = "none";
     document.getElementById("tab-settings-controller").style.display = "none";
+    const tabPlugins = document.getElementById("tab-settings-plugins");
+    if (tabPlugins) tabPlugins.style.display = "none";
 
     // Deactivate Buttons
     const btns = document.querySelectorAll(".settings-nav .nav-btn");
@@ -2825,10 +2827,17 @@ function switchSettingsTab(tabName) {
 
     // Show Target
     const target = document.getElementById(`tab-settings-${tabName}`);
-    if (target) target.style.display = "block";
+    if (target) {
+        if (tabName === 'plugins') {
+            target.style.display = "flex";
+            loadPluginsList();
+        } else {
+            target.style.display = "block";
+        }
+    }
 
-    // Activate Button (Mapping correct avec l'ordre de l'index.html)
-    const map = { 'general': 0, 'library': 1, 'storage': 2, 'controller': 3 };
+    // Activate Button
+    const map = { 'general': 0, 'library': 1, 'storage': 2, 'controller': 3, 'plugins': 4 };
     if (btns[map[tabName]]) btns[map[tabName]].classList.add("active");
 }
 
@@ -13598,4 +13607,319 @@ async function captureActiveWindowTitle() {
             btn.disabled = false;
         }
     }
+}
+
+// ==========================================
+// V22: GESTIONNAIRE DE USERSCRIPTS / PLUGINS
+// ==========================================
+let loadedPlugins = [];
+let activePluginId = null;
+let pluginFormDirty = false;
+
+// Charger et afficher la liste des plugins
+async function loadPluginsList() {
+    console.log("[PLUGINS] Chargement de la liste des plugins...");
+    const container = document.getElementById("plugins-list-container");
+    if (!container) return;
+    container.innerHTML = `<div style="color:#666; font-size:0.85em; padding:10px; text-align:center;"><i class="ph ph-spinner ph-spin"></i> Chargement...</div>`;
+
+    try {
+        const res = await fetch("/api/userscripts");
+        if (res.ok) {
+            loadedPlugins = await res.json();
+            container.innerHTML = "";
+            
+            if (loadedPlugins.length === 0) {
+                container.innerHTML = `<div style="color:#555; font-size:0.8em; text-align:center; padding:20px;">Aucun script installé.<br>Cliquez sur "+ Nouveau" ou sur un modèle d'exemple ci-dessous pour démarrer.</div>`;
+                return;
+            }
+
+            loadedPlugins.forEach(p => {
+                const item = document.createElement("div");
+                item.className = `plugin-item ${activePluginId === p.id ? 'active-item' : ''}`;
+                item.onclick = () => selectPluginForEditing(p.id);
+
+                const statusClass = p.enabled ? "plugin-status-active" : "plugin-status-inactive";
+                const statusText = p.enabled ? "Actif" : "Inactif";
+                const checkedAttr = p.enabled ? "checked" : "";
+
+                item.innerHTML = `
+                    <div class="plugin-item-header">
+                        <span class="plugin-item-name" title="${p.name}">${p.name}</span>
+                        <label class="modern-switch" style="margin:0; width:34px; height:18px;" onclick="event.stopPropagation();">
+                            <input type="checkbox" onchange="togglePluginEnabled('${p.id}', event)" ${checkedAttr}>
+                            <span class="slider round" style="before: {width:14px; height:14px; left:2px; bottom:2px;}"></span>
+                        </label>
+                    </div>
+                    ${p.description ? `<span class="plugin-item-desc" title="${p.description}">${p.description}</span>` : ''}
+                    <span class="plugin-item-pattern" title="Filtre URL">${p.url_pattern || '*'}</span>
+                    <div class="plugin-item-meta">
+                        <span class="plugin-status-badge ${statusClass}">${statusText}</span>
+                        <span style="font-size:0.65em; color:#555;">Injection: ${p.run_at === 'document_creation' ? 'Création' : 'DOM Ready'}</span>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+        } else {
+            container.innerHTML = `<div style="color:#cf6679; font-size:0.85em; text-align:center; padding:10px;">Erreur lors du chargement des plugins</div>`;
+        }
+    } catch (e) {
+        console.error("[PLUGINS] Erreur réseau lors du chargement des plugins:", e);
+        container.innerHTML = `<div style="color:#cf6679; font-size:0.85em; text-align:center; padding:10px;">Erreur réseau</div>`;
+    }
+}
+
+// Sélectionner un plugin pour édition
+function selectPluginForEditing(id) {
+    if (pluginFormDirty) {
+        if (!confirm("Vous avez des modifications non sauvegardées dans le script en cours. Voulez-vous changer de script et perdre vos modifications ?")) {
+            return;
+        }
+    }
+
+    activePluginId = id;
+    pluginFormDirty = false;
+
+    // Mettre à jour l'état visuel actif dans la liste
+    const items = document.querySelectorAll(".plugin-item");
+    items.forEach((item, idx) => {
+        if (loadedPlugins[idx] && loadedPlugins[idx].id === id) {
+            item.classList.add("active-item");
+        } else {
+            item.classList.remove("active-item");
+        }
+    });
+
+    const plugin = loadedPlugins.find(p => p.id === id);
+    if (!plugin) return;
+
+    // Remplir le formulaire
+    document.getElementById("plugin-edit-name").value = plugin.name || "";
+    document.getElementById("plugin-edit-pattern").value = plugin.url_pattern || "";
+    document.getElementById("plugin-edit-desc").value = plugin.description || "";
+    document.getElementById("plugin-edit-runat").value = plugin.run_at || "document_ready";
+    document.getElementById("plugin-edit-code").value = plugin.code || "";
+
+    // Afficher l'éditeur et cacher le placeholder
+    document.getElementById("plugin-editor-placeholder").style.display = "none";
+    document.getElementById("plugin-editor-pane").style.display = "flex";
+    document.getElementById("plugin-editor-title").textContent = "Éditer le Script";
+    document.getElementById("btn-plugin-delete").style.display = "block";
+}
+
+// Créer un formulaire pour un nouveau script
+function createNewUserScript() {
+    if (pluginFormDirty) {
+        if (!confirm("Vous avez des modifications non sauvegardées. Voulez-vous les abandonner ?")) {
+            return;
+        }
+    }
+
+    activePluginId = null;
+    pluginFormDirty = false;
+
+    // Déselectionner la liste
+    const items = document.querySelectorAll(".plugin-item");
+    items.forEach(item => item.classList.remove("active-item"));
+
+    // Remplir le formulaire vierge avec modèle minimal
+    document.getElementById("plugin-edit-name").value = "";
+    document.getElementById("plugin-edit-pattern").value = "*://*.example.com/*";
+    document.getElementById("plugin-edit-desc").value = "";
+    document.getElementById("plugin-edit-runat").value = "document_ready";
+    document.getElementById("plugin-edit-code").value = `// Modèle Utilisateur minimal\n(function() {\n    'use strict';\n    console.log("Script utilisateur exécuté pour : " + window.location.href);\n    \n    // Saisissez votre code JavaScript ici...\n})();\n`;
+
+    // Afficher l'éditeur
+    document.getElementById("plugin-editor-placeholder").style.display = "none";
+    document.getElementById("plugin-editor-pane").style.display = "flex";
+    document.getElementById("plugin-editor-title").textContent = "Nouveau Script";
+    document.getElementById("btn-plugin-delete").style.display = "none"; // Pas encore de suppression pour un nouveau script
+}
+
+// Marquer le formulaire comme modifié
+function markPluginFormDirty() {
+    pluginFormDirty = true;
+}
+
+// Sauvegarder le script actif
+async function saveCurrentUserScript() {
+    const name = document.getElementById("plugin-edit-name").value.trim();
+    const pattern = document.getElementById("plugin-edit-pattern").value.trim();
+    const desc = document.getElementById("plugin-edit-desc").value.trim();
+    const runAt = document.getElementById("plugin-edit-runat").value;
+    const code = document.getElementById("plugin-edit-code").value;
+
+    if (!name) {
+        alert("Veuillez saisir un nom pour le script.");
+        return;
+    }
+
+    const payload = {
+        name: name,
+        url_pattern: pattern,
+        description: desc,
+        run_at: runAt,
+        code: code,
+        enabled: true
+    };
+
+    if (activePluginId) {
+        payload.id = activePluginId;
+    }
+
+    try {
+        const res = await fetch("/api/userscripts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            const saved = await res.json();
+            console.log("[PLUGINS] Script sauvegardé avec succès ! ID =", saved.id);
+            pluginFormDirty = false;
+            
+            // Sélectionner le script enregistré si c'était un nouveau
+            activePluginId = saved.id;
+            
+            // Recharger la liste et rafraîchir le formulaire d'édition
+            await loadPluginsList();
+            selectPluginForEditing(saved.id);
+        } else {
+            alert("Erreur lors de la sauvegarde du script.");
+        }
+    } catch (e) {
+        console.error("[PLUGINS] Erreur de sauvegarde:", e);
+        alert("Erreur réseau lors de la sauvegarde.");
+    }
+}
+
+// Supprimer le script actif
+async function deleteCurrentUserScript() {
+    if (!activePluginId) return;
+    if (!confirm("Voulez-vous vraiment supprimer définitivement ce script ?")) return;
+
+    try {
+        const res = await fetch(`/api/userscripts/${activePluginId}`, {
+            method: "DELETE"
+        });
+
+        if (res.ok) {
+            console.log("[PLUGINS] Script supprimé avec succès !");
+            activePluginId = null;
+            pluginFormDirty = false;
+
+            // Réinitialiser le formulaire
+            document.getElementById("plugin-editor-pane").style.display = "none";
+            document.getElementById("plugin-editor-placeholder").style.display = "flex";
+
+            await loadPluginsList();
+        } else {
+            alert("Erreur lors de la suppression du script.");
+        }
+    } catch (e) {
+        console.error("[PLUGINS] Erreur de suppression:", e);
+        alert("Erreur réseau lors de la suppression.");
+    }
+}
+
+// Activer / désactiver rapidement depuis la liste
+async function togglePluginEnabled(id, event) {
+    const isChecked = event.target.checked;
+    
+    // Si on modifie le plugin en cours d'édition, mettre à jour la valeur locale en cache
+    const plugin = loadedPlugins.find(p => p.id === id);
+    if (plugin) {
+        plugin.enabled = isChecked;
+    }
+
+    try {
+        const res = await fetch(`/api/userscripts/toggle/${id}`, {
+            method: "POST"
+        });
+
+        if (res.ok) {
+            console.log(`[PLUGINS] État de script ${id} basculé à : ${isChecked}`);
+            // Recharger discrètement la liste pour synchroniser les badges et descriptions
+            await loadPluginsList();
+        } else {
+            alert("Erreur lors du basculement d'activation du script.");
+            event.target.checked = !isChecked; // Rétablir checkbox
+        }
+    } catch (e) {
+        console.error("[PLUGINS] Erreur lors du basculement d'activation:", e);
+        alert("Erreur réseau");
+        event.target.checked = !isChecked; // Rétablir checkbox
+    }
+}
+
+// Importer un modèle d'exemple prédéfini
+function importPluginTemplate(type) {
+    if (pluginFormDirty) {
+        if (!confirm("Vous avez des modifications non sauvegardées. Les remplacer par le modèle d'exemple ?")) {
+            return;
+        }
+    }
+
+    activePluginId = null;
+    pluginFormDirty = true; // Forcer dirty car l'utilisateur charge un template à modifier/sauvegarder
+
+    document.getElementById("plugin-editor-placeholder").style.display = "none";
+    document.getElementById("plugin-editor-pane").style.display = "flex";
+    document.getElementById("btn-plugin-delete").style.display = "none";
+
+    if (type === 'songsterr') {
+        document.getElementById("plugin-edit-name").value = "Songsterr Plus Patcher & Clean UI";
+        document.getElementById("plugin-edit-pattern").value = "*://*.songsterr.com/*";
+        document.getElementById("plugin-edit-desc").value = "Débloque Songsterr Plus de manière transparente, permet la connexion à votre vrai compte et corrige le bug d'affichage timbre poste.";
+        document.getElementById("plugin-edit-runat").value = "document_creation";
+        document.getElementById("plugin-edit-code").value = `// ==UserScript==\n// @name         Songsterr Plus & Universal Display Hardening (V2.7.2)\n// @namespace    http://tampermonkey.net/\n// @version      2.7.2\n// @description  Déverrouille les fonctionnalités Songsterr Plus, permet la connexion à votre vrai compte et corrige définitivement le bug timbre poste sans effet zoom.\n// @match        *://*.songsterr.com/*\n// @run-at       document-start\n// @grant        none\n// ==/UserScript==\n\n(function() {\n    'use strict';\n\n    const win = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;\n\n    // --- 1. BYPASS PRÉVENTIF DES COOKIES ---\n    try {\n        const key = 'sng-consent';\n        const consentData = {\n            version: 1,\n            created: Date.now(),\n            consents: {\n                advertising: true,\n                advertising_consent_given: true,\n                analytics: true,\n                personalization: true\n            }\n        };\n        localStorage.setItem(key, JSON.stringify(consentData));\n        console.log("[Userscript] Consentement de cookies injecté.");\n    } catch (e) {\n        console.error("[Userscript] Échec injection cookies :", e);\n    }\n\n    // --- 1.5 BRIDAGE DYNAMIQUE ET SÉCURISÉ DE LA LARGEUR D'ÉCRAN ---\n    // Utilise outerWidth pour éviter la récursion infinie ou les valeurs nulles (0) au démarrage\n    const getTargetWidth = () => {\n        const ow = win.outerWidth;\n        const width = (ow && ow > 0) ? ow : 1070;\n        return Math.min(width, 1070);\n    };\n\n    try {\n        Object.defineProperty(win, 'innerWidth', {\n            get: () => getTargetWidth(),\n            configurable: true\n        });\n        console.log("[Userscript] window.innerWidth bridé dynamiquement (max 1070px).");\n    } catch (e) {\n        console.error("[Userscript] Impossible de brider innerWidth :", e);\n    }\n\n    // --- 2. INTERCEPTION DYNAMIQUE ET INJECTION DU STATUT PREMIUM ---\n    \n    // A. Interception de l'état initial (JSON.parse)\n    const originalParse = JSON.parse;\n    JSON.parse = function(text, reviver) {\n        const result = originalParse.apply(this, arguments);\n        \n        try {\n            if (typeof text === 'string' && text.includes('"runningThunks"') && text.includes('"user"')) {\n                console.log("[Userscript] Interception de l'état initial détectée.");\n                if (result && result.user) {\n                    result.user.hasPlus = true;\n                    \n                    if (result.user.profile && result.user.profile.id) {\n                        console.log("[Userscript] Vrai compte connecté détecté dans l'état initial. Injection premium...");\n                        result.user.isLoggedIn = true;\n                        result.user.profile.hasPlus = true;\n                        result.user.profile.plan = "plus";\n                        if (!result.user.profile.subscription) {\n                            result.user.profile.subscription = {};\n                        }\n                        result.user.profile.subscription.plan = { id: "plus" };\n                    } else {\n                        console.log("[Userscript] Aucun compte connecté. Utilisation du profil virtuel premium.");\n                        result.user.isLoggedIn = true;\n                        result.user.profile = {\n                            id: 100000000,\n                            uid: 100000000,\n                            email: "premium@airstepstudio.com",\n                            name: "AirstepUser",\n                            plan: "plus",\n                            permissions: [],\n                            subscription: { plan: { id: "plus" } },\n                            sra_license: "none",\n                            created_at: "2026-01-01T00:00:00.000Z",\n                            last_signin_date: "2026-01-01T00:00:00.000Z"\n                        };\n                    }\n                }\n                \n                if (result && result.player) {\n                    result.player.locks = [];\n                }\n            }\n        } catch (err) {\n            console.error("[Userscript] Erreur patching initial state :", err);\n        }\n        \n        return result;\n    };\n\n    // B. Interception intelligente Fetch (auth/profile)\n    const originalFetch = win.fetch;\n    win.fetch = async function(resource, options) {\n        const url = typeof resource === 'string' ? resource : (resource && resource.url) || '';\n        \n        if (url.includes("/auth/profile")) {\n            console.log("[Userscript] Interception d'authentification profil...");\n            try {\n                const response = await originalFetch.apply(this, arguments);\n                if (response.ok) {\n                    const profile = await response.json();\n                    console.log("[Userscript] Session réelle active pour :", profile.email || profile.name);\n                    profile.hasPlus = true;\n                    profile.plan = "plus";\n                    if (!profile.subscription) {\n                        profile.subscription = {};\n                    }\n                    profile.subscription.plan = { id: "plus" };\n                    \n                    return new Response(JSON.stringify(profile), {\n                        status: response.status,\n                        statusText: response.statusText,\n                        headers: response.headers\n                    });\n                }\n            } catch (err) {\n                console.warn("[Userscript] API injoignable, repli virtuel.");\n            }\n            \n            const fakeProfile = {\n                id: 100000000,\n                uid: 100000000,\n                email: "premium@airstepstudio.com",\n                name: "AirstepUser",\n                plan: "plus",\n                permissions: [],\n                subscription: { plan: { id: "plus" } },\n                sra_license: "none",\n                created_at: "2026-01-01T00:00:00.000Z",\n                last_signin_date: "2026-01-01T00:00:00.000Z"\n            };\n            return new Response(JSON.stringify(fakeProfile), {\n                status: 200,\n                statusText: "OK",\n                headers: { "Content-Type": "application/json" }\n            });\n        }\n        \n        return originalFetch.apply(this, arguments);\n    };\n\n    // --- 3. HARDENING CSS ULTRA-PUISSANT (Correction définitive timbre poste sans effet zoom) ---\n    const injectStyle = () => {\n        if (document.getElementById('songsterr-hardening-style')) return;\n        try {\n            const style = document.createElement('style');\n            style.id = 'songsterr-hardening-style';\n            style.innerHTML = \`\n                /* Force la largeur maximale naturelle de 1070px (comme le Songsterr original) pour éviter le zoom */\n                #apptab, [class*="tablature"], ._6jiALa_pane, .aJq1bq_tablature, .aJq1bq_tablaturePrint {\n                    --max-tab-width: 1070px !important;\n                    max-width: 1070px !important;\n                    width: 100% !important;\n                    margin: 0 auto !important;\n                }\n                /* Centre parfaitement le conteneur de tablature sur l'écran */\n                #tablature, .aJq1bq_tablature {\n                    margin: 0 auto !important;\n                }\n                /* Empêche les éléments SVG internes de se contracter au milieu tout en respectant la largeur maximale */\n                #tablature svg, .aJq1bq_tablature svg {\n                    width: 100% !important;\n                    max-width: 100% !important;\n                }\n            \`;\n            (document.head || document.documentElement).appendChild(style);\n            console.log("[Userscript] CSS de forçage de taille injecté avec succès (limité à 1070px).");\n        } catch (e) {\n            console.error("[Userscript] Échec injection CSS de forçage :", e);\n        }\n    };\n\n    // Injection agressive au plus tôt\n    injectStyle();\n    win.addEventListener('DOMContentLoaded', injectStyle);\n    win.addEventListener('load', injectStyle);\n\n    // --- 4. DOUBLE-RESIZE DE SÉCURITÉ ---\n    const triggerUniversalResize = () => {\n        try {\n            console.log("[Userscript] Déclenchement du redimensionnement universel...");\n            \n            const targetWidth = getTargetWidth();\n            const oh = win.innerHeight;\n            const originalHeight = (oh && oh > 0) ? oh : 800;\n\n            // Étape 1 : Recalcul forcé temporaire (avec des garde-fous stricts contre les valeurs négatives ou nulles)\n            const tempWidth = Math.max(targetWidth - 20, 320);\n            const tempHeight = Math.max(originalHeight - 20, 240);\n\n            Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: tempWidth });\n            Object.defineProperty(window, 'innerHeight', { writable: true, configurable: true, value: tempHeight });\n            window.dispatchEvent(new Event('resize'));\n\n            const containers = [\n                document.getElementById('apptab'),\n                document.getElementById('tablature'),\n                document.getElementById('app'),\n                document.querySelector('.aJq1bq_tablature'),\n                document.querySelector('._6jiALa_tablature')\n            ].filter(Boolean);\n\n            containers.forEach(el => {\n                el.style.setProperty('width', '95%', 'important');\n                el.style.setProperty('padding-right', '10px', 'important');\n            });\n\n            document.body.offsetHeight;\n\n            // Étape 2 : Verrouillage permanent sur targetWidth (1070px max)\n            Object.defineProperty(window, 'innerWidth', { \n                configurable: true, \n                get: () => getTargetWidth()\n            });\n            Object.defineProperty(window, 'innerHeight', { \n                configurable: true, \n                get: () => originalHeight\n            });\n            window.dispatchEvent(new Event('resize'));\n\n            containers.forEach(el => {\n                el.style.removeProperty('width');\n                el.style.removeProperty('padding-right');\n            });\n\n            document.body.offsetHeight;\n            console.log("[Userscript] Rendu tablature recalculé avec une largeur cible de :", targetWidth);\n        } catch (e) {\n            console.error("[Userscript] Erreur resize universel :", e);\n        }\n    };\n\n    if (document.readyState === 'complete') {\n        setTimeout(triggerUniversalResize, 500);\n        setTimeout(triggerUniversalResize, 1500);\n    } else {\n        win.addEventListener('load', () => {\n            setTimeout(triggerUniversalResize, 300);\n            setTimeout(triggerUniversalResize, 1000);\n            setTimeout(triggerUniversalResize, 2500);\n        });\n    }\n})();\n`;
+        document.getElementById("plugin-editor-title").textContent = "Importer : Songsterr Plus Patcher";
+    } else if (type === 'youtube') {
+        document.getElementById("plugin-edit-name").value = "YouTube Auto-Looper";
+        document.getElementById("plugin-edit-pattern").value = "*://*.youtube.com/*";
+        document.getElementById("plugin-edit-desc").value = "Force automatiquement la répétition en boucle (loop) sur toutes les vidéos YouTube.";
+        document.getElementById("plugin-edit-runat").value = "document_ready";
+        document.getElementById("plugin-edit-code").value = `// YouTube Auto-Looper\n(function() {\n    'use strict';\n    console.log("[Userscript] Initialisation de YouTube Auto-Looper");\n    \n    const autoLoop = () => {\n        const videos = document.querySelectorAll('video');\n        videos.forEach(v => {\n            if (!v.loop) {\n                v.loop = true;\n                console.log("[Userscript] Loop activé automatiquement sur la vidéo YouTube.");\n            }\n        });\n    };\n    \n    // Exécuter périodiquement pour gérer les changements dynamiques de page\n    setInterval(autoLoop, 1000);\n})();\n`;
+        document.getElementById("plugin-editor-title").textContent = "Importer : YouTube Loop";
+    }
+}
+
+// Importer un script utilisateur depuis une URL distante (détectée à la volée par le navigateur nativement)
+function importUserScriptFromUrl(name, description, urlPattern, runAt, code) {
+    console.log("[PLUGINS] Importation automatique de script depuis l'intercepteur de navigation...", name);
+    
+    // 1. Ouvrir la modale des réglages
+    const modal = document.getElementById("settings-modal");
+    if (modal) {
+        if (!modal.open) {
+            modal.showModal();
+        }
+    }
+    
+    // 2. Basculer vers l'onglet "plugins"
+    switchSettingsTab('plugins');
+    
+    // 3. Déselectionner tout script actif dans la liste de gauche
+    activePluginId = null;
+    pluginFormDirty = true; // Forcer dirty car l'utilisateur va éditer/sauvegarder
+    
+    const items = document.querySelectorAll(".plugin-item");
+    items.forEach(item => item.classList.remove("active-item"));
+    
+    // 4. Remplir le formulaire avec les valeurs parsées
+    document.getElementById("plugin-edit-name").value = name || "Script Importé";
+    document.getElementById("plugin-edit-pattern").value = urlPattern || "*";
+    document.getElementById("plugin-edit-desc").value = description || "Importé automatiquement depuis Tampermonkey / GreasyFork.";
+    document.getElementById("plugin-edit-runat").value = runAt || "document_ready";
+    document.getElementById("plugin-edit-code").value = code || "";
+    
+    // 5. Afficher l'éditeur et cacher le placeholder
+    document.getElementById("plugin-editor-placeholder").style.display = "none";
+    document.getElementById("plugin-editor-pane").style.display = "flex";
+    document.getElementById("plugin-editor-title").textContent = "Installer le Script Importé";
+    document.getElementById("btn-plugin-delete").style.display = "none";
+    
+    // 6. Afficher une notification utilisateur
+    alert("🚀 Script Tampermonkey détecté !\n\nL'application a intercepté le lien d'installation et a pré-rempli l'éditeur de plugins avec ses métadonnées.\n\nVous pouvez réviser le code source et cliquer sur \"Enregistrer\" pour l'activer immédiatement.");
 }

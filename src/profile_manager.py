@@ -267,9 +267,12 @@ class ProfileManager:
             CoInitialize()
             
             devices = AudioUtilities.GetSpeakers()
-            interface = devices.Activate(
-                IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-            volume = cast(interface, POINTER(IAudioEndpointVolume))
+            if hasattr(devices, "EndpointVolume"):
+                volume = devices.EndpointVolume
+            else:
+                interface = devices.Activate(
+                    IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+                volume = cast(interface, POINTER(IAudioEndpointVolume))
             
             # Pycaw uses scalar 0.0 to 1.0 for SetMasterVolumeLevelScalar
             scalar_vol = vol_percent / 100.0

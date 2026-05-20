@@ -43,8 +43,11 @@ from metadata_service import MetadataService
 from download_service import DownloadService
 from music_api import MusicAPI
 from device_manager import DEFAULT_AIRSTEP_DEF
+from userscript_manager import UserScriptManager
 
 app = FastAPI()
+userscript_manager = UserScriptManager()
+app.state.userscript_manager = userscript_manager
 WEB_LINKS_FILE = os.path.join(get_data_dir(), "web_links.json")
 SETLIST_FILE = WEB_LINKS_FILE # V60: Backward compatibility, YouTube/Web links now unified
 SETLIST_V2_FILE = os.path.join(get_data_dir(), "setlists.json") # New real setlists
@@ -3871,6 +3874,80 @@ async def delete_setlist(sl_id: str):
         return {"status": "ok"}
     except Exception as e:
         logging.error(f"[SETLIST_V2] Erreur suppression: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- USERSCRIPTS API ---
+@app.get("/api/userscripts")
+async def get_userscripts():
+    """V22: Récupère la liste de tous les plugins / scripts configurés."""
+    return userscript_manager.scripts
+
+@app.post("/api/userscripts")
+async def save_userscript(payload: dict):
+    """V22: Crée ou met à jour un plugin."""
+    try:
+        s_id = payload.get("id")
+        if not s_id:
+            s_name = payload.get("name", "plugin")
+            import uuid
+            s_id = s_name.lower().replace(" ", "-") + "-" + uuid.uuid4().hex[:6]
+            payload["id"] = s_id
+            
+        # Update list
+        found = False
+        for i, s in enumerate(userscript_manager.scripts):
+            if s.get("id") == s_id:
+                userscript_manager.scripts[i] = payload
+                found = True
+                break
+        if not found:
+            userscript_manager.scripts.append(payload)
+            
+        userscript_manager.save_scripts()
+        
+        # Trigger hot-reload in Qt WebEngine if callback is registered
+        if hasattr(app.state, "reload_userscripts_callback") and app.state.reload_userscripts_callback:
+            app.state.reload_userscripts_callback()
+            
+        return {"status": "ok", "id": s_id}
+    except Exception as e:
+        logging.error(f"[UserScript API] Error saving: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/userscripts/{s_id}")
+async def delete_userscript(s_id: str):
+    """V22: Supprime un plugin."""
+    try:
+        userscript_manager.scripts = [s for s in userscript_manager.scripts if s.get("id") != s_id]
+        userscript_manager.save_scripts()
+        
+        # Trigger hot-reload in Qt WebEngine if callback is registered
+        if hasattr(app.state, "reload_userscripts_callback") and app.state.reload_userscripts_callback:
+            app.state.reload_userscripts_callback()
+            
+        return {"status": "ok"}
+    except Exception as e:
+        logging.error(f"[UserScript API] Error deleting: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/userscripts/toggle/{s_id}")
+async def toggle_userscript(s_id: str):
+    """V22: Active ou désactive rapidement un plugin."""
+    try:
+        for s in userscript_manager.scripts:
+            if s.get("id") == s_id:
+                s["enabled"] = not s.get("enabled", False)
+                break
+                
+        userscript_manager.save_scripts()
+        
+        # Trigger hot-reload in Qt WebEngine if callback is registered
+        if hasattr(app.state, "reload_userscripts_callback") and app.state.reload_userscripts_callback:
+            app.state.reload_userscripts_callback()
+            
+        return {"status": "ok"}
+    except Exception as e:
+        logging.error(f"[UserScript API] Error toggling: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/remote")

@@ -154,8 +154,13 @@ def main():
         if app:
             app.after(0, lambda: app.toggle_remote_control())
             
+    def reload_userscripts_wrapper():
+        if app:
+            app.after(0, lambda: app.reload_userscripts())
+            
     fastapi_app.state.toggle_remote_callback = toggle_remote_wrapper
     fastapi_app.state.open_settings_callback = open_settings_wrapper
+    fastapi_app.state.reload_userscripts_callback = reload_userscripts_wrapper
     fastapi_app.state.midi_manager = app.midi_manager
 
     # 2c. Wiring Folder Selection (Thread-Safe)

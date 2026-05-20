@@ -100,6 +100,14 @@ class CockpitWebPage(QWebEnginePage):
 
     def acceptNavigationRequest(self, url, navigation_type, is_main_frame):
         url_str = url.toString()
+        
+        # Intercepter les installations automatiques de scripts utilisateur (.user.js) dans le Cockpit
+        if url_str.endswith(".user.js") or "/code/" in url_str and url_str.split("?")[0].endswith(".user.js"):
+            print(f"[NAV] Intercepted Tampermonkey script installation link in Cockpit: {url_str}")
+            import threading
+            threading.Thread(target=self.window.handle_userscript_installation, args=(url_str,), daemon=True).start()
+            return False
+
         # If it's an external http/https URL that is not embeddable media or local API
         if url_str.startswith("http") and not self.is_embeddable_media(url_str):
             print(f"[NAV] Intercepted navigation to external: {url_str}")
@@ -118,6 +126,26 @@ class CockpitWebPage(QWebEnginePage):
             "localhost" in url_lower or
             "127.0.0.1" in url_lower
         )
+
+# -------------------------------------------------------------
+# EXTERNAL WEB PAGE INTERCEPTOR (Detects Tampermonkey script installations)
+# -------------------------------------------------------------
+class ExternalWebPage(QWebEnginePage):
+    def __init__(self, window, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.window = window
+
+    def acceptNavigationRequest(self, url, navigation_type, is_main_frame):
+        url_str = url.toString()
+        
+        # Intercepter les installations automatiques de scripts utilisateur (.user.js) dans les onglets externes
+        if url_str.endswith(".user.js") or "/code/" in url_str and url_str.split("?")[0].endswith(".user.js"):
+            print(f"[NAV] Intercepted Tampermonkey script installation link in external tab: {url_str}")
+            import threading
+            threading.Thread(target=self.window.handle_userscript_installation, args=(url_str,), daemon=True).start()
+            return False
+            
+        return super().acceptNavigationRequest(url, navigation_type, is_main_frame)
 
 # -------------------------------------------------------------
 # REMOTE WEBVIEW PYTHON BRIDGE (Qt WebChannel)
@@ -338,6 +366,9 @@ class MidiKbdApp(QMainWindow):
 
         # System Tray setup
         self.setup_tray()
+
+        # V22: Chargement et injection initiale des UserScripts à chaud dans Chromium
+        self.reload_userscripts()
 
         # Start Engine (Delayed)
         self.after(1000, self.start_engine)
@@ -567,6 +598,9 @@ class MidiKbdApp(QMainWindow):
 
         # External WebView (completely isolated, loads as a top-level page)
         web_view = QWebEngineView(self)
+        ext_page = ExternalWebPage(self, web_view)
+        web_view.setPage(ext_page)
+        
         ext_settings = web_view.settings()
         ext_settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
         ext_settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, True)
@@ -595,3 +629,101 @@ class MidiKbdApp(QMainWindow):
             
         self.tab_widget.removeTab(index)
         widget.deleteLater()
+
+    def reload_userscripts(self):
+        """V22: Efface les anciens scripts et injecte les nouveaux scripts actifs à chaud dans Chromium"""
+        try:
+            from server import userscript_manager
+            from PySide6.QtWebEngineCore import QWebEngineScript, QWebEngineProfile
+            from PySide6.QtCore import QUrl
+            
+            profile = QWebEngineProfile.defaultProfile()
+            profile.scripts().clear()
+            
+            active_scripts = userscript_manager.get_active_scripts()
+            print(f"[UserScript GUI] Reloading scripts... Found {len(active_scripts)} active scripts.")
+            
+            for s in active_scripts:
+                script = QWebEngineScript()
+                script.setSourceCode(s["code"])
+                script.setName(s["id"])
+                
+                # Injection point selection
+                run_at = s["run_at"]
+                if run_at == "document_creation":
+                    script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
+                else:
+                    script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentReady)
+                    
+                # V22: Changement vers MainWorld pour assurer 100% de compatibilité avec l'environnement global JS
+                script.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
+                script.setRunsOnSubFrames(True)
+                
+                profile.scripts().insert(script)
+                print(f"[UserScript GUI] Injected: {s['name']}")
+        except Exception as e:
+            print(f"[UserScript GUI] Error reloading scripts: {e}")
+
+    def handle_userscript_installation(self, url_str):
+        """Télécharge et extrait les métadonnées d'un script .user.js à la volée, puis l'importe dans l'éditeur Cockpit"""
+        try:
+            import requests
+            import json
+            import re
+            
+            print(f"[UserScript Auto-Install] Téléchargement du script : {url_str}")
+            res = requests.get(url_str, timeout=10)
+            if res.status_code == 200:
+                js_code = res.text
+                
+                # Initialiser les métadonnées par défaut
+                meta = {
+                    "name": "",
+                    "description": "",
+                    "url_pattern": "*",
+                    "run_at": "document_ready",
+                    "code": js_code
+                }
+                
+                # Parsing regex du bloc de métadonnées Tampermonkey
+                match = re.search(r"//\s*==UserScript==\s*\n(.*?)\n//\s*==/UserScript==", js_code, re.DOTALL | re.IGNORECASE)
+                if match:
+                    meta_block = match.group(1)
+                    for line in meta_block.splitlines():
+                        line = line.strip()
+                        if line.startswith("//"):
+                            line = line[2:].strip()
+                        if line.startswith("@"):
+                            parts = line.split(maxsplit=1)
+                            if len(parts) == 2:
+                                tag, val = parts
+                                tag = tag.lower()
+                                if tag == "@name":
+                                    meta["name"] = val.strip()
+                                elif tag == "@description":
+                                    meta["description"] = val.strip()
+                                elif tag in ("@match", "@include"):
+                                    if meta["url_pattern"] == "*":
+                                        meta["url_pattern"] = val.strip()
+                                elif tag == "@run-at":
+                                    val_lower = val.strip().lower()
+                                    if "start" in val_lower or "creation" in val_lower:
+                                        meta["run_at"] = "document_creation"
+                                    else:
+                                        meta["run_at"] = "document_ready"
+                
+                # Nom de repli si absent des métadonnées
+                if not meta["name"]:
+                    meta["name"] = url_str.split("/")[-1].replace(".user.js", "").replace("-", " ").title()
+                
+                # Encodage sécurisé en JSON pour appel JavaScript
+                js_call = f"if (typeof importUserScriptFromUrl === 'function') importUserScriptFromUrl({json.dumps(meta['name'])}, {json.dumps(meta['description'])}, {json.dumps(meta['url_pattern'])}, {json.dumps(meta['run_at'])}, {json.dumps(meta['code'])});"
+                
+                # Exécuter sur le thread UI
+                self.after(0, lambda: [
+                    self.web_view.page().runJavaScript(js_call),
+                    self.tab_widget.setCurrentIndex(0),
+                    self.show_main_window()
+                ])
+        except Exception as e:
+            print(f"[UserScript Auto-Install] Erreur lors de l'import automatique : {e}")
