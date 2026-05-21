@@ -1,5 +1,12 @@
 import customtkinter as ctk
 
+def _get_gui():
+    try:
+        import src.gui as gui
+    except ImportError:
+        import gui
+    return gui
+
 class CompactPedalboardFrame(ctk.CTkFrame):
     """Grid layout for pedalboard (shared between Main and Remote)"""
     def __init__(self, parent, device_def, profile, callback_press):
@@ -23,12 +30,14 @@ class CompactPedalboardFrame(ctk.CTkFrame):
 
     def flash_button(self, cc):
         """Simulate a visual flash on the specific button"""
+        gui = _get_gui()
         if cc in self.btn_map:
             btn = self.btn_map[cc]
             original_color = btn.cget("fg_color")
-            # Flash Color: Bright Green/Cyan or White
-            btn.configure(fg_color="#00E5FF", text_color="black") 
-            self.after(150, lambda: btn.configure(fg_color=original_color, text_color="white"))
+            original_text_color = btn.cget("text_color")
+            # Flash Color: Electric Neon Cyan
+            btn.configure(fg_color="#00E5FF", text_color=gui.BG_COLOR) 
+            self.after(150, lambda: btn.configure(fg_color=original_color, text_color=original_text_color))
 
     def _get_icon_for_name(self, name):
         """Convertit les mots clés en icônes pour le mode Remote"""
@@ -115,17 +124,22 @@ class CompactPedalboardFrame(ctk.CTkFrame):
                 else: icon = self._get_icon_for_name(action_name)
                 
                 main_text = icon
-                # Premium Colors
-                btn_color = "#2B7DE9" # Modern Blue
-                hover_color = "#1A5CB8"
+                gui = _get_gui()
+                btn_color = gui.ACCENT_COLOR 
+                hover_color = gui.ACCENT_HOVER
                 state = "normal"
-                text_color = "white"
+                text_color = gui.TEXT_PRIMARY
+                border_w = 0
+                border_c = btn_color
             else:
+                gui = _get_gui()
                 main_text = ""
-                btn_color = "#2A2A2A" # Dark Grey
-                hover_color = "#2A2A2A"
+                btn_color = gui.CARD_BG
+                hover_color = gui.CARD_BG
                 state = "disabled"
-                text_color = "gray30"
+                text_color = "gray25"
+                border_w = 1
+                border_c = gui.BORDER_COLOR
 
             # Layout Calculation
             row = i // cols
@@ -136,17 +150,18 @@ class CompactPedalboardFrame(ctk.CTkFrame):
             container.grid(row=row, column=col, padx=4, pady=4, sticky="nsew")
 
             # 1. Top Label (Physical Index)
+            gui = _get_gui()
             lbl_phy = ctk.CTkLabel(
                 container,
                 text=short_lbl,
                 font=ctk.CTkFont(family="Segoe UI", size=9, weight="bold"),
-                text_color="gray60",
+                text_color=gui.TEXT_SECONDARY,
                 height=12
             )
             lbl_phy.pack(side="top", pady=(0, 2))
 
             # 2. Main Button (Icon)
-            # Modern Look: Rounded, Larger Icon
+            # Modern Look: Rounded, Larger Icon, Cockpit Accent
             btn = ctk.CTkButton(
                 container,
                 text=main_text,
@@ -155,9 +170,11 @@ class CompactPedalboardFrame(ctk.CTkFrame):
                 hover_color=hover_color,
                 text_color=text_color,
                 state=state,
-                height=32, 
-                width=36,
-                corner_radius=6,
+                height=36, 
+                width=40,
+                corner_radius=8,
+                border_width=border_w,
+                border_color=border_c,
                 command=lambda c=cc: self.on_btn_click(c)
             )
             btn.pack(side="top", fill="both", expand=True)
@@ -193,10 +210,12 @@ class RemoteControl(ctk.CTkToplevel):
         self.is_minimized = False
         self.saved_geometry = "400x300+100+100"
 
-        # Style
-        self.bg_color = "#2b2b2b"
-        self.header_color = "#1f1f1f"
-        self.hover_color = "#3a3a3a"
+        # Style: Modern Cockpit
+        gui = _get_gui()
+        self.bg_color = gui.BG_COLOR
+        self.header_color = gui.CARD_BG
+        self.hover_color = gui.BTN_SECONDARY
+        self.border_color = gui.BORDER_COLOR
 
         # Window Setup
         self.title(self._("gui.title_remote"))
@@ -223,9 +242,14 @@ class RemoteControl(ctk.CTkToplevel):
         self.geometry(f"+{x}+{y}")
 
     def build_ui(self):
+        gui = _get_gui()
+        # Main Outer Container mimicking a modern premium frame border
+        self.main_border_frame = ctk.CTkFrame(self, fg_color=self.bg_color, border_width=1, border_color=self.border_color, corner_radius=10)
+        self.main_border_frame.pack(fill="both", expand=True, padx=0, pady=0)
+
         # --- Header (Barre de titre custom) ---
-        self.header = ctk.CTkFrame(self, height=30, fg_color=self.header_color, corner_radius=0)
-        self.header.pack(fill="x", side="top")
+        self.header = ctk.CTkFrame(self.main_border_frame, height=28, fg_color=self.header_color, corner_radius=10)
+        self.header.pack(fill="x", side="top", padx=1, pady=1)
 
         # Bind move on header too
         self.header.bind("<ButtonPress-1>", self.start_move)
@@ -235,48 +259,54 @@ class RemoteControl(ctk.CTkToplevel):
         title_text = f"{self._('gui.lbl_remote_prefix')} - {self.profile.get('name', 'Profile')}" if self.profile else self._("gui.title_remote")
         if len(title_text) > 25: title_text = title_text[:25] + "..."
 
-        self.lbl_title = ctk.CTkLabel(self.header, text=title_text, text_color="gray", width=120, anchor="w", font=ctk.CTkFont(size=11))
+        self.lbl_title = ctk.CTkLabel(self.header, text=title_text, text_color=gui.TEXT_SECONDARY, width=120, anchor="w", font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"))
         self.lbl_title.pack(side="left", padx=10, fill="x", expand=True)
         self.lbl_title.bind("<ButtonPress-1>", self.start_move)
         self.lbl_title.bind("<B1-Motion>", self.do_move)
 
         # Close Button (X)
-        self.btn_close = ctk.CTkButton(self.header, text="✕", width=30, height=24,
+        self.btn_close = ctk.CTkButton(self.header, text="✕", width=28, height=22,
                                        fg_color="transparent", hover_color="#c42b1c",
+                                       text_color=gui.TEXT_SECONDARY,
+                                       font=ctk.CTkFont(size=9),
                                        command=self.close_remote)
-        self.btn_close.pack(side="right", padx=2, pady=2)
+        self.btn_close.pack(side="right", padx=1, pady=1)
 
         # Minimize Button (_)
-        self.btn_min = ctk.CTkButton(self.header, text="—", width=30, height=24,
-                                     fg_color="transparent", hover_color="#444",
+        self.btn_min = ctk.CTkButton(self.header, text="—", width=28, height=22,
+                                     fg_color="transparent", hover_color=self.hover_color,
+                                     text_color=gui.TEXT_SECONDARY,
+                                     font=ctk.CTkFont(size=9),
                                      command=self.toggle_minimize)
-        self.btn_min.pack(side="right", padx=2, pady=2)
+        self.btn_min.pack(side="right", padx=1, pady=1)
 
         # Config Button (Left) - Uses Segoe MDL2 Assets (Windows Native Icons)
         # \uE713 = Settings Gear (Wireframe) | "Cardan" style
         if self.callback_open_conf:
-            self.btn_conf = ctk.CTkButton(self.header, text="\uE713", width=30, height=24,
-                                          fg_color="transparent", hover_color="#444",
-                                          font=ctk.CTkFont(family="Segoe MDL2 Assets", size=12),
+            self.btn_conf = ctk.CTkButton(self.header, text="\uE713", width=28, height=22,
+                                          fg_color="transparent", hover_color=self.hover_color,
+                                          text_color=gui.TEXT_SECONDARY,
+                                          font=ctk.CTkFont(family="Segoe MDL2 Assets", size=10),
                                           command=self.callback_open_conf)
-            self.btn_conf.pack(side="left", padx=2, pady=2)
+            self.btn_conf.pack(side="left", padx=1, pady=1)
 
         # Web Button (Left) - Uses Segoe MDL2 Assets
         # \uE12B = World/Globe (Windows style)
         if self.callback_open_web:
-            self.btn_web = ctk.CTkButton(self.header, text="\uE12B", width=30, height=24,
-                                         fg_color="transparent", hover_color="#444",
-                                         font=ctk.CTkFont(family="Segoe MDL2 Assets", size=12),
+            self.btn_web = ctk.CTkButton(self.header, text="\uE12B", width=28, height=22,
+                                         fg_color="transparent", hover_color=self.hover_color,
+                                         text_color=gui.TEXT_SECONDARY,
+                                         font=ctk.CTkFont(family="Segoe MDL2 Assets", size=10),
                                          command=self.callback_open_web)
-            self.btn_web.pack(side="left", padx=2, pady=2)
+            self.btn_web.pack(side="left", padx=1, pady=1)
 
         # --- Main Container (Holds Content) ---
-        self.main_container = ctk.CTkFrame(self, fg_color="transparent")
-        self.main_container.pack(fill="both", expand=True)
+        self.main_container = ctk.CTkFrame(self.main_border_frame, fg_color="transparent")
+        self.main_container.pack(fill="both", expand=True, padx=2, pady=2)
 
         # --- Content (Grid of Buttons) ---
         self.content_frame = ctk.CTkFrame(self.main_container, fg_color="transparent")
-        self.content_frame.pack(side="top", fill="both", expand=True, padx=5, pady=5)
+        self.content_frame.pack(side="top", fill="both", expand=True, padx=4, pady=4)
 
         # Instantiate Component
         self.pedalboard_frame = CompactPedalboardFrame(self.content_frame, self.device_def, self.profile, self.on_btn_click)

@@ -1,10 +1,38 @@
 :root {
-    --bg-color: #121212;
-    --card-bg: #1e1e1e;
-    --accent: #bb86fc;
-    --text: #ffffff;
+    --bg-color: #0B0F19;
+    --card-bg: #131B2E;
+    --accent: #3B82F6;
+    --text: #F3F4F6;
     --danger: #cf6679;
     --success: #03dac6;
+}
+
+body.theme-steel_blue {
+    --bg-color: #0B0F19;
+    --card-bg: #131B2E;
+    --accent: #3B82F6;
+    --text: #F3F4F6;
+}
+
+body.theme-amethyst {
+    --bg-color: #0B0F19;
+    --card-bg: #131B2E;
+    --accent: #8B5CF6;
+    --text: #F3F4F6;
+}
+
+body.theme-emerald {
+    --bg-color: #0B0F19;
+    --card-bg: #131B2E;
+    --accent: #10B981;
+    --text: #F3F4F6;
+}
+
+body.theme-amber {
+    --bg-color: #0B0F19;
+    --card-bg: #131B2E;
+    --accent: #F59E0B;
+    --text: #F3F4F6;
 }
 
 body {

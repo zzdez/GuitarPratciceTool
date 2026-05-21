@@ -58,14 +58,114 @@ except ImportError:
 from i18n import _
 
 # Configuration de l'apparence
-ctk.set_appearance_mode("System")
+ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
+
+# --- SYSTÈME DE THÈMES DYNAMIQUES ET UNIFIÉS (SKINS) ---
+THEMES = {
+    "steel_blue": {
+        "BG_COLOR": "#0B0F19",
+        "CARD_BG": "#131B2E",
+        "BORDER_COLOR": "#223154",
+        "ACCENT_COLOR": "#3B82F6",      # Bleu acier technologique
+        "ACCENT_HOVER": "#2563EB",
+        "ACCENT_LIGHT": "#60A5FA",
+        "BTN_SECONDARY": "#1E293B",
+        "BTN_SECONDARY_HOVER": "#334155",
+        "TEXT_PRIMARY": "#F9FAFB",
+        "TEXT_SECONDARY": "#9CA3AF",
+        "LCD_BG": "#070A13",
+        "LCD_TEXT": "#10B981",
+        "LED_CONNECTED": "#10B981",
+        "LED_DISCONNECTED": "#EF4444",
+        "LED_OFF": "#2B3B60"
+    },
+    "amethyst": {
+        "BG_COLOR": "#0B0F19",
+        "CARD_BG": "#131B2E",
+        "BORDER_COLOR": "#223154",
+        "ACCENT_COLOR": "#8B5CF6",      # Violet améthyste
+        "ACCENT_HOVER": "#7C3AED",
+        "ACCENT_LIGHT": "#A78BFA",
+        "BTN_SECONDARY": "#1E293B",
+        "BTN_SECONDARY_HOVER": "#334155",
+        "TEXT_PRIMARY": "#F9FAFB",
+        "TEXT_SECONDARY": "#9CA3AF",
+        "LCD_BG": "#070A13",
+        "LCD_TEXT": "#10B981",
+        "LED_CONNECTED": "#10B981",
+        "LED_DISCONNECTED": "#EF4444",
+        "LED_OFF": "#2B3B60"
+    },
+    "emerald": {
+        "BG_COLOR": "#0B0F19",
+        "CARD_BG": "#131B2E",
+        "BORDER_COLOR": "#223154",
+        "ACCENT_COLOR": "#10B981",      # Vert émeraude
+        "ACCENT_HOVER": "#059669",
+        "ACCENT_LIGHT": "#34D399",
+        "BTN_SECONDARY": "#1E293B",
+        "BTN_SECONDARY_HOVER": "#334155",
+        "TEXT_PRIMARY": "#F9FAFB",
+        "TEXT_SECONDARY": "#9CA3AF",
+        "LCD_BG": "#070A13",
+        "LCD_TEXT": "#10B981",
+        "LED_CONNECTED": "#10B981",
+        "LED_DISCONNECTED": "#EF4444",
+        "LED_OFF": "#2B3B60"
+    },
+    "amber": {
+        "BG_COLOR": "#0B0F19",
+        "CARD_BG": "#131B2E",
+        "BORDER_COLOR": "#223154",
+        "ACCENT_COLOR": "#F59E0B",      # Ambre/Orange
+        "ACCENT_HOVER": "#D97706",
+        "ACCENT_LIGHT": "#FBBF24",
+        "BTN_SECONDARY": "#1E293B",
+        "BTN_SECONDARY_HOVER": "#334155",
+        "TEXT_PRIMARY": "#F9FAFB",
+        "TEXT_SECONDARY": "#9CA3AF",
+        "LCD_BG": "#070A13",
+        "LCD_TEXT": "#10B981",
+        "LED_CONNECTED": "#10B981",
+        "LED_DISCONNECTED": "#EF4444",
+        "LED_OFF": "#2B3B60"
+    }
+}
+
+try:
+    from config_manager import ConfigManager
+    cm = ConfigManager()
+    active_theme = cm.get("theme", "steel_blue")
+except Exception:
+    active_theme = "steel_blue"
+
+if active_theme not in THEMES:
+    active_theme = "steel_blue"
+
+theme_colors = THEMES[active_theme]
+BG_COLOR = theme_colors["BG_COLOR"]
+CARD_BG = theme_colors["CARD_BG"]
+BORDER_COLOR = theme_colors["BORDER_COLOR"]
+ACCENT_COLOR = theme_colors["ACCENT_COLOR"]
+ACCENT_HOVER = theme_colors["ACCENT_HOVER"]
+ACCENT_LIGHT = theme_colors["ACCENT_LIGHT"]
+BTN_SECONDARY = theme_colors["BTN_SECONDARY"]
+BTN_SECONDARY_HOVER = theme_colors["BTN_SECONDARY_HOVER"]
+TEXT_PRIMARY = theme_colors["TEXT_PRIMARY"]
+TEXT_SECONDARY = theme_colors["TEXT_SECONDARY"]
+LCD_BG = theme_colors["LCD_BG"]
+LCD_TEXT = theme_colors["LCD_TEXT"]
+LED_CONNECTED = theme_colors["LED_CONNECTED"]
+LED_DISCONNECTED = theme_colors["LED_DISCONNECTED"]
+LED_OFF = theme_colors["LED_OFF"]
 
 class CTkMessageBox(ctk.CTkToplevel):
     def __init__(self, title=_("gui.msg_title"), message="", icon="info", option_text_1=_("gui.btn_ok"), option_text_2=None):
         super().__init__()
         self.title(title)
         self.geometry("400x200")
+        self.configure(fg_color=BG_COLOR)
         self.attributes("-topmost", True)
 
         self.update_idletasks()
@@ -77,17 +177,17 @@ class CTkMessageBox(ctk.CTkToplevel):
 
         self.result = None
 
-        self.label = ctk.CTkLabel(self, text=message, wraplength=350)
+        self.label = ctk.CTkLabel(self, text=message, wraplength=350, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=12))
         self.label.pack(pady=30, padx=20, fill="both", expand=True)
 
         self.btn_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.btn_frame.pack(pady=20)
 
         if option_text_2:
-            self.btn2 = ctk.CTkButton(self.btn_frame, text=option_text_2, fg_color="transparent", border_width=1, text_color=("gray10", "gray90"), command=lambda: self.on_click(False))
+            self.btn2 = ctk.CTkButton(self.btn_frame, text=option_text_2, fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=11), command=lambda: self.on_click(False))
             self.btn2.pack(side="left", padx=10)
 
-        self.btn1 = ctk.CTkButton(self.btn_frame, text=option_text_1, command=lambda: self.on_click(True))
+        self.btn1 = ctk.CTkButton(self.btn_frame, text=option_text_1, fg_color=ACCENT_COLOR, hover_color=ACCENT_HOVER, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), command=lambda: self.on_click(True))
         self.btn1.pack(side="left", padx=10)
 
         self.grab_set()
@@ -116,13 +216,14 @@ class ShortcutsDialog(ctk.CTkToplevel):
         self.callback = callback
         self.title(_("gui.title_shortcuts"))
         self.geometry("600x600")
+        self.configure(fg_color=BG_COLOR)
         self.attributes("-topmost", True)
 
-        self.textbox = ctk.CTkTextbox(self)
+        self.textbox = ctk.CTkTextbox(self, fg_color=CARD_BG, border_color=BORDER_COLOR, border_width=1, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Consolas", size=12))
         self.textbox.pack(fill="both", expand=True, padx=20, pady=20)
         self.textbox.insert("0.0", initial_text)
 
-        self.btn_save = ctk.CTkButton(self, text=_("gui.btn_save"), command=self.save)
+        self.btn_save = ctk.CTkButton(self, text=_("gui.btn_save"), fg_color="#10B981", hover_color="#059669", text_color="#FFFFFF", font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), command=self.save)
         self.btn_save.pack(pady=(0, 20), padx=20, fill="x")
 
     def save(self):
@@ -135,6 +236,7 @@ class SyncConfirmationDialog(ctk.CTkToplevel):
         super().__init__(parent)
         self.title("Récapitulatif de Synchronisation")
         self.geometry("950x850")
+        self.configure(fg_color=BG_COLOR)
         self.attributes("-topmost", True)
         self.callback = callback
         self.vars = {"pull": [], "push": [], "delete_remote": [], "delete_local": []}
@@ -144,35 +246,35 @@ class SyncConfirmationDialog(ctk.CTkToplevel):
         self.protocol("WM_DELETE_WINDOW", self.on_cancel)
         self.grab_set()
 
-        self.scroll = ctk.CTkScrollableFrame(self)
+        self.scroll = ctk.CTkScrollableFrame(self, fg_color=CARD_BG, border_width=1, border_color=BORDER_COLOR, corner_radius=8)
         self.scroll.pack(fill="both", expand=True, padx=20, pady=20)
 
         ctk.CTkLabel(self.scroll, text="Vérifiez les actions avant de lancer la synchronisation :", 
-                     font=ctk.CTkFont(size=14, weight="bold")).pack(pady=10)
+                     font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"), text_color=TEXT_PRIMARY).pack(pady=10)
 
         # Build sections
-        self._add_section("📥 Téléchargements (Cloud ➔ PC)", analysis_result.get("pull", []), "pull", "#2ecc71", default=True)
-        self._add_section("📤 Envois (PC ➔ Cloud)", analysis_result.get("push", []), "push", "#3498db", default=True)
-        self._add_section("🗑️ Suppressions sur le Cloud (Cloud ❌)", analysis_result.get("delete_remote", []), "delete_remote", "#e74c3c", default=False)
-        self._add_section("🗑️ Suppressions sur ce PC (PC ❌)", analysis_result.get("delete_local", []), "delete_local", "#e67e22", default=False)
+        self._add_section("📥 Téléchargements (Cloud ➔ PC)", analysis_result.get("pull", []), "pull", "#10B981", default=True)
+        self._add_section("📤 Envois (PC ➔ Cloud)", analysis_result.get("push", []), "push", "#8B5CF6", default=True)
+        self._add_section("🗑️ Suppressions sur le Cloud (Cloud ❌)", analysis_result.get("delete_remote", []), "delete_remote", "#EF4444", default=False)
+        self._add_section("🗑️ Suppressions sur ce PC (PC ❌)", analysis_result.get("delete_local", []), "delete_local", "#EF4444", default=False)
 
         # Execution Section
-        ctk.CTkLabel(self, text="Progression & Logs", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=(10, 5))
-        self.progress_bar = ctk.CTkProgressBar(self, width=800)
+        ctk.CTkLabel(self, text="Progression & Logs", font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"), text_color=TEXT_PRIMARY).pack(pady=(10, 5))
+        self.progress_bar = ctk.CTkProgressBar(self, width=800, progress_color=ACCENT_COLOR, fg_color=BORDER_COLOR)
         self.progress_bar.set(0)
         self.progress_bar.pack(pady=10)
         
-        self.log_box = ctk.CTkTextbox(self, height=180, font=ctk.CTkFont(family="Consolas", size=11))
+        self.log_box = ctk.CTkTextbox(self, height=180, font=ctk.CTkFont(family="Consolas", size=11), fg_color=LCD_BG, border_color=BORDER_COLOR, border_width=1, text_color=LCD_TEXT)
         self.log_box.pack(fill="both", expand=True, padx=20, pady=5)
         self.log_box.configure(state="disabled")
 
         self.btn_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.btn_frame.pack(fill="x", side="bottom", pady=20, padx=20)
         
-        self.btn_sync = ctk.CTkButton(self.btn_frame, text="Lancer la Synchronisation", fg_color="green", hover_color="darkgreen", command=self.on_sync)
+        self.btn_sync = ctk.CTkButton(self.btn_frame, text="Lancer la Synchronisation", fg_color="#10B981", hover_color="#059669", text_color="#FFFFFF", font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), command=self.on_sync)
         self.btn_sync.pack(side="right", padx=10)
         
-        self.btn_cancel = ctk.CTkButton(self.btn_frame, text="Fermer / Annuler", fg_color="#555", command=self.on_cancel)
+        self.btn_cancel = ctk.CTkButton(self.btn_frame, text="Fermer / Annuler", fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=12), command=self.on_cancel)
         self.btn_cancel.pack(side="right", padx=10)
 
     def on_cancel(self):
@@ -191,12 +293,13 @@ class SyncConfirmationDialog(ctk.CTkToplevel):
         header_frame = ctk.CTkFrame(self.scroll, fg_color="transparent")
         header_frame.pack(fill="x", pady=(15, 5))
         
-        ctk.CTkLabel(header_frame, text=title, font=ctk.CTkFont(weight="bold", size=13), text_color=color).pack(side="left")
+        ctk.CTkLabel(header_frame, text=title, font=ctk.CTkFont(family="Segoe UI", weight="bold", size=13), text_color=color).pack(side="left")
         
         # Select All checkbox
         toggle_var = ctk.BooleanVar(value=default)
-        cb_all = ctk.CTkCheckBox(header_frame, text="Tout sélectionner", font=ctk.CTkFont(size=11), 
-                                 variable=toggle_var, command=lambda k=key, v=toggle_var: self._toggle_all(k, v))
+        cb_all = ctk.CTkCheckBox(header_frame, text="Tout sélectionner", font=ctk.CTkFont(family="Segoe UI", size=11), 
+                                 variable=toggle_var, command=lambda k=key, v=toggle_var: self._toggle_all(k, v),
+                                 fg_color=ACCENT_COLOR, hover_color=ACCENT_HOVER, text_color=TEXT_SECONDARY)
         cb_all.pack(side="right", padx=10)
         self.section_cbs[key] = (cb_all, toggle_var)
         
@@ -217,7 +320,8 @@ class SyncConfirmationDialog(ctk.CTkToplevel):
             if reason: display_text += f" ({reason})"
             
             var = ctk.BooleanVar(value=default)
-            cb = ctk.CTkCheckBox(self.scroll, text=display_text, variable=var, font=ctk.CTkFont(size=11))
+            cb = ctk.CTkCheckBox(self.scroll, text=display_text, variable=var, font=ctk.CTkFont(family="Segoe UI", size=11),
+                                 fg_color=ACCENT_COLOR, hover_color=ACCENT_HOVER, text_color=TEXT_PRIMARY)
             cb.pack(anchor="w", padx=20, pady=2)
             self.vars[key].append((item, var))
 
@@ -243,7 +347,8 @@ class SettingsDialog(ctk.CTkToplevel):
     def __init__(self, parent, profile_manager, action_handler, env_manager, midi_manager):
         super().__init__(parent)
         self.title(_("gui.tab_settings"))
-        self.geometry("450x400")
+        self.geometry("450x510")
+        self.configure(fg_color=BG_COLOR)
         self.attributes("-topmost", True)
         self.profile_manager = profile_manager
         self.action_handler = action_handler
@@ -251,56 +356,75 @@ class SettingsDialog(ctk.CTkToplevel):
         self.midi_manager = midi_manager
 
         try:
-            self.tabview = ctk.CTkTabview(self)
+            self.tabview = ctk.CTkTabview(self, fg_color=BG_COLOR,
+                                          segmented_button_fg_color=CARD_BG,
+                                          segmented_button_selected_color=ACCENT_COLOR,
+                                          segmented_button_selected_hover_color=ACCENT_HOVER,
+                                          segmented_button_unselected_color=BTN_SECONDARY,
+                                          segmented_button_unselected_hover_color=BTN_SECONDARY_HOVER,
+                                          text_color=TEXT_PRIMARY)
             self.tabview.pack(fill="both", expand=True, padx=10, pady=10)
             self.tabview.add(_("web.tab_general"))
             self.tabview.add(_("gui.tab_backup"))
 
             # Tab General
             tab_gen = self.tabview.tab(_("web.tab_general"))
-            ctk.CTkLabel(tab_gen, text=_("gui.lbl_debounce")).pack(pady=(20, 5))
+            ctk.CTkLabel(tab_gen, text=_("gui.lbl_debounce"), text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold")).pack(pady=(20, 5))
 
             current_val = action_handler.debounce_delay if action_handler else 0.15
-            self.lbl_debounce = ctk.CTkLabel(tab_gen, text=f"{int(current_val * 1000)} ms")
+            self.lbl_debounce = ctk.CTkLabel(tab_gen, text=f"{int(current_val * 1000)} ms", text_color=ACCENT_LIGHT, font=ctk.CTkFont(family="Consolas", size=14, weight="bold"))
             self.lbl_debounce.pack()
 
-            self.slider = ctk.CTkSlider(tab_gen, from_=0, to=1000, number_of_steps=100, command=self.update_label)
+            self.slider = ctk.CTkSlider(tab_gen, from_=0, to=1000, number_of_steps=100, command=self.update_label,
+                                        button_color=ACCENT_COLOR, button_hover_color=ACCENT_HOVER, progress_color=ACCENT_COLOR, fg_color=BORDER_COLOR)
             self.slider.set(current_val * 1000)
             self.slider.pack(pady=10, padx=20, fill="x")
 
-            ctk.CTkLabel(tab_gen, text=_("gui.lbl_debounce_hint"), text_color="gray", font=("Arial", 10)).pack()
+            ctk.CTkLabel(tab_gen, text=_("gui.lbl_debounce_hint"), text_color=TEXT_SECONDARY, font=ctk.CTkFont(family="Segoe UI", size=10)).pack()
 
             # Language Selector
-            ctk.CTkLabel(tab_gen, text=_("gui.lbl_lang")).pack(pady=(15, 5))
+            ctk.CTkLabel(tab_gen, text=_("gui.lbl_lang"), text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold")).pack(pady=(10, 2))
             from config_manager import ConfigManager
             cm = ConfigManager()
             current_lang = cm.get("language", "fr")
-            self.lang_combo = ctk.CTkComboBox(tab_gen, values=["fr", "en"], command=self.update_lang, state="readonly")
+            self.lang_combo = ctk.CTkComboBox(tab_gen, values=["fr", "en"], command=self.update_lang, state="readonly",
+                                              fg_color=CARD_BG, border_color=BORDER_COLOR, button_color=ACCENT_COLOR, button_hover_color=ACCENT_HOVER,
+                                              dropdown_fg_color=CARD_BG, dropdown_hover_color=ACCENT_HOVER, dropdown_text_color=TEXT_PRIMARY, text_color=TEXT_PRIMARY)
             self.lang_combo.set(current_lang)
-            self.lang_combo.pack(pady=5)
-            ctk.CTkLabel(tab_gen, text=_("gui.lbl_restart_hint"), text_color="gray", font=("Arial", 10)).pack()
+            self.lang_combo.pack(pady=2)
+
+            # Theme Selector
+            ctk.CTkLabel(tab_gen, text=_("gui.lbl_theme"), text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold")).pack(pady=(10, 2))
+            current_theme = cm.get("theme", "steel_blue")
+            self.theme_combo = ctk.CTkComboBox(tab_gen, values=["steel_blue", "amethyst", "emerald", "amber"], command=self.update_theme, state="readonly",
+                                               fg_color=CARD_BG, border_color=BORDER_COLOR, button_color=ACCENT_COLOR, button_hover_color=ACCENT_HOVER,
+                                               dropdown_fg_color=CARD_BG, dropdown_hover_color=ACCENT_HOVER, dropdown_text_color=TEXT_PRIMARY, text_color=TEXT_PRIMARY)
+            self.theme_combo.set(current_theme)
+            self.theme_combo.pack(pady=2)
+
+            ctk.CTkLabel(tab_gen, text=_("gui.lbl_restart_hint"), text_color=TEXT_SECONDARY, font=ctk.CTkFont(family="Segoe UI", size=10)).pack(pady=(5, 0))
 
             # Tab Backup
             tab_backup = self.tabview.tab(_("gui.tab_backup"))
-            ctk.CTkButton(tab_backup, text=_("gui.btn_export_conf"), command=self.export_conf).pack(pady=20, padx=20, fill="x")
-            ctk.CTkButton(tab_backup, text=_("gui.btn_import_conf"), command=self.import_conf).pack(pady=10, padx=20, fill="x")
+            ctk.CTkButton(tab_backup, text=_("gui.btn_export_conf"), fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=12), command=self.export_conf).pack(pady=20, padx=20, fill="x")
+            ctk.CTkButton(tab_backup, text=_("gui.btn_import_conf"), fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=12), command=self.import_conf).pack(pady=10, padx=20, fill="x")
 
             # Force set tab
             self.tabview.set(_("web.tab_general"))
 
             # Tab MIDI Output
             tab_midi = self.tabview.add(_("gui.lbl_midi_out"))
-            ctk.CTkLabel(tab_midi, text=_("gui.lbl_midi_out")).pack(pady=(20, 5))
+            ctk.CTkLabel(tab_midi, text=_("gui.lbl_midi_out"), text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold")).pack(pady=(20, 5))
             
             self.midi_checkboxes = []
-            self.scroll_midi = ctk.CTkScrollableFrame(tab_midi, width=300, height=200)
+            self.scroll_midi = ctk.CTkScrollableFrame(tab_midi, width=300, height=200, fg_color=CARD_BG, border_width=1, border_color=BORDER_COLOR, corner_radius=6)
             self.scroll_midi.pack(pady=5, fill="both", expand=True)
             
             # Get Status (Available + Missing Configured)
             ports_status = self.midi_manager.get_ports_status()
             
             if not ports_status:
-                ctk.CTkLabel(self.scroll_midi, text=_("gui.lbl_no_midi")).pack()
+                ctk.CTkLabel(self.scroll_midi, text=_("gui.lbl_no_midi"), text_color=TEXT_SECONDARY, font=ctk.CTkFont(family="Segoe UI", size=12)).pack()
             
             for p in ports_status:
                 name = p["name"]
@@ -310,25 +434,26 @@ class SettingsDialog(ctk.CTkToplevel):
                 
                 # Label text logic
                 lbl_text = name
-                text_color = "white" # default (or None)
+                text_color = TEXT_PRIMARY # default
                 
                 if not is_available:
                     lbl_text += f" ({_('gui.lbl_absent')})"
                     text_color = "orange"
                 elif is_selected and not is_connected:
                     lbl_text += f" ({_('gui.lbl_error')})"
-                    text_color = "red"
+                    text_color = "#EF4444"
                 
-                chk = ctk.CTkCheckBox(self.scroll_midi, text=lbl_text, text_color=text_color)
+                chk = ctk.CTkCheckBox(self.scroll_midi, text=lbl_text, text_color=text_color,
+                                     fg_color=ACCENT_COLOR, hover_color=ACCENT_HOVER)
                 if is_selected:
                     chk.select()
                 
-                chk.pack(anchor="w", pady=2, padx=5)
+                chk.pack(anchor="w", pady=4, padx=10)
                 # Store (checkbox_widget, port_name)
                 self.midi_checkboxes.append((chk, name))
 
-            ctk.CTkButton(tab_midi, text=_("gui.btn_apply"), command=self.save_midi_out).pack(pady=20)
-            ctk.CTkLabel(tab_midi, text=_("gui.lbl_midi_multi_hint"), text_color="gray", font=("Arial", 10)).pack()
+            ctk.CTkButton(tab_midi, text=_("gui.btn_apply"), fg_color="#10B981", hover_color="#059669", text_color="#FFFFFF", font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), command=self.save_midi_out).pack(pady=20)
+            ctk.CTkLabel(tab_midi, text=_("gui.lbl_midi_multi_hint"), text_color=TEXT_SECONDARY, font=ctk.CTkFont(family="Segoe UI", size=10)).pack()
 
         except Exception as e:
             # log_debug handles the error silently or we just pass
@@ -369,6 +494,12 @@ class SettingsDialog(ctk.CTkToplevel):
         cm.set("language", value)
         CTkMessageBox.show_info(_("gui.msg_lang_changed_title"), _("gui.msg_lang_changed_text"))
 
+    def update_theme(self, value):
+        from config_manager import ConfigManager
+        cm = ConfigManager()
+        cm.set("theme", value)
+        CTkMessageBox.show_info(_("gui.msg_theme_changed_title"), _("gui.msg_theme_changed_text"))
+
     def export_conf(self):
         from tkinter import filedialog
         path = filedialog.asksaveasfilename(defaultextension=".zip", filetypes=[(_("gui.filetype_zip"), "*.zip")])
@@ -395,18 +526,20 @@ class DeviceEditorDialog(ctk.CTkToplevel):
         self.callback = callback
         self.title(_("gui.title_device_editor"))
         self.geometry("500x600")
+        self.configure(fg_color=BG_COLOR)
         self.attributes("-topmost", True)
 
         self.definition = current_def if current_def else {"name": _("gui.new_device"), "buttons": []}
 
         # Name
-        ctk.CTkLabel(self, text=_("gui.lbl_model_name")).pack(pady=(10,0))
-        self.entry_name = ctk.CTkEntry(self)
+        ctk.CTkLabel(self, text=_("gui.lbl_model_name"), text_color=TEXT_SECONDARY, font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold")).pack(pady=(15,2), padx=20, anchor="w")
+        self.entry_name = ctk.CTkEntry(self, fg_color=CARD_BG, border_color=BORDER_COLOR, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=12))
         self.entry_name.insert(0, self.definition["name"])
-        self.entry_name.pack(pady=5, padx=20, fill="x")
+        self.entry_name.pack(pady=(0, 5), padx=20, fill="x")
 
         # Buttons List
-        self.scroll_frame = ctk.CTkScrollableFrame(self, label_text=_("gui.lbl_buttons_list"))
+        self.scroll_frame = ctk.CTkScrollableFrame(self, label_text=_("gui.lbl_buttons_list"), fg_color=CARD_BG, border_width=1, border_color=BORDER_COLOR, corner_radius=8,
+                                                  label_text_color=TEXT_PRIMARY, label_fg_color=CARD_BG, label_font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"))
         self.scroll_frame.pack(pady=10, padx=20, fill="both", expand=True)
 
         self.rows = []
@@ -414,33 +547,34 @@ class DeviceEditorDialog(ctk.CTkToplevel):
             self.add_row(btn["cc"], btn["label"])
 
         # Add Button
-        ctk.CTkButton(self, text=f"+ {_('gui.btn_add_button')}", command=lambda: self.add_row("", "")).pack(pady=5)
+        ctk.CTkButton(self, text=f"+ {_('gui.btn_add_button')}", fg_color=ACCENT_COLOR, hover_color=ACCENT_HOVER, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), command=lambda: self.add_row("", "")).pack(pady=5)
 
         # Save
-        ctk.CTkButton(self, text=_("gui.btn_save"), fg_color="green", command=self.save).pack(pady=20, padx=20, fill="x")
+        ctk.CTkButton(self, text=_("gui.btn_save"), fg_color="#10B981", hover_color="#059669", text_color="#FFFFFF", font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), command=self.save).pack(pady=20, padx=20, fill="x")
 
     def add_row(self, cc, label):
-        row = ctk.CTkFrame(self.scroll_frame)
-        row.pack(fill="x", pady=2)
+        row = ctk.CTkFrame(self.scroll_frame, fg_color="transparent")
+        row.pack(fill="x", pady=4, padx=5)
 
-        e_cc = ctk.CTkEntry(row, width=60, placeholder_text=_("gui.placeholder_cc"))
+        e_cc = ctk.CTkEntry(row, width=60, placeholder_text=_("gui.placeholder_cc"), fg_color=BG_COLOR, border_color=BORDER_COLOR, font=ctk.CTkFont(family="Consolas", size=11))
         
         # Display logic
         val_display = ""
         if isinstance(cc, int) and cc < 0:
             val_display = _("gui.lbl_virtual")
-            e_cc.configure(text_color="cyan")
+            e_cc.configure(text_color="#00E5FF") # Neon cyan for virtual
         elif cc != "" and cc is not None:
              val_display = str(cc)
+             e_cc.configure(text_color=TEXT_PRIMARY)
              
         e_cc.insert(0, val_display)
         e_cc.pack(side="left", padx=5)
 
-        e_lbl = ctk.CTkEntry(row, placeholder_text=_("gui.placeholder_btn_name"))
+        e_lbl = ctk.CTkEntry(row, placeholder_text=_("gui.placeholder_btn_name"), fg_color=BG_COLOR, border_color=BORDER_COLOR, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=11))
         e_lbl.insert(0, str(label))
         e_lbl.pack(side="left", fill="x", expand=True, padx=5)
 
-        btn_del = ctk.CTkButton(row, text="X", width=30, fg_color="red", command=lambda: self.delete_row(row))
+        btn_del = ctk.CTkButton(row, text="✕", width=30, height=26, fg_color="#EF4444", hover_color="#DC2626", text_color="#FFFFFF", font=ctk.CTkFont(size=10, weight="bold"), command=lambda: self.delete_row(row))
         btn_del.pack(side="right", padx=5)
 
         # Store original CC to preserve ID if not changed
@@ -520,13 +654,14 @@ class ProfileEditorDialog(ctk.CTkToplevel):
 
         self.title(_("gui.title_profile_editor"))
         self.geometry("380x250")
+        self.configure(fg_color=BG_COLOR)
         self.resizable(False, False)
         self.transient(parent)
         self.grab_set()
 
         # Name
-        ctk.CTkLabel(self, text=_("gui.lbl_profile_full_name")).pack(pady=(20, 5), padx=20, anchor="w")
-        self.entry_name = ctk.CTkEntry(self, width=340)
+        ctk.CTkLabel(self, text=_("gui.lbl_profile_full_name"), font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), text_color=TEXT_PRIMARY).pack(pady=(20, 5), padx=20, anchor="w")
+        self.entry_name = ctk.CTkEntry(self, width=340, fg_color=CARD_BG, border_color=BORDER_COLOR, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=12))
         self.entry_name.pack(padx=20)
         self.entry_name.insert(0, current_profile.get("name", ""))
 
@@ -535,11 +670,11 @@ class ProfileEditorDialog(ctk.CTkToplevel):
         self.vol_frame.pack(pady=(15, 5), padx=20, fill="x")
         
         # Label that will hold the percentage
-        self.lbl_vol = ctk.CTkLabel(self.vol_frame, text=f"{_('gui.lbl_master_vol')} : 100%")
+        self.lbl_vol = ctk.CTkLabel(self.vol_frame, text=f"{_('gui.lbl_master_vol')} : 100%", font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), text_color=TEXT_PRIMARY)
         self.lbl_vol.pack(anchor="w")
         
         # Slider
-        self.slider_vol = ctk.CTkSlider(self.vol_frame, from_=0, to=100, number_of_steps=100, command=self.on_slider_change)
+        self.slider_vol = ctk.CTkSlider(self.vol_frame, from_=0, to=100, number_of_steps=100, command=self.on_slider_change, progress_color=ACCENT_COLOR, button_color=ACCENT_COLOR, button_hover_color=ACCENT_HOVER)
         self.slider_vol.pack(fill="x", pady=5)
         
         # Init value
@@ -557,9 +692,9 @@ class ProfileEditorDialog(ctk.CTkToplevel):
         # Save Set
         btn_frame = ctk.CTkFrame(self, fg_color="transparent")
         btn_frame.pack(pady=25, fill="x", padx=20)
-        btn_cancel = ctk.CTkButton(btn_frame, text=_("gui.btn_cancel"), width=120, fg_color="#555", hover_color="#777", command=self.destroy)
+        btn_cancel = ctk.CTkButton(btn_frame, text=_("gui.btn_cancel"), width=120, fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), command=self.destroy)
         btn_cancel.pack(side="left")
-        btn_save = ctk.CTkButton(btn_frame, text=_("gui.btn_save"), width=120, fg_color="green", hover_color="darkgreen", command=self.save)
+        btn_save = ctk.CTkButton(btn_frame, text=_("gui.btn_save"), width=120, fg_color="#10B981", hover_color="#059669", text_color="#FFFFFF", font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), command=self.save)
         btn_save.pack(side="right")
 
     def on_slider_change(self, value):
@@ -588,19 +723,22 @@ class MappingDialog(ctk.CTkToplevel):
         self.action_handler = action_handler
 
         self.title(_("gui.title_edit_action") if initial_data else _("gui.title_add_action"))
-        self.geometry("450x450")
+        self.geometry("450x480")
+        self.configure(fg_color=BG_COLOR)
         self.attributes("-topmost", True)
 
-        ctk.CTkLabel(self, text=_("gui.lbl_action_name")).pack(pady=(10,0))
-        self.entry_name = ctk.CTkEntry(self, placeholder_text=_("gui.placeholder_action_name"))
-        self.entry_name.pack(pady=5, padx=20, fill="x")
+        ctk.CTkLabel(self, text=_("gui.lbl_action_name"), font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), text_color=TEXT_SECONDARY).pack(pady=(15,2), padx=20, anchor="w")
+        self.entry_name = ctk.CTkEntry(self, placeholder_text=_("gui.placeholder_action_name"), fg_color=CARD_BG, border_color=BORDER_COLOR, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=12))
+        self.entry_name.pack(pady=(0, 5), padx=20, fill="x")
         if initial_data:
             self.entry_name.insert(0, initial_data.get("name", ""))
 
-        ctk.CTkLabel(self, text=_("gui.lbl_button_midi_cc")).pack(pady=(10,0))
+        ctk.CTkLabel(self, text=_("gui.lbl_button_midi_cc"), font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), text_color=TEXT_SECONDARY).pack(pady=(5,2), padx=20, anchor="w")
 
-        self.combo_cc = ctk.CTkComboBox(self)
-        self.combo_cc.pack(pady=5, padx=20, fill="x")
+        self.combo_cc = ctk.CTkComboBox(self, fg_color=CARD_BG, border_color=BORDER_COLOR, button_color=ACCENT_COLOR, button_hover_color=ACCENT_HOVER,
+                                        dropdown_fg_color=CARD_BG, dropdown_hover_color=ACCENT_HOVER, dropdown_text_color=TEXT_PRIMARY, text_color=TEXT_PRIMARY,
+                                        font=ctk.CTkFont(family="Segoe UI", size=12))
+        self.combo_cc.pack(pady=(0, 5), padx=20, fill="x")
 
         # Populate values
         values = []
@@ -628,9 +766,12 @@ class MappingDialog(ctk.CTkToplevel):
             self.combo_cc.set(values[0])
 
         # Icon Selector
-        ctk.CTkLabel(self, text=_("gui.lbl_icon_opt")).pack(pady=(10,0))
-        self.combo_icon = ctk.CTkComboBox(self, values=[_("gui.lbl_auto"), "▶", "⏸", "■", "●", "⏪", "⏩", "⟳", "🔇", "🔊", "↔", "⏱", "♪", "◴", "📍", "▲", "▼", "◄", "►", "✓", "↶", "↷", "⚡", "⚙", "📂", "🎸", "🎤", "🎹"])
-        self.combo_icon.pack(pady=5, padx=20, fill="x")
+        ctk.CTkLabel(self, text=_("gui.lbl_icon_opt"), font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), text_color=TEXT_SECONDARY).pack(pady=(5,2), padx=20, anchor="w")
+        self.combo_icon = ctk.CTkComboBox(self, values=[_("gui.lbl_auto"), "▶", "⏸", "■", "●", "⏪", "⏩", "⟳", "🔇", "🔊", "↔", "⏱", "♪", "◴", "📍", "▲", "▼", "◄", "►", "✓", "↶", "↷", "⚡", "⚙", "📂", "🎸", "🎤", "🎹"],
+                                          fg_color=CARD_BG, border_color=BORDER_COLOR, button_color=ACCENT_COLOR, button_hover_color=ACCENT_HOVER,
+                                          dropdown_fg_color=CARD_BG, dropdown_hover_color=ACCENT_HOVER, dropdown_text_color=TEXT_PRIMARY, text_color=TEXT_PRIMARY,
+                                          font=ctk.CTkFont(family="Segoe UI", size=12))
+        self.combo_icon.pack(pady=(0, 5), padx=20, fill="x")
 
         if initial_data and initial_data.get("custom_icon"):
             self.combo_icon.set(initial_data.get("custom_icon"))
@@ -638,9 +779,12 @@ class MappingDialog(ctk.CTkToplevel):
             self.combo_icon.set(_("gui.lbl_auto"))
 
         # Action Type Selector
-        ctk.CTkLabel(self, text=_("gui.lbl_action_type")).pack(pady=(10,0))
-        self.combo_type = ctk.CTkComboBox(self, values=[_("gui.type_hotkey"), _("gui.type_command"), _("gui.type_midi")], command=self.update_ui_state)
-        self.combo_type.pack(pady=5, padx=20, fill="x")
+        ctk.CTkLabel(self, text=_("gui.lbl_action_type"), font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), text_color=TEXT_SECONDARY).pack(pady=(5,2), padx=20, anchor="w")
+        self.combo_type = ctk.CTkComboBox(self, values=[_("gui.type_hotkey"), _("gui.type_command"), _("gui.type_midi")], command=self.update_ui_state,
+                                          fg_color=CARD_BG, border_color=BORDER_COLOR, button_color=ACCENT_COLOR, button_hover_color=ACCENT_HOVER,
+                                          dropdown_fg_color=CARD_BG, dropdown_hover_color=ACCENT_HOVER, dropdown_text_color=TEXT_PRIMARY, text_color=TEXT_PRIMARY,
+                                          font=ctk.CTkFont(family="Segoe UI", size=12))
+        self.combo_type.pack(pady=(0, 5), padx=20, fill="x")
 
         # --- Frames for different types ---
         self.frame_hotkey = ctk.CTkFrame(self, fg_color="transparent")
@@ -648,50 +792,49 @@ class MappingDialog(ctk.CTkToplevel):
         self.frame_midi = ctk.CTkFrame(self, fg_color="transparent")
 
         # 1. Hotkey UI
-        ctk.CTkLabel(self.frame_hotkey, text=_("gui.lbl_keyboard_key")).pack(pady=(5,0))
+        ctk.CTkLabel(self.frame_hotkey, text=_("gui.lbl_keyboard_key"), font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), text_color=TEXT_SECONDARY).pack(pady=(5,2), anchor="w")
         self.sub_hotkey = ctk.CTkFrame(self.frame_hotkey, fg_color="transparent")
         self.sub_hotkey.pack(fill="x")
         
-        self.entry_key = ctk.CTkEntry(self.sub_hotkey, placeholder_text="space")
+        self.entry_key = ctk.CTkEntry(self.sub_hotkey, placeholder_text="space", fg_color=CARD_BG, border_color=BORDER_COLOR, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Consolas", size=12))
         self.entry_key.pack(side="left", fill="x", expand=True)
 
-        self.btn_test = ctk.CTkButton(self.sub_hotkey, text="▶", width=30, fg_color="#444", hover_color="#666", command=self.test_mapping)
+        self.btn_test = ctk.CTkButton(self.sub_hotkey, text="▶", width=30, fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), command=self.test_mapping)
         self.btn_test.pack(side="right", padx=(5,0))
 
-        self.btn_rec = ctk.CTkButton(self.sub_hotkey, text=_("gui.btn_rec"), width=60, fg_color="#cc3300", hover_color="#992200", command=self.start_recording)
+        self.btn_rec = ctk.CTkButton(self.sub_hotkey, text=_("gui.btn_rec"), width=60, fg_color="#EF4444", hover_color="#DC2626", text_color="#FFFFFF", font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), command=self.start_recording)
         self.btn_rec.pack(side="right", padx=(5,0))
         
         self.lbl_scan_info = ctk.CTkLabel(self.frame_hotkey, text="", text_color="gray", font=("Arial", 10))
-        self.lbl_scan_info.pack(pady=(0, 5))
+        self.lbl_scan_info.pack(pady=(2, 5))
 
         # 2. Command UI
-        ctk.CTkLabel(self.frame_command, text=_("gui.lbl_command")).pack(pady=(5,0))
-        self.entry_cmd = ctk.CTkEntry(self.frame_command, placeholder_text="media_play_pause")
+        ctk.CTkLabel(self.frame_command, text=_("gui.lbl_command"), font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), text_color=TEXT_SECONDARY).pack(pady=(5,2), anchor="w")
+        self.entry_cmd = ctk.CTkEntry(self.frame_command, placeholder_text="media_play_pause", fg_color=CARD_BG, border_color=BORDER_COLOR, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=12))
         self.entry_cmd.pack(fill="x")
 
         # 3. MIDI Out UI
-        ctk.CTkLabel(self.frame_midi, text=_("gui.lbl_midi_msg")).pack(pady=(5,0))
+        ctk.CTkLabel(self.frame_midi, text=_("gui.lbl_midi_msg"), font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), text_color=TEXT_SECONDARY).pack(pady=(5,2), anchor="w")
         
         f_midi_row = ctk.CTkFrame(self.frame_midi, fg_color="transparent")
         f_midi_row.pack(fill="x")
         
         # Channel
-        ctk.CTkLabel(f_midi_row, text=_("gui.lbl_midi_ch")).pack(side="left", padx=2)
-        self.entry_midi_ch = ctk.CTkEntry(f_midi_row, width=40)
+        ctk.CTkLabel(f_midi_row, text=_("gui.lbl_midi_ch"), font=ctk.CTkFont(family="Segoe UI", size=11), text_color=TEXT_SECONDARY).pack(side="left", padx=2)
+        self.entry_midi_ch = ctk.CTkEntry(f_midi_row, width=40, fg_color=CARD_BG, border_color=BORDER_COLOR, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Consolas", size=12))
         self.entry_midi_ch.pack(side="left", padx=2)
         self.entry_midi_ch.insert(0, "1")
 
         # CC
-        ctk.CTkLabel(f_midi_row, text=_("gui.lbl_midi_cc")).pack(side="left", padx=2)
-        self.entry_midi_cc = ctk.CTkEntry(f_midi_row, width=40)
+        ctk.CTkLabel(f_midi_row, text=_("gui.lbl_midi_cc"), font=ctk.CTkFont(family="Segoe UI", size=11), text_color=TEXT_SECONDARY).pack(side="left", padx=2)
+        self.entry_midi_cc = ctk.CTkEntry(f_midi_row, width=40, fg_color=CARD_BG, border_color=BORDER_COLOR, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Consolas", size=12))
         self.entry_midi_cc.pack(side="left", padx=2)
         
         # Value
-        ctk.CTkLabel(f_midi_row, text=_("gui.lbl_midi_val")).pack(side="left", padx=2)
-        self.entry_midi_val = ctk.CTkEntry(f_midi_row, width=40)
+        ctk.CTkLabel(f_midi_row, text=_("gui.lbl_midi_val"), font=ctk.CTkFont(family="Segoe UI", size=11), text_color=TEXT_SECONDARY).pack(side="left", padx=2)
+        self.entry_midi_val = ctk.CTkEntry(f_midi_row, width=40, fg_color=CARD_BG, border_color=BORDER_COLOR, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Consolas", size=12))
         self.entry_midi_val.pack(side="left", padx=2)
         self.entry_midi_val.insert(0, "127")
-
 
         # Load Initial Data
         if initial_data:
@@ -714,14 +857,10 @@ class MappingDialog(ctk.CTkToplevel):
                  self.combo_type.set(_("gui.type_hotkey"))
                  self.entry_key.insert(0, initial_data.get("action_value", ""))
 
-            # Handle legacy "command" stored as hotkey with "media_" prefix?
-            # Existing code handled "media_" in trigger_keystroke. 
-            # We can expose it as Command type now if we want, but legacy compat is fine.
-
         self.update_ui_state(self.combo_type.get())
 
-        self.btn_save = ctk.CTkButton(self, text=_("gui.btn_validate"), fg_color="green", hover_color="darkgreen", command=self.save_mapping)
-        self.btn_save.pack(pady=10, padx=20, fill="x")
+        self.btn_save = ctk.CTkButton(self, text=_("gui.btn_validate"), fg_color="#10B981", hover_color="#059669", text_color="#FFFFFF", font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), command=self.save_mapping)
+        self.btn_save.pack(pady=15, padx=20, fill="x")
 
     def update_ui_state(self, choice):
         self.frame_hotkey.pack_forget()
@@ -931,6 +1070,7 @@ class GuitarPracticeApp(ctk.CTk):
         super().__init__()
         self.title(_("gui.main_title"))
         self.geometry("1000x750")
+        self.configure(fg_color=BG_COLOR)
 
         self.tray_icon = None
         self.protocol("WM_DELETE_WINDOW", self.minimize_to_tray)
@@ -1050,7 +1190,7 @@ class GuitarPracticeApp(ctk.CTk):
         pass
 
     def create_sidebar(self):
-        self.sidebar_frame = ctk.CTkFrame(self, width=220, corner_radius=0)
+        self.sidebar_frame = ctk.CTkFrame(self, width=220, corner_radius=0, fg_color=CARD_BG)
         self.sidebar_frame.grid(row=0, column=0, rowspan=4, sticky="nsew")
         self.sidebar_frame.grid_rowconfigure(8, weight=1) # Spacer is row 8
 
@@ -1061,29 +1201,34 @@ class GuitarPracticeApp(ctk.CTk):
              self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="", image=logo_img)
         except Exception as e:
              print(f"Logo Load Error: {e}")
-             self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="MIDI-KBD\nControl", font=ctk.CTkFont(size=20, weight="bold"))
+             self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="MIDI-KBD\nControl", font=ctk.CTkFont(family="Segoe UI", size=20, weight="bold"), text_color=ACCENT_LIGHT)
         self.logo_label.grid(row=0, column=0, padx=10, pady=(10, 5))
 
         # 2. MIDI Mode & Selector
-        self.lbl_mode = ctk.CTkLabel(self.sidebar_frame, text=_("gui.lbl_conn_mode"), anchor="w")
+        self.lbl_mode = ctk.CTkLabel(self.sidebar_frame, text=_("gui.lbl_conn_mode"), anchor="w", text_color=TEXT_SECONDARY, font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"))
         self.lbl_mode.grid(row=1, column=0, padx=20, pady=(5, 0), sticky="w")
 
-        self.mode_combo = ctk.CTkComboBox(self.sidebar_frame, values=[_("gui.mode_usb"), _("gui.mode_ble")], command=self.change_mode, height=24)
+        self.mode_combo = ctk.CTkComboBox(self.sidebar_frame, values=[_("gui.mode_usb"), _("gui.mode_ble")], command=self.change_mode, height=26,
+                                          fg_color=BG_COLOR, border_color=BORDER_COLOR, button_color=ACCENT_COLOR, button_hover_color=ACCENT_HOVER,
+                                          dropdown_fg_color=CARD_BG, dropdown_hover_color=ACCENT_HOVER, dropdown_text_color=TEXT_PRIMARY, text_color=TEXT_PRIMARY)
         self.mode_combo.grid(row=2, column=0, padx=20, pady=(0, 5))
 
-        self.lbl_device = ctk.CTkLabel(self.sidebar_frame, text=_("gui.lbl_device"), anchor="w")
+        self.lbl_device = ctk.CTkLabel(self.sidebar_frame, text=_("gui.lbl_device"), anchor="w", text_color=TEXT_SECONDARY, font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"))
         self.lbl_device.grid(row=3, column=0, padx=20, pady=(5, 0), sticky="w")
 
-        self.device_combo = ctk.CTkComboBox(self.sidebar_frame, values=[_("gui.msg_searching")], command=self.change_midi_device, height=24)
+        self.device_combo = ctk.CTkComboBox(self.sidebar_frame, values=[_("gui.msg_searching")], command=self.change_midi_device, height=26,
+                                            fg_color=BG_COLOR, border_color=BORDER_COLOR, button_color=ACCENT_COLOR, button_hover_color=ACCENT_HOVER,
+                                            dropdown_fg_color=CARD_BG, dropdown_hover_color=ACCENT_HOVER, dropdown_text_color=TEXT_PRIMARY, text_color=TEXT_PRIMARY)
         self.device_combo.grid(row=4, column=0, padx=20, pady=(0, 5))
 
-        self.btn_refresh = ctk.CTkButton(self.sidebar_frame, text=_("gui.btn_refresh"), width=100, height=24, command=self.refresh_midi_ports)
+        self.btn_refresh = ctk.CTkButton(self.sidebar_frame, text=_("gui.btn_refresh"), width=100, height=24, command=self.refresh_midi_ports,
+                                         fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY)
         self.btn_refresh.grid(row=5, column=0, padx=20, pady=5)
 
         # 3. Device & Settings
         self.settings_frame = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
         self.settings_frame.grid(row=6, column=0, padx=10, pady=5)
-        self.btn_edit_device = ctk.CTkButton(self.settings_frame, text=f"⚙ {_('gui.btn_buttons')}", width=90, height=24, fg_color="#555", command=self.open_device_editor)
+        self.btn_edit_device = ctk.CTkButton(self.settings_frame, text=f"⚙ {_('gui.btn_buttons')}", width=90, height=24, fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY, command=self.open_device_editor)
 
         # Update text update logic
         if self.current_device_def:
@@ -1095,7 +1240,7 @@ class GuitarPracticeApp(ctk.CTk):
         self.btn_edit_device.pack(side="left", padx=2)
 
         # Missing Settings Button restored
-        self.btn_settings = ctk.CTkButton(self.settings_frame, text=f"🛠 {_('gui.btn_settings')}", width=90, height=24, fg_color="#555", command=self.open_settings)
+        self.btn_settings = ctk.CTkButton(self.settings_frame, text=f"🛠 {_('gui.btn_settings')}", width=90, height=24, fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY, command=self.open_settings)
         self.btn_settings.pack(side="left", padx=2)
 
         self.status_frame = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
@@ -1105,28 +1250,30 @@ class GuitarPracticeApp(ctk.CTk):
         self.conn_frame = ctk.CTkFrame(self.status_frame, fg_color="transparent")
         self.conn_frame.pack(fill="x", pady=2)
 
-        self.lbl_conn_led = ctk.CTkLabel(self.conn_frame, text="●", font=ctk.CTkFont(size=18), text_color="red")
+        self.lbl_conn_led = ctk.CTkLabel(self.conn_frame, text="●", font=ctk.CTkFont(size=18), text_color=LED_DISCONNECTED)
         self.lbl_conn_led.pack(side="left", padx=(0, 5))
-        self.lbl_conn_text = ctk.CTkLabel(self.conn_frame, text=_("gui.lbl_disconnected"), font=ctk.CTkFont(size=12, weight="bold"))
+        self.lbl_conn_text = ctk.CTkLabel(self.conn_frame, text=_("gui.lbl_disconnected"), font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), text_color=TEXT_PRIMARY)
         self.lbl_conn_text.pack(side="left")
 
         # LCD Monitor
-        self.monitor_frame = ctk.CTkFrame(self.status_frame, fg_color=("gray90", "gray20"), corner_radius=5)
+        self.monitor_frame = ctk.CTkFrame(self.status_frame, fg_color=LCD_BG, corner_radius=8, border_width=1, border_color=BORDER_COLOR)
         self.monitor_frame.pack(fill="x", pady=5)
 
-        self.lbl_monitor_cc = ctk.CTkLabel(self.monitor_frame, text=f"{_('gui.lbl_monitor_cc')}: --", font=ctk.CTkFont(family="Consolas", size=14, weight="bold"))
+        self.lbl_monitor_cc = ctk.CTkLabel(self.monitor_frame, text=f"{_('gui.lbl_monitor_cc')}: --", font=ctk.CTkFont(family="Consolas", size=13, weight="bold"), text_color=LCD_TEXT)
         self.lbl_monitor_cc.pack(side="left", padx=10, pady=5)
 
-        self.lbl_monitor_ch = ctk.CTkLabel(self.monitor_frame, text=f"{_('gui.lbl_monitor_ch')}: --", font=ctk.CTkFont(family="Consolas", size=11))
+        self.lbl_monitor_ch = ctk.CTkLabel(self.monitor_frame, text=f"{_('gui.lbl_monitor_ch')}: --", font=ctk.CTkFont(family="Consolas", size=10), text_color=LCD_TEXT)
         self.lbl_monitor_ch.pack(side="right", padx=10, pady=5)
 
         # Auto-Scan Switch
-        self.switch_scan = ctk.CTkSwitch(self.status_frame, text=_("gui.lbl_auto_scan"), command=self.toggle_scan, font=ctk.CTkFont(size=11), width=80, height=24)
+        self.switch_scan = ctk.CTkSwitch(self.status_frame, text=_("gui.lbl_auto_scan"), command=self.toggle_scan, font=ctk.CTkFont(family="Segoe UI", size=11), width=80, height=24,
+                                          progress_color=ACCENT_COLOR, text_color=TEXT_SECONDARY)
         self.switch_scan.select()
         self.switch_scan.pack(pady=(5, 0), anchor="w")
 
         # Theme Switch
-        self.theme_switch = ctk.CTkSwitch(self.status_frame, text=_("gui.lbl_dark_mode"), command=self.toggle_theme, font=ctk.CTkFont(size=11), width=80, height=24)
+        self.theme_switch = ctk.CTkSwitch(self.status_frame, text=_("gui.lbl_dark_mode"), command=self.toggle_theme, font=ctk.CTkFont(family="Segoe UI", size=11), width=80, height=24,
+                                          progress_color=ACCENT_COLOR, text_color=TEXT_SECONDARY)
 
         # Load theme setting
         current_theme = self.settings.get("theme", "Dark")
@@ -1145,17 +1292,18 @@ class GuitarPracticeApp(ctk.CTk):
         # 5. Startup
         is_startup = self.check_startup_status()
         self.startup_var = ctk.BooleanVar(value=is_startup)
-        self.chk_startup = ctk.CTkCheckBox(self.sidebar_frame, text=_("gui.lbl_launch_at_startup"), variable=self.startup_var, command=self.toggle_startup, font=ctk.CTkFont(size=12))
+        self.chk_startup = ctk.CTkCheckBox(self.sidebar_frame, text=_("gui.lbl_launch_at_startup"), variable=self.startup_var, command=self.toggle_startup,
+                                           font=ctk.CTkFont(family="Segoe UI", size=11), text_color=TEXT_SECONDARY, fg_color=ACCENT_COLOR, hover_color=ACCENT_HOVER)
         self.chk_startup.grid(row=9, column=0, padx=20, pady=10, sticky="w")
 
         # 6. Global Actions
-        self.btn_remote = ctk.CTkButton(self.sidebar_frame, text=_("gui.btn_detach_remote"), command=self.open_remote_control, fg_color="#444", hover_color="#666", height=28)
+        self.btn_remote = ctk.CTkButton(self.sidebar_frame, text=_("gui.btn_detach_remote"), command=self.open_remote_control, fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY, height=28)
         self.btn_remote.grid(row=10, column=0, padx=20, pady=(10, 2))
 
-        self.btn_sync = ctk.CTkButton(self.sidebar_frame, text="☁ Sync", command=self.open_sync_dialog, fg_color="#0066cc", hover_color="#004499", height=28)
+        self.btn_sync = ctk.CTkButton(self.sidebar_frame, text="☁ Sync", command=self.open_sync_dialog, fg_color=ACCENT_COLOR, hover_color=ACCENT_HOVER, text_color=TEXT_PRIMARY, height=28)
         self.btn_sync.grid(row=11, column=0, padx=20, pady=(2, 5))
 
-        self.save_button = ctk.CTkButton(self.sidebar_frame, text=_("gui.btn_save_all"), command=lambda: self.save_all(silent=False), fg_color="green", hover_color="darkgreen", height=28)
+        self.save_button = ctk.CTkButton(self.sidebar_frame, text=_("gui.btn_save_all"), command=lambda: self.save_all(silent=False), fg_color="#10B981", hover_color="#059669", text_color="#FFFFFF", height=28)
         self.save_button.grid(row=12, column=0, padx=20, pady=(5, 20))
 
     def create_main_area(self):
@@ -1166,74 +1314,79 @@ class GuitarPracticeApp(ctk.CTk):
         self.grid_rowconfigure(3, weight=1)
 
         # --- Zone 1: Sélection du Profil ---
-        self.profile_frame = ctk.CTkFrame(self, corner_radius=5)
-        self.profile_frame.grid(row=0, column=1, padx=5, pady=(5, 1), sticky="ew")
+        self.profile_frame = ctk.CTkFrame(self, corner_radius=8, fg_color=CARD_BG, border_width=1, border_color=BORDER_COLOR)
+        self.profile_frame.grid(row=0, column=1, padx=10, pady=(10, 5), sticky="ew")
 
-        ctk.CTkLabel(self.profile_frame, text=_("gui.lbl_profile", default="Profil :"), font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(5, 2), pady=2)
+        ctk.CTkLabel(self.profile_frame, text=_("gui.lbl_profile", default="Profil :"), font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), text_color=TEXT_PRIMARY).pack(side="left", padx=(10, 5), pady=6)
 
-        self.profile_combo = ctk.CTkComboBox(self.profile_frame, width=200, height=24, command=self.on_profile_change)
-        self.profile_combo.pack(side="left", padx=2, pady=2)
+        self.profile_combo = ctk.CTkComboBox(self.profile_frame, width=200, height=26, command=self.on_profile_change,
+                                            fg_color=BG_COLOR, border_color=BORDER_COLOR, button_color=ACCENT_COLOR, button_hover_color=ACCENT_HOVER,
+                                            dropdown_fg_color=CARD_BG, dropdown_hover_color=ACCENT_HOVER, dropdown_text_color=TEXT_PRIMARY, text_color=TEXT_PRIMARY,
+                                            font=ctk.CTkFont(family="Segoe UI", size=12))
+        self.profile_combo.pack(side="left", padx=4, pady=6)
 
-        self.btn_new_profile = ctk.CTkButton(self.profile_frame, text="+", width=24, height=24, command=self.create_new_profile)
-        self.btn_new_profile.pack(side="left", padx=2, pady=2)
+        self.btn_new_profile = ctk.CTkButton(self.profile_frame, text="+", width=26, height=26, fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"), command=self.create_new_profile)
+        self.btn_new_profile.pack(side="left", padx=4, pady=6)
 
-        self.btn_dup_profile = ctk.CTkButton(self.profile_frame, text="❐", width=24, height=24, fg_color="#555", hover_color="#777", command=self.duplicate_current_profile)
-        self.btn_dup_profile.pack(side="left", padx=2, pady=2)
+        self.btn_dup_profile = ctk.CTkButton(self.profile_frame, text="❐", width=26, height=26, fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"), command=self.duplicate_current_profile)
+        self.btn_dup_profile.pack(side="left", padx=4, pady=6)
 
-        self.btn_edit_profile = ctk.CTkButton(self.profile_frame, text="✎", width=24, height=24, fg_color="#555", hover_color="#777", command=self.edit_current_profile)
-        self.btn_edit_profile.pack(side="left", padx=2, pady=2)
+        self.btn_edit_profile = ctk.CTkButton(self.profile_frame, text="✎", width=26, height=26, fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"), command=self.edit_current_profile)
+        self.btn_edit_profile.pack(side="left", padx=4, pady=6)
 
-        self.btn_del_profile = ctk.CTkButton(self.profile_frame, text=_("gui.btn_delete_short"), width=40, height=24, fg_color="red", hover_color="darkred", command=self.delete_current_profile)
-        self.btn_del_profile.pack(side="left", padx=2, pady=2)
+        self.btn_del_profile = ctk.CTkButton(self.profile_frame, text=_("gui.btn_delete_short"), width=44, height=26, fg_color="#EF4444", hover_color="#DC2626", text_color="#FFFFFF", font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), command=self.delete_current_profile)
+        self.btn_del_profile.pack(side="left", padx=4, pady=6)
 
         # Shortcut Memo Button
-        self.btn_shortcuts = ctk.CTkButton(self.profile_frame, text=f"📝 {_('gui.btn_memo')}", width=60, height=24, command=self.open_shortcuts_dialog)
-        self.btn_shortcuts.pack(side="right", padx=5, pady=2)
+        self.btn_shortcuts = ctk.CTkButton(self.profile_frame, text=f"📝 {_('gui.btn_memo')}", width=80, height=26, fg_color=ACCENT_COLOR, hover_color=ACCENT_HOVER, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), command=self.open_shortcuts_dialog)
+        self.btn_shortcuts.pack(side="right", padx=10, pady=6)
 
         # --- Zone 2: Règles de Détection ---
-        self.rules_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.rules_frame.grid(row=1, column=1, padx=5, pady=(1, 5), sticky="ew")
+        self.rules_frame = ctk.CTkFrame(self, corner_radius=8, fg_color=CARD_BG, border_width=1, border_color=BORDER_COLOR)
+        self.rules_frame.grid(row=1, column=1, padx=10, pady=(5, 5), sticky="ew")
+        
+        self.rules_frame.grid_rowconfigure(0, weight=1)
 
-        ctk.CTkLabel(self.rules_frame, text=_("gui.lbl_rules"), width=60).grid(row=0, column=0, padx=(2,0), pady=1)
+        ctk.CTkLabel(self.rules_frame, text=_("gui.lbl_rules"), width=60, font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), text_color=TEXT_SECONDARY).grid(row=0, column=0, padx=(10, 2), pady=6)
 
-        self.entry_app_rule = ctk.CTkEntry(self.rules_frame, placeholder_text=_("gui.placeholder_process"), height=24)
-        self.entry_app_rule.grid(row=0, column=1, padx=2, sticky="ew")
+        self.entry_app_rule = ctk.CTkEntry(self.rules_frame, placeholder_text=_("gui.placeholder_process"), height=26, fg_color=BG_COLOR, border_color=BORDER_COLOR, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=11))
+        self.entry_app_rule.grid(row=0, column=1, padx=4, pady=6, sticky="ew")
 
-        self.btn_scan_app = ctk.CTkButton(self.rules_frame, text=_("gui.btn_scan_app"), width=60, height=24, command=lambda: self.scan_window("app"))
-        self.btn_scan_app.grid(row=0, column=2, padx=2)
+        self.btn_scan_app = ctk.CTkButton(self.rules_frame, text=_("gui.btn_scan_app"), width=70, height=26, fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=11), command=lambda: self.scan_window("app"))
+        self.btn_scan_app.grid(row=0, column=2, padx=4, pady=6)
 
-        self.entry_title_rule = ctk.CTkEntry(self.rules_frame, placeholder_text=_("gui.placeholder_title_opt"), height=24)
-        self.entry_title_rule.grid(row=0, column=3, padx=2, sticky="ew")
+        self.entry_title_rule = ctk.CTkEntry(self.rules_frame, placeholder_text=_("gui.placeholder_title_opt"), height=26, fg_color=BG_COLOR, border_color=BORDER_COLOR, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=11))
+        self.entry_title_rule.grid(row=0, column=3, padx=4, pady=6, sticky="ew")
 
-        self.btn_scan_title = ctk.CTkButton(self.rules_frame, text=_("gui.btn_scan_title"), width=60, height=24, command=lambda: self.scan_window("title"))
-        self.btn_scan_title.grid(row=0, column=4, padx=2)
+        self.btn_scan_title = ctk.CTkButton(self.rules_frame, text=_("gui.btn_scan_title"), width=70, height=26, fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=11), command=lambda: self.scan_window("title"))
+        self.btn_scan_title.grid(row=0, column=4, padx=4, pady=6)
 
-        self.entry_vol_rule = ctk.CTkEntry(self.rules_frame, placeholder_text=_("gui.placeholder_os_vol"), height=24, width=70)
-        self.entry_vol_rule.grid(row=0, column=5, padx=2)
+        self.entry_vol_rule = ctk.CTkEntry(self.rules_frame, placeholder_text=_("gui.placeholder_os_vol"), height=26, width=70, fg_color=BG_COLOR, border_color=BORDER_COLOR, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=11))
+        self.entry_vol_rule.grid(row=0, column=5, padx=4, pady=6)
 
         self.rules_frame.grid_columnconfigure(1, weight=1)
         self.rules_frame.grid_columnconfigure(3, weight=1)
 
-        self.btn_apply_rules = ctk.CTkButton(self.rules_frame, text="✓", width=24, height=24, command=self.apply_rules_to_profile)
-        self.btn_apply_rules.grid(row=0, column=6, padx=2)
+        self.btn_apply_rules = ctk.CTkButton(self.rules_frame, text="✓", width=26, height=26, fg_color="#10B981", hover_color="#059669", text_color="#FFFFFF", font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), command=self.apply_rules_to_profile)
+        self.btn_apply_rules.grid(row=0, column=6, padx=(4, 10), pady=6)
 
         # --- Zone 3: Header Mappings (New) ---
         self.mappings_header = ctk.CTkFrame(self, fg_color="transparent")
-        self.mappings_header.grid(row=2, column=1, padx=5, pady=(2, 0), sticky="ew")
+        self.mappings_header.grid(row=2, column=1, padx=10, pady=(10, 5), sticky="ew")
 
-        ctk.CTkLabel(self.mappings_header, text=_("gui.lbl_mappings"), font=ctk.CTkFont(size=14, weight="bold")).pack(side="left", padx=5)
+        ctk.CTkLabel(self.mappings_header, text=_("gui.lbl_mappings"), font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"), text_color=TEXT_PRIMARY).pack(side="left")
 
-        self.add_mapping_btn = ctk.CTkButton(self.mappings_header, text=f"+ {_('gui.btn_add')}", width=70, height=24, command=self.open_add_dialog)
-        self.add_mapping_btn.pack(side="right", padx=5)
+        self.add_mapping_btn = ctk.CTkButton(self.mappings_header, text=f"+ {_('gui.btn_add')}", width=80, height=26, fg_color=ACCENT_COLOR, hover_color=ACCENT_HOVER, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), command=self.open_add_dialog)
+        self.add_mapping_btn.pack(side="right")
 
         # --- Zone 4: Liste des Mappings ---
-        self.scrollable_frame = ctk.CTkScrollableFrame(self)
-        self.scrollable_frame.grid(row=3, column=1, padx=5, pady=(0, 5), sticky="nsew")
+        self.scrollable_frame = ctk.CTkScrollableFrame(self, fg_color=CARD_BG, border_width=1, border_color=BORDER_COLOR, corner_radius=8)
+        self.scrollable_frame.grid(row=3, column=1, padx=10, pady=(0, 10), sticky="nsew")
         self.scrollable_frame.grid_columnconfigure(0, weight=1)
 
         # --- Zone 5: Pédalier Virtuel ---
         self.virtual_pedalboard = CompactPedalboardFrame(self, self.current_device_def, self.current_profile, self.simulate_midi_press)
-        self.virtual_pedalboard.grid(row=4, column=1, padx=5, pady=(0, 10), sticky="ew")
+        self.virtual_pedalboard.grid(row=4, column=1, padx=10, pady=(0, 15), sticky="ew")
 
 
     def load_data(self):
@@ -1891,54 +2044,59 @@ class GuitarPracticeApp(ctk.CTk):
             self.create_mapping_card(index, mapping)
 
     def create_mapping_card(self, index, mapping):
-        # Direct Grid Layout (Table)
-
+        row_frame = ctk.CTkFrame(self.scrollable_frame, fg_color=BG_COLOR, border_width=1, border_color=BORDER_COLOR, corner_radius=6)
+        row_frame.grid(row=index, column=0, sticky="ew", pady=4, padx=5)
+        
+        row_frame.grid_columnconfigure(1, weight=3) # Name gets space
+        row_frame.grid_columnconfigure(3, weight=4) # Details gets space
+        
         # Col 0: LED Indicator
-        lbl_led = ctk.CTkLabel(self.scrollable_frame, text="●", font=ctk.CTkFont(size=16), text_color="#444444", width=20)
-        lbl_led.grid(row=index, column=0, padx=(5,0), pady=1)
-
+        lbl_led = ctk.CTkLabel(row_frame, text="●", font=ctk.CTkFont(size=14), text_color=LED_OFF, width=20)
+        lbl_led.grid(row=0, column=0, padx=(10, 5), pady=6)
+        
         cc = mapping.get('midi_cc')
         if cc is not None:
              self.mapping_indicators.setdefault(cc, []).append(lbl_led)
-
+             
         # Col 1: Name
         info_text = f"{mapping.get('name', '???')}"
-        lbl_name = ctk.CTkLabel(self.scrollable_frame, text=info_text, anchor="w", font=ctk.CTkFont(weight="bold"))
-        lbl_name.grid(row=index, column=1, padx=5, pady=1, sticky="ew")
-
+        lbl_name = ctk.CTkLabel(row_frame, text=info_text, anchor="w", font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), text_color=TEXT_PRIMARY)
+        lbl_name.grid(row=0, column=1, padx=5, pady=6, sticky="ew")
+        
         # Col 2: Button Name
         btn_label = f"CC {cc}"
         if self.current_device_def:
              match = next((b for b in self.current_device_def['buttons'] if b['cc'] == cc), None)
              if match:
                  btn_label = match['label']
-
-        lbl_btn = ctk.CTkLabel(self.scrollable_frame, text=btn_label, anchor="w", text_color="silver")
-        lbl_btn.grid(row=index, column=2, padx=5, pady=1, sticky="w")
-
+                 
+        lbl_btn = ctk.CTkLabel(row_frame, text=btn_label, anchor="w", font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), text_color=TEXT_SECONDARY)
+        lbl_btn.grid(row=0, column=2, padx=10, pady=6, sticky="w")
+        
         # Col 3: Details
         details_text = f"({cc}) {mapping.get('action_value')}"
-        lbl_details = ctk.CTkLabel(self.scrollable_frame, text=details_text, text_color="gray", font=ctk.CTkFont(size=11), anchor="w")
-        lbl_details.grid(row=index, column=3, padx=10, pady=1, sticky="w")
-
+        lbl_details = ctk.CTkLabel(row_frame, text=details_text, text_color=ACCENT_LIGHT, font=ctk.CTkFont(family="Consolas", size=11), anchor="w")
+        lbl_details.grid(row=0, column=3, padx=10, pady=6, sticky="ew")
+        
         # Col 4: Up
-        btn_up = ctk.CTkButton(self.scrollable_frame, text="▲", width=24, height=22, fg_color="#555", hover_color="#777",
-                               command=lambda i=index: self.move_mapping_up(i))
-        btn_up.grid(row=index, column=4, padx=2, pady=1)
+        btn_up = ctk.CTkButton(row_frame, text="▲", width=24, height=22, fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY,
+                               font=ctk.CTkFont(size=10), command=lambda i=index: self.move_mapping_up(i))
+        btn_up.grid(row=0, column=4, padx=2, pady=6)
 
         # Col 5: Down
-        btn_down = ctk.CTkButton(self.scrollable_frame, text="▼", width=24, height=22, fg_color="#555", hover_color="#777",
-                                 command=lambda i=index: self.move_mapping_down(i))
-        btn_down.grid(row=index, column=5, padx=2, pady=1)
+        btn_down = ctk.CTkButton(row_frame, text="▼", width=24, height=22, fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY,
+                                 font=ctk.CTkFont(size=10), command=lambda i=index: self.move_mapping_down(i))
+        btn_down.grid(row=0, column=5, padx=2, pady=6)
 
         # Col 6: Edit
-        edit_btn = ctk.CTkButton(self.scrollable_frame, text="✎", width=24, height=22, command=lambda i=index: self.edit_mapping(i))
-        edit_btn.grid(row=index, column=6, padx=2, pady=1)
+        edit_btn = ctk.CTkButton(row_frame, text="✎", width=24, height=22, fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY,
+                                 font=ctk.CTkFont(size=10), command=lambda i=index: self.edit_mapping(i))
+        edit_btn.grid(row=0, column=6, padx=2, pady=6)
 
         # Col 7: Del
-        del_btn = ctk.CTkButton(self.scrollable_frame, text="X", width=24, height=22, fg_color="red", hover_color="darkred",
-                                command=lambda i=index: self.delete_mapping(i))
-        del_btn.grid(row=index, column=7, padx=(2, 5), pady=1)
+        del_btn = ctk.CTkButton(row_frame, text="X", width=24, height=22, fg_color="#EF4444", hover_color="#DC2626", text_color="#FFFFFF",
+                                font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"), command=lambda i=index: self.delete_mapping(i))
+        del_btn.grid(row=0, column=7, padx=(2, 10), pady=6)
 
     # --- Actions Profils ---
     def create_new_profile(self):
@@ -2044,8 +2202,8 @@ class GuitarPracticeApp(ctk.CTk):
         self.current_profile["window_title_filter"] = self.entry_title_rule.get()
         self.current_profile["target_volume"] = self.entry_vol_rule.get()
         self.profile_manager.save_profile(self.current_profile)
-        self.btn_apply_rules.configure(fg_color="green")
-        self.after(500, lambda: self.btn_apply_rules.configure(fg_color=["#3B8ED0", "#1F6AA5"]))
+        self.btn_apply_rules.configure(fg_color="#059669")
+        self.after(500, lambda: self.btn_apply_rules.configure(fg_color="#10B981"))
 
     # --- Shortcuts Memo ---
     def open_shortcuts_dialog(self):
@@ -2583,8 +2741,9 @@ class GuitarPracticeApp(ctk.CTk):
         indicators = self.mapping_indicators.get(cc, [])
         for lbl in indicators:
              try:
-                lbl.configure(text_color="#00FF00")
-                self.after(200, lambda l=lbl: l.configure(text_color="#444444"))
+                # Flash Color: Electric Neon Cyan
+                lbl.configure(text_color="#00E5FF")
+                self.after(200, lambda l=lbl: l.configure(text_color=LED_OFF))
              except: pass
 
     def _monitor_connection_status(self):
@@ -2597,7 +2756,7 @@ class GuitarPracticeApp(ctk.CTk):
 
     def update_status(self, connected, message=None):
         if connected:
-            self.lbl_conn_led.configure(text_color="green")
+            self.lbl_conn_led.configure(text_color=LED_CONNECTED)
             
             # Récupération du mode et du device REEL
             mode = self.settings.get("connection_mode", "MIDO")
@@ -2612,7 +2771,7 @@ class GuitarPracticeApp(ctk.CTk):
             
             self.lbl_conn_text.configure(text=f"{dev_name} ({mode_str})")
         else:
-            self.lbl_conn_led.configure(text_color="red")
+            self.lbl_conn_led.configure(text_color=LED_DISCONNECTED)
             self.lbl_conn_text.configure(text=_("gui.lbl_disconnected"))
 
     def check_startup_status(self):

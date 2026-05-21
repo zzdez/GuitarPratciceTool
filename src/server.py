@@ -1124,6 +1124,7 @@ async def get_settings():
         "midi_output_names": config_manager.get("midi_output_names", []),
         "midi_output_name": config_manager.get("midi_output_name", ""), # Legacy fallback
         "language": config_manager.get("language", "fr"),
+        "theme": config_manager.get("theme", "steel_blue"),
         "autoplay": config_manager.get("autoplay", False),
         "autoreplay": config_manager.get("autoreplay", False),
         "sidebar_autohide": config_manager.get("sidebar_autohide", False),

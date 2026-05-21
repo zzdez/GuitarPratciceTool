@@ -2579,6 +2579,9 @@ async function loadSettings() {
                 await loadTranslations(currentLang);
             }
 
+            // Apply Theme
+            applyWebTheme(currentSettings.theme || "steel_blue");
+
             // Sync Fretboard State if loaded
             if (typeof fretboardState !== 'undefined') {
                 fretboardState.skin = currentSettings.fretboard_skin || "flat";
@@ -2613,6 +2616,9 @@ async function openSettingsModal() {
         // Populate Fields
         const langDropdown = document.getElementById("setting-language");
         if (langDropdown) langDropdown.value = currentSettings.language || "fr";
+
+        const themeDropdown = document.getElementById("setting-theme");
+        if (themeDropdown) themeDropdown.value = currentSettings.theme || "steel_blue";
 
         document.getElementById("setting-youtube-key").value = currentSettings.YOUTUBE_API_KEY || "";
 
@@ -2682,6 +2688,26 @@ async function changeLanguage() {
 
     // Dynamically apply
     await loadTranslations(newLang);
+}
+
+function applyWebTheme(theme) {
+    document.body.classList.remove("theme-steel_blue", "theme-amethyst", "theme-emerald", "theme-amber");
+    document.body.classList.add(`theme-${theme}`);
+    const themeDropdown = document.getElementById("setting-theme");
+    if (themeDropdown) themeDropdown.value = theme;
+}
+
+async function changeWebTheme() {
+    const selector = document.getElementById("setting-theme");
+    if (!selector) return;
+    const newTheme = selector.value;
+    applyWebTheme(newTheme);
+    if (currentSettings) currentSettings.theme = newTheme;
+    await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ theme: newTheme })
+    });
 }
 
 function closeSettingsModal() {
@@ -2821,6 +2847,12 @@ async function saveSettings() {
     const fbAutoClose = document.getElementById("setting-fretboard-autoclose");
     if (fbAutoClose) {
         currentSettings.fretboard_autoclose = fbAutoClose.checked;
+    }
+
+    const themeDropdown = document.getElementById("setting-theme");
+    if (themeDropdown) {
+        currentSettings.theme = themeDropdown.value;
+        applyWebTheme(themeDropdown.value);
     }
 
     // Sidebar Settings (Now handled via toggleSidebarOption in header)
