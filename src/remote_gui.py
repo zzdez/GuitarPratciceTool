@@ -77,14 +77,40 @@ class CompactPedalboardFrame(ctk.CTkFrame):
             w.destroy()
         self.btn_map.clear()
 
-        if not self.device_def or "buttons" not in self.device_def:
-            msg = self._("gui.lbl_no_device_def")
-            if self.device_def is None: msg += " (None)"
-            elif "buttons" not in self.device_def: msg += " (No Buttons)"
-            ctk.CTkLabel(self, text=msg).pack(pady=20)
-            return
+        none_lbl = self._("gui.lbl_none")
+        is_virtual = False
+        if self.profile and (self.profile.get("device_name") == none_lbl or self.profile.get("device_name") == "Aucun"):
+            is_virtual = True
+        elif not self.device_def or self.device_def.get("name") == none_lbl or not self.device_def.get("buttons"):
+            is_virtual = True
 
-        buttons_def = self.device_def["buttons"]
+        if is_virtual:
+            # Grille dynamique (Option A) basée uniquement sur les mappings configurés
+            buttons_def = []
+            mappings = self.profile.get("mappings", []) if self.profile else []
+            for m in mappings:
+                cc = m.get("midi_cc")
+                name = m.get("name", "Bouton")
+                if cc is not None:
+                    buttons_def.append({
+                        "cc": cc,
+                        "short_label": name[:12], # le nom de l'action abrégé
+                        "label": name
+                    })
+            if not buttons_def:
+                # Aucun bouton virtuel configuré
+                msg = self._("gui.lbl_no_virtual_buttons", "Aucun bouton virtuel")
+                lbl_empty = ctk.CTkLabel(self, text=msg, font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), text_color="gray")
+                lbl_empty.pack(pady=20, padx=10)
+                return
+        else:
+            if not self.device_def or "buttons" not in self.device_def:
+                msg = self._("gui.lbl_no_device_def")
+                if self.device_def is None: msg += " (None)"
+                elif "buttons" not in self.device_def: msg += " (No Buttons)"
+                ctk.CTkLabel(self, text=msg).pack(pady=20)
+                return
+            buttons_def = self.device_def["buttons"]
 
         # Mapping Map : CC -> {name, custom_icon}
         mapping_map = {}
@@ -95,25 +121,35 @@ class CompactPedalboardFrame(ctk.CTkFrame):
                     mapping_map[cc] = m
 
         # Grid logic
-        # Grid logic
-        cols = 10 # 10 Columns for standard AIRSTEP (5 Short + 5 Long)
-        if len(buttons_def) > 10:
-             cols = 10 # split into rows
+        if is_virtual:
+            cols = min(5, len(buttons_def))
+            if cols < 1: cols = 1
+        else:
+            cols = 10 # 10 Columns for standard AIRSTEP (5 Short + 5 Long)
+            if len(buttons_def) > 10:
+                 cols = 10 # split into rows
 
         for i, btn_data in enumerate(buttons_def):
             cc = btn_data["cc"]
             default_label = btn_data["label"]
 
-            # Clean Physical Index (Top Label)
-            short_lbl = default_label.replace("Bouton ", "").replace("Button ", "").replace("Footswitch ", "")
-            if "(" in short_lbl: short_lbl = short_lbl.split("(")[0].strip()
+            if is_virtual:
+                short_lbl = btn_data.get("short_label", default_label)
+            else:
+                # Priorité au short_label explicite si configuré
+                short_lbl = btn_data.get("short_label")
+                if not short_lbl:
+                    # Clean Physical Index (Top Label)
+                    short_lbl = default_label.replace("Bouton ", "").replace("Button ", "").replace("Footswitch ", "")
+                    if "(" in short_lbl: short_lbl = short_lbl.split("(")[0].strip()
+                    
+                    # Handle Long Press Labels
+                    is_long_press = "Long Press" in default_label
+                    if is_long_press:
+                        base = default_label.replace("Long Press ", "").strip()
+                        if "(" in base: base = base.split("(")[0].strip()
+                        short_lbl = f"{base} ({self._('gui.lbl_hold')})"
             
-            # Handle Long Press Labels
-            is_long_press = "Long Press" in default_label
-            if is_long_press:
-                base = default_label.replace("Long Press ", "").strip()
-                if "(" in base: base = base.split("(")[0].strip()
-                short_lbl = f"{base} ({self._('gui.lbl_hold')})"
             # Determine Icon & State
             mapping_data = mapping_map.get(cc, None)
 
@@ -156,12 +192,12 @@ class CompactPedalboardFrame(ctk.CTkFrame):
                 text=short_lbl,
                 font=ctk.CTkFont(family="Segoe UI", size=9, weight="bold"),
                 text_color=gui.TEXT_SECONDARY,
-                height=12
+                wraplength=70,
+                height=24
             )
             lbl_phy.pack(side="top", pady=(0, 2))
 
             # 2. Main Button (Icon)
-            # Modern Look: Rounded, Larger Icon, Cockpit Accent
             btn = ctk.CTkButton(
                 container,
                 text=main_text,

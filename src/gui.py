@@ -544,15 +544,15 @@ class DeviceEditorDialog(ctk.CTkToplevel):
 
         self.rows = []
         for btn in self.definition.get("buttons", []):
-            self.add_row(btn["cc"], btn["label"])
+            self.add_row(btn["cc"], btn["label"], btn.get("short_label", ""))
 
         # Add Button
-        ctk.CTkButton(self, text=f"+ {_('gui.btn_add_button')}", fg_color=ACCENT_COLOR, hover_color=ACCENT_HOVER, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), command=lambda: self.add_row("", "")).pack(pady=5)
+        ctk.CTkButton(self, text=f"+ {_('gui.btn_add_button')}", fg_color=ACCENT_COLOR, hover_color=ACCENT_HOVER, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), command=lambda: self.add_row("", "", "")).pack(pady=5)
 
         # Save
         ctk.CTkButton(self, text=_("gui.btn_save"), fg_color="#10B981", hover_color="#059669", text_color="#FFFFFF", font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), command=self.save).pack(pady=20, padx=20, fill="x")
 
-    def add_row(self, cc, label):
+    def add_row(self, cc, label, short_label=""):
         row = ctk.CTkFrame(self.scroll_frame, fg_color="transparent")
         row.pack(fill="x", pady=4, padx=5)
 
@@ -570,6 +570,11 @@ class DeviceEditorDialog(ctk.CTkToplevel):
         e_cc.insert(0, val_display)
         e_cc.pack(side="left", padx=5)
 
+        # Label Court
+        e_short = ctk.CTkEntry(row, width=70, placeholder_text=_("gui.placeholder_short_lbl"), fg_color=BG_COLOR, border_color=BORDER_COLOR, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=11))
+        e_short.insert(0, str(short_label))
+        e_short.pack(side="left", padx=5)
+
         e_lbl = ctk.CTkEntry(row, placeholder_text=_("gui.placeholder_btn_name"), fg_color=BG_COLOR, border_color=BORDER_COLOR, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=11))
         e_lbl.insert(0, str(label))
         e_lbl.pack(side="left", fill="x", expand=True, padx=5)
@@ -578,7 +583,7 @@ class DeviceEditorDialog(ctk.CTkToplevel):
         btn_del.pack(side="right", padx=5)
 
         # Store original CC to preserve ID if not changed
-        self.rows.append((row, e_cc, e_lbl, cc))
+        self.rows.append((row, e_cc, e_lbl, e_short, cc))
 
     def delete_row(self, row_widget):
         for i, r in enumerate(self.rows):
@@ -593,11 +598,12 @@ class DeviceEditorDialog(ctk.CTkToplevel):
         pending_rows = []
 
         for r in self.rows:
-            # r = (row_widget, entry_cc, entry_lbl, original_cc)
+            # r = (row_widget, entry_cc, entry_lbl, entry_short, original_cc)
             row_widget = r[0]
             e_cc = r[1]
             e_lbl = r[2]
-            original_cc = r[3]
+            e_short = r[3]
+            original_cc = r[4]
             
             val = e_cc.get().strip()
             
@@ -623,6 +629,7 @@ class DeviceEditorDialog(ctk.CTkToplevel):
         
         for r, assigned_cc in pending_rows:
             lbl = r[2].get().strip()
+            short_lbl = r[3].get().strip()
             
             final_cc = assigned_cc
             if final_cc is None:
@@ -632,7 +639,18 @@ class DeviceEditorDialog(ctk.CTkToplevel):
                 final_cc = next_virtual
                 used_ccs.add(final_cc)
             
-            new_buttons.append({"cc": final_cc, "label": lbl})
+            # Fallback automatique pour short_lbl s'il est vide
+            if not short_lbl:
+                if "Long Press" in lbl:
+                    base = lbl.replace("Long Press ", "").strip()
+                    if "(" in base: base = base.split("(")[0].strip()
+                    short_lbl = f"{base} (H)"
+                else:
+                    short = lbl.replace("Bouton ", "").replace("Button ", "").replace("Footswitch ", "")
+                    if "(" in short: short = short.split("(")[0].strip()
+                    short_lbl = short[:8]
+            
+            new_buttons.append({"cc": final_cc, "short_label": short_lbl, "label": lbl})
 
         data = {
             "name": self.entry_name.get(),
@@ -1386,7 +1404,7 @@ class GuitarPracticeApp(ctk.CTk):
 
         # --- Zone 5: Pédalier Virtuel ---
         self.virtual_pedalboard = CompactPedalboardFrame(self, self.current_device_def, self.current_profile, self.simulate_midi_press)
-        self.virtual_pedalboard.grid(row=4, column=1, padx=10, pady=(0, 15), sticky="ew")
+        self.virtual_pedalboard.grid(row=4, column=1, padx=10, pady=(0, 15), sticky="")
 
 
     def load_data(self):
@@ -1458,26 +1476,26 @@ class GuitarPracticeApp(ctk.CTk):
         port_name = self.device_combo.get()
         
         # If combo says "Recherche...", use the actual target for the current mode
-        if port_name in [_("gui.msg_searching_full"), _("gui.msg_searching"), _("gui.lbl_none"), ""]:
+        if port_name in [_("gui.msg_searching_full"), _("gui.msg_searching"), ""]:
             mode = self.settings.get("connection_mode", "MIDO")
             if mode == "BLE":
                 port_name = self.settings.get("midi_device_name_ble", "")
             else:
                 port_name = self.settings.get("midi_device_name_usb", "")
 
-        new_def = self.device_manager.get_definition_for_port(port_name)
+        none_lbl = _("gui.lbl_none")
+        if port_name == none_lbl or not port_name:
+            new_def = {"name": none_lbl, "buttons": []}
+        else:
+            new_def = self.device_manager.get_definition_for_port(port_name)
 
-        # Fallback to AIRSTEP if nothing found (e.g. at startup or no device connected)
-        # if not new_def:
-        #      new_def = self.device_manager.get_definition_for_port("AIRSTEP")
+            # Ultimate Fallback: Just take the first one available
+            if not new_def and self.device_manager.definitions:
+                 new_def = self.device_manager.definitions[0]
 
-        # Ultimate Fallback: Just take the first one available
-        if not new_def and self.device_manager.definitions:
-             new_def = self.device_manager.definitions[0]
-
-        # Absolute Last Resort: Hardcoded default
-        if not new_def:
-            new_def = {"name": _("gui.lbl_no_device"), "buttons": []}
+            # Absolute Last Resort: Hardcoded default
+            if not new_def:
+                new_def = {"name": _("gui.lbl_no_device"), "buttons": []}
 
         self.current_device_def = new_def
         self.log_debug(f"Device Definition set to: {self.current_device_def.get('name')}")
@@ -1486,10 +1504,12 @@ class GuitarPracticeApp(ctk.CTk):
             self.virtual_pedalboard.set_device_def(self.current_device_def)
 
         # Update btn text for confirmation
-        if self.current_device_def:
+        if self.current_device_def and self.current_device_def.get("name") != none_lbl:
             self.btn_edit_device.configure(text=f"⚙ {self.current_device_def['name']}")
+            self.btn_edit_device.configure(state="normal")
         else:
-            self.btn_edit_device.configure(text=f"⚙ {_('gui.btn_configure')}")
+            self.btn_edit_device.configure(text=f"⚙ {_('gui.lbl_none')}")
+            self.btn_edit_device.configure(state="disabled")
 
     def open_device_editor(self):
         DeviceEditorDialog(self, self.device_manager, self.current_device_def, self.on_device_saved)
@@ -2018,8 +2038,44 @@ class GuitarPracticeApp(ctk.CTk):
     def refresh_ui_for_profile(self):
         if not self.current_profile: return
 
+        # Synchroniser le périphérique associé à ce profil
+        device_name = self.current_profile.get("device_name")
+        none_lbl = _("gui.lbl_none")
+        if not device_name:
+            # Fallback rétrocompatible vers les paramètres globaux
+            mode = self.settings.get("connection_mode", "MIDO")
+            device_name = self.settings.get("midi_device_name_ble" if mode == "BLE" else "midi_device_name_usb", self.settings.get("midi_device_name", none_lbl))
+            if not device_name:
+                device_name = none_lbl
+            self.current_profile["device_name"] = device_name
+            try:
+                self.profile_manager.save_profile(self.current_profile)
+            except Exception as e:
+                print(f"[GUI] Error auto-saving profile with default device: {e}")
+
+        # Mettre à jour l'affichage de la combo
+        if hasattr(self, "device_combo"):
+            current_values = list(self.device_combo.cget("values") or [])
+            if none_lbl not in current_values:
+                current_values.append(none_lbl)
+            if device_name not in current_values:
+                current_values.insert(0, device_name)
+            self.device_combo.configure(values=current_values)
+            self.device_combo.set(device_name)
+            
+            # Mettre à jour les settings globaux pour ce mode
+            self.settings["midi_device_name"] = device_name
+            mode = self.settings.get("connection_mode", "MIDO")
+            if mode == "BLE":
+                self.settings["midi_device_name_ble"] = device_name
+            else:
+                self.settings["midi_device_name_usb"] = device_name
+
+        self.update_device_def()
+
         # Update Pedalboard
         if hasattr(self, 'virtual_pedalboard'):
+            self.virtual_pedalboard.set_device_def(self.current_device_def)
             self.virtual_pedalboard.set_profile(self.current_profile)
 
         self.entry_app_rule.delete(0, "end")
@@ -2638,8 +2694,9 @@ class GuitarPracticeApp(ctk.CTk):
             elif target_name not in display_ports:
                  display_ports.insert(0, target_name)
 
-        if not display_ports:
-            display_ports = [_("gui.lbl_none")]
+        none_label = _("gui.lbl_none")
+        if none_label not in display_ports:
+            display_ports.append(none_label)
 
         self.device_combo.configure(values=display_ports)
         
@@ -2679,6 +2736,14 @@ class GuitarPracticeApp(ctk.CTk):
             self.settings["midi_device_name_ble"] = choice
         else:
             self.settings["midi_device_name_usb"] = choice
+
+        # Save to current profile immediately if loaded
+        if self.current_profile:
+            self.current_profile["device_name"] = choice
+            try:
+                self.profile_manager.save_profile(self.current_profile)
+            except Exception as e:
+                print(f"[GUI] Error saving profile device change: {e}")
 
         # Persist immediately
         cm = ConfigManager()
@@ -2748,14 +2813,31 @@ class GuitarPracticeApp(ctk.CTk):
 
     def _monitor_connection_status(self):
         """Vérifie périodiquement l'état de la connexion"""
-        connected = self.midi_manager.is_connected
-        self.update_status(connected)
+        device_name = None
+        if self.current_profile:
+            device_name = self.current_profile.get("device_name")
+        if not device_name:
+            device_name = self.device_combo.get() if hasattr(self, 'device_combo') else None
+        
+        none_lbl = _("gui.lbl_none")
+        if device_name == none_lbl or not device_name:
+            # Profil virtuel / Aucun périphérique physique
+            self.midi_manager.set_scanning(False)
+            self.update_status(True, is_virtual=True)
+        else:
+            # Périphérique physique requis
+            self.midi_manager.set_scanning(True)
+            connected = self.midi_manager.is_connected
+            self.update_status(connected, is_virtual=False)
         
         # Loop 1s
         self.after(1000, self._monitor_connection_status)
 
-    def update_status(self, connected, message=None):
-        if connected:
+    def update_status(self, connected, message=None, is_virtual=False):
+        if is_virtual:
+            self.lbl_conn_led.configure(text_color="#00E5FF") # Bleu fluo
+            self.lbl_conn_text.configure(text=_("gui.lbl_virtual_mode"))
+        elif connected:
             self.lbl_conn_led.configure(text_color=LED_CONNECTED)
             
             # Récupération du mode et du device REEL

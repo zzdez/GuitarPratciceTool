@@ -9,19 +9,19 @@ DEVICE_DIR = os.path.join(get_app_dir(), "devices")
 DEFAULT_AIRSTEP_DEF = {
     "name": "AIRSTEP",
     "buttons": [
-        {"cc": 50, "label": "Bouton A (Gauche)"},
-        {"cc": 52, "label": "Bouton B (Milieu G)"},
-        {"cc": 54, "label": "Bouton C (Milieu)"},
-        {"cc": 56, "label": "Bouton D (Milieu D)"},
-        {"cc": 58, "label": "Bouton E (Droite)"},
-        {"cc": 51, "label": "Long Press A"},
-        {"cc": 53, "label": "Long Press B"},
-        {"cc": 55, "label": "Long Press C"},
-        {"cc": 57, "label": "Long Press D"},
-        {"cc": 59, "label": "Long Press E"},
-        {"cc": 80, "label": "Bouton 1 (Boss)"},
-        {"cc": 81, "label": "Bouton 2 (Boss)"},
-        {"cc": 82, "label": "Bouton 3 (Boss)"}
+        {"cc": 50, "short_label": "A", "label": "Bouton A (Gauche)"},
+        {"cc": 52, "short_label": "B", "label": "Bouton B (Milieu G)"},
+        {"cc": 54, "short_label": "C", "label": "Bouton C (Milieu)"},
+        {"cc": 56, "short_label": "D", "label": "Bouton D (Milieu D)"},
+        {"cc": 58, "short_label": "E", "label": "Bouton E (Droite)"},
+        {"cc": 51, "short_label": "A (H)", "label": "Long Press A"},
+        {"cc": 53, "short_label": "B (H)", "label": "Long Press B"},
+        {"cc": 55, "short_label": "C (H)", "label": "Long Press C"},
+        {"cc": 57, "short_label": "D (H)", "label": "Long Press D"},
+        {"cc": 59, "short_label": "E (H)", "label": "Long Press E"},
+        {"cc": 80, "short_label": "1", "label": "Bouton 1 (Boss)"},
+        {"cc": 81, "short_label": "2", "label": "Bouton 2 (Boss)"},
+        {"cc": 82, "short_label": "3", "label": "Bouton 3 (Boss)"}
     ]
 }
 
@@ -57,6 +57,18 @@ class DeviceManager:
                 with open(fpath, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     if "name" in data and "buttons" in data:
+                        # Rétrocompatibilité : calcul automatique du short_label s'il est absent
+                        for btn in data["buttons"]:
+                            if "short_label" not in btn:
+                                lbl = btn.get("label", "")
+                                if "Long Press" in lbl:
+                                    base = lbl.replace("Long Press ", "").strip()
+                                    if "(" in base: base = base.split("(")[0].strip()
+                                    btn["short_label"] = f"{base} (H)"
+                                else:
+                                    short = lbl.replace("Bouton ", "").replace("Button ", "").replace("Footswitch ", "")
+                                    if "(" in short: short = short.split("(")[0].strip()
+                                    btn["short_label"] = short[:8]
                         self.definitions.append(data)
             except Exception as e:
                 print(f"Error loading device {fpath}: {e}")
