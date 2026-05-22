@@ -235,6 +235,21 @@ def main():
     # 2e. State Injection (Profiles, Context, Action Handler)
     fastapi_app.state.profile_manager = app.profile_manager
     fastapi_app.state.action_handler = app.action_handler
+    fastapi_app.state.gui_app = app
+    
+    def change_device_wrapper(device_name):
+        if app:
+            def _change():
+                try:
+                    if app.current_profile:
+                        app.current_profile["device_name"] = device_name
+                        app.profile_manager.save_profile(app.current_profile)
+                    app.refresh_ui_for_profile()
+                except Exception as e:
+                    print(f"[MAIN] Error changing device from wrapper: {e}")
+            app.after(0, _change)
+
+    fastapi_app.state.change_device_callback = change_device_wrapper
     
     if hasattr(app, 'context_monitor'):
         fastapi_app.state.context_monitor = app.context_monitor

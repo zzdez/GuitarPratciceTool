@@ -138,14 +138,55 @@ function startDeviceStatusPolling() {
                     profileLabel.innerText = t("web.profile_prefix") + activeProfileName;
                 }
 
+                // Mettre à jour le sélecteur de télécommande active
+                const selectDevice = document.getElementById("select-active-device");
+                if (selectDevice && data.available_devices) {
+                    const currentOptions = Array.from(selectDevice.options).map(o => o.value);
+                    const newOptions = data.available_devices;
+                    const needsRebuild = currentOptions.length !== newOptions.length || !currentOptions.every((val, index) => val === newOptions[index]);
+
+                    if (needsRebuild) {
+                        selectDevice.innerHTML = "";
+                        newOptions.forEach(dev => {
+                            const opt = document.createElement("option");
+                            opt.value = dev;
+                            opt.textContent = dev;
+                            opt.style.background = "#1e1e1e";
+                            opt.style.color = "white";
+                            selectDevice.appendChild(opt);
+                        });
+                    }
+
+                    if (data.active_device_name) {
+                        selectDevice.value = data.active_device_name;
+                    }
+                }
+
                 // Update Header Device Status
                 const headerStatus = document.getElementById("header-device-status");
                 if (headerStatus) {
                     if (currentConnectionMode === "Virtuel") {
                         headerStatus.innerHTML = `🟢 ` + t("web.virtual_device", "Télécommande virtuelle");
                         headerStatus.style.color = "#03dac6";
+                    } else if (data.ports_status && data.ports_status.length > 0) {
+                        let statusParts = [];
+                        let numConnected = 0;
+                        data.ports_status.forEach(p => {
+                            const pName = p.name || "Appareil";
+                            const pConnected = p.connected || false;
+                            if (pConnected) numConnected++;
+                            statusParts.push(`${pName} ${pConnected ? '🟢' : '🔴'}`);
+                        });
+                        headerStatus.innerHTML = statusParts.join(" | ");
+                        if (numConnected === data.ports_status.length) {
+                            headerStatus.style.color = "#03dac6";
+                        } else if (numConnected > 0) {
+                            headerStatus.style.color = "#ffa500";
+                        } else {
+                            headerStatus.style.color = "#cf6679";
+                        }
                     } else {
-                        let displayMode = currentConnectionMode === "BLE" ? t("web.bt") : (currentConnectionMode === "Composite" ? "Composite" : t("web.usb"));
+                        let displayMode = currentConnectionMode === "BLE" ? t("web.bt") : t("web.usb");
                         if (currentDeviceName === t("web.none") || !currentDeviceName) {
                             headerStatus.innerHTML = `○ ` + t("web.status_waiting");
                             headerStatus.style.color = "#888";
@@ -159,18 +200,31 @@ function startDeviceStatusPolling() {
                     }
                 }
 
-                // If on empty state, force refresh to show new name immediately
                 if (!currentProfile || !currentProfile.mappings) {
                     renderPedalboard(currentProfile);
                 }
             }
         } catch (e) {
-            // Silently ignore connection errors here to not spam console when server restarts
             currentIsConnected = false;
         }
     }, 2000);
 }
 startDeviceStatusPolling();
+
+async function changeActiveDevice(deviceName) {
+    try {
+        const res = await fetch("/api/active_device", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ device_name: deviceName })
+        });
+        if (res.ok) {
+            console.log("Active device changed to:", deviceName);
+        }
+    } catch (e) {
+        console.error("Error changing active device:", e);
+    }
+}
 
 // --- PITCH SHIFT VARIABLES ---
 let audioCtx = null;

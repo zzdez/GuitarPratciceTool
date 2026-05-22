@@ -692,23 +692,46 @@ async def get_cover_image(path: str):
 async def get_status():
     config_manager._load_config()
     is_connected = False
+    ports_status = []
     if hasattr(app.state, "midi_manager") and app.state.midi_manager:
         is_connected = app.state.midi_manager.is_connected
+        ports_status = app.state.midi_manager.get_providers_status()
 
     active_profile_name = "Global / Aucun"
     if hasattr(app.state, "action_handler") and app.state.action_handler.current_profile:
          active_profile_name = app.state.action_handler.current_profile.get("name", "Global / Aucun")
-    elif hasattr(app.state, "profile_manager") and app.state.profile_manager:
-         # Fallback if needed, but ActionHandler tracks the live context
-         pass
+
+    available_devices = []
+    active_device_name = config_manager.get("midi_device_name", _("web.none"))
+    if hasattr(app.state, "gui_app") and app.state.gui_app:
+        gui_app = app.state.gui_app
+        if hasattr(gui_app, "device_manager") and gui_app.device_manager:
+            available_devices = [d.get("name") for d in gui_app.device_manager.definitions if d.get("name")]
+        if hasattr(gui_app, "current_profile") and gui_app.current_profile:
+            active_device_name = gui_app.current_profile.get("device_name", active_device_name)
 
     return {
         "status": "ok",
-        "device_name": config_manager.get("midi_device_name", _("web.none")),
+        "device_name": active_device_name,
         "connection_mode": config_manager.get("connection_mode", "MIDO"),
         "is_connected": is_connected,
-        "active_profile_name": active_profile_name
+        "active_profile_name": active_profile_name,
+        "ports_status": ports_status,
+        "available_devices": available_devices,
+        "active_device_name": active_device_name
     }
+
+@app.post("/api/active_device")
+async def change_active_device(payload: dict):
+    device_name = payload.get("device_name")
+    if not device_name:
+        raise HTTPException(status_code=400, detail="Missing device_name")
+    
+    if hasattr(app.state, "change_device_callback") and app.state.change_device_callback:
+        app.state.change_device_callback(device_name)
+        return {"status": "ok", "message": f"Active device changed to {device_name}"}
+    else:
+        raise HTTPException(status_code=500, detail="Callback change_device_callback not registered")
 
 @app.get("/api/metronome/sounds")
 async def get_metronome_sounds():

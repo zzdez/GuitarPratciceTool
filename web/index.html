@@ -62,7 +62,6 @@
 
         <!-- COL 4: Status Bar / Buttons -->
         <div class="status-bar" style="display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; min-width: 300px; justify-content: flex-end; flex-shrink: 0;">
-            <button id="btn-remote-native" class="btn-icon" onclick="toggleNativeRemote()" data-i18n-title="web.btn_remote" title="Télécommande"><i class="ph ph-device-mobile"></i></button>
             <button id="btn-toggle-metronome" class="btn-icon" onclick="toggleMetronomeUI()" data-i18n-title="web.title_metronome" title="Métronome"><i class="ph ph-metronome"></i></button>
             <button id="btn-toggle-drum-machine" class="btn-icon" onclick="openDrumModal()" data-i18n-title="web.title_drum_machine" title="Boîte-Rythmes"><i class="ph ph-speaker-hifi"></i></button>
             <button id="btn-toggle-fretboard" class="btn-icon" onclick="toggleFretboard()" data-i18n-title="web.title_fretboard" title="Gammes"><i class="ph ph-grid-nine"></i></button>
@@ -85,6 +84,15 @@
             </button>
             <button id="btn-cockpit" class="btn-icon" onclick="toggleCockpitMode(true)" data-i18n-title="setlist.btn_cockpit_mode" title="Mode Live (Cockpit)" style="color:var(--accent); font-weight:bold;"><i class="ph ph-gauge"></i></button>
             <button id="btn-toggle-theater" class="btn-icon" onclick="toggleTheaterMode()" data-i18n-title="web.btn_theater" title="Théâtre"><i class="ph ph-corners-out"></i></button>
+            
+            <div class="active-device-container" style="display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.05); padding: 4px 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); margin-right: 5px;">
+                <button id="btn-remote-native" class="btn-icon" onclick="toggleNativeRemote()" data-i18n-title="web.btn_remote" title="Télécommande" style="font-size: 1.1em; color: var(--accent); padding: 0; background: transparent; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform 0.15s ease, color 0.15s ease;" onmouseover="this.style.transform='scale(1.15)'; this.style.color='white';" onmouseout="this.style.transform='scale(1)'; this.style.color='var(--accent)';">
+                    <i class="ph ph-device-mobile"></i>
+                </button>
+                <select id="select-active-device" onchange="changeActiveDevice(this.value)" style="background: transparent; color: white; border: none; font-size: 0.85em; font-weight: 500; cursor: pointer; outline: none; padding-right: 5px;">
+                    <!-- Injecté dynamiquement -->
+                </select>
+            </div>
             <span id="active-profile" data-i18n="web.profile_prefix" style="white-space: nowrap; font-size: 0.8em; color: #ccc;">Profil : Global</span>
             <button id="btn-settings" class="btn-icon" onclick="openSettingsModal()" data-i18n-title="web.btn_settings" title="Paramètres"><i class="ph ph-gear"></i></button>
         </div>

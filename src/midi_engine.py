@@ -539,6 +539,18 @@ class MidiManager:
         # Fallback aux noms cibles configurés s'ils ne sont pas encore connectés
         return ", ".join([p.target_name for p in self.active_providers])
 
+    def get_providers_status(self):
+        """Retourne la liste des périphériques gérés par les providers actifs et leur statut de connexion."""
+        status_list = []
+        for provider in self.active_providers:
+            dev_type = "BLE" if "BleakProvider" in provider.__class__.__name__ else "USB"
+            status_list.append({
+                "name": provider.target_name,
+                "type": dev_type,
+                "connected": provider.is_connected
+            })
+        return status_list
+
     # --- Output Management (Instance Methods) ---
     
     def get_available_outputs(self):

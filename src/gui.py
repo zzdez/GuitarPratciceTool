@@ -1758,26 +1758,7 @@ class GuitarPracticeApp(ctk.CTk):
         self.lbl_monitor_ch = ctk.CTkLabel(self.monitor_frame, text=f"{_('gui.lbl_monitor_ch')}: --", font=ctk.CTkFont(family="Consolas", size=10), text_color=LCD_TEXT)
         self.lbl_monitor_ch.pack(side="right", padx=10, pady=5)
 
-        # Auto-Scan Switch
-        self.switch_scan = ctk.CTkSwitch(self.status_frame, text=_("gui.lbl_auto_scan"), command=self.toggle_scan, font=ctk.CTkFont(family="Segoe UI", size=11), width=80, height=24,
-                                          progress_color=ACCENT_COLOR, text_color=TEXT_SECONDARY)
-        self.switch_scan.select()
-        self.switch_scan.pack(pady=(5, 0), anchor="w")
 
-        # Theme Switch
-        self.theme_switch = ctk.CTkSwitch(self.status_frame, text=_("gui.lbl_dark_mode"), command=self.toggle_theme, font=ctk.CTkFont(family="Segoe UI", size=11), width=80, height=24,
-                                          progress_color=ACCENT_COLOR, text_color=TEXT_SECONDARY)
-
-        # Load theme setting
-        current_theme = self.settings.get("theme", "Dark")
-        if current_theme == "Dark":
-            self.theme_switch.select()
-            ctk.set_appearance_mode("Dark")
-        else:
-            self.theme_switch.deselect()
-            ctk.set_appearance_mode("Light")
-
-        self.theme_switch.pack(pady=(5, 0), anchor="w")
 
         # Spacer (Row 5 is Spacer row, let's add a label to push content up)
         self.spacer_lbl = ctk.CTkLabel(self.sidebar_frame, text="")
@@ -2606,67 +2587,94 @@ class GuitarPracticeApp(ctk.CTk):
 
         self.mapping_indicators = {}
 
-        # Table Config
-        self.scrollable_frame.grid_columnconfigure(1, weight=1) # Col 1 (Name) expands
+        # Configuration de la grille unifiée de la table (comme un tableau Excel)
+        self.scrollable_frame.grid_columnconfigure(0, weight=0, minsize=40)  # État / LED
+        self.scrollable_frame.grid_columnconfigure(1, weight=3, minsize=150) # Nom du Mapping
+        self.scrollable_frame.grid_columnconfigure(2, weight=2, minsize=100) # Bouton Physique
+        self.scrollable_frame.grid_columnconfigure(3, weight=4, minsize=200) # Action / Détails
+        self.scrollable_frame.grid_columnconfigure(4, weight=0, minsize=32)  # Action ▲
+        self.scrollable_frame.grid_columnconfigure(5, weight=0, minsize=32)  # Action ▼
+        self.scrollable_frame.grid_columnconfigure(6, weight=0, minsize=32)  # Action ✎
+        self.scrollable_frame.grid_columnconfigure(7, weight=0, minsize=32)  # Action X
+
+        # --- En-têtes de colonnes (Style Tableau Excel Professionnel) ---
+        lbl_h_led = ctk.CTkLabel(self.scrollable_frame, text=_("gui.col_state"), font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), text_color=TEXT_SECONDARY, anchor="w")
+        lbl_h_led.grid(row=0, column=0, padx=(10, 5), pady=(8, 4), sticky="w")
+        
+        lbl_h_name = ctk.CTkLabel(self.scrollable_frame, text=_("gui.col_name"), font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), text_color=TEXT_SECONDARY, anchor="w")
+        lbl_h_name.grid(row=0, column=1, padx=5, pady=(8, 4), sticky="w")
+        
+        lbl_h_btn = ctk.CTkLabel(self.scrollable_frame, text=_("gui.col_btn"), font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), text_color=TEXT_SECONDARY, anchor="w")
+        lbl_h_btn.grid(row=0, column=2, padx=10, pady=(8, 4), sticky="w")
+        
+        lbl_h_details = ctk.CTkLabel(self.scrollable_frame, text=_("gui.col_details"), font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), text_color=TEXT_SECONDARY, anchor="w")
+        lbl_h_details.grid(row=0, column=3, padx=10, pady=(8, 4), sticky="w")
+        
+        lbl_h_actions = ctk.CTkLabel(self.scrollable_frame, text=_("gui.col_actions"), font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), text_color=TEXT_SECONDARY, anchor="center")
+        lbl_h_actions.grid(row=0, column=4, columnspan=4, padx=5, pady=(8, 4), sticky="ew")
+
+        # Ligne de séparation sous les en-têtes
+        sep_h = ctk.CTkFrame(self.scrollable_frame, height=2, fg_color=BORDER_COLOR)
+        sep_h.grid(row=1, column=0, columnspan=8, sticky="ew", pady=(2, 6))
 
         mappings = self.current_profile.get("mappings", [])
         for index, mapping in enumerate(mappings):
             self.create_mapping_card(index, mapping)
 
     def create_mapping_card(self, index, mapping):
-        row_frame = ctk.CTkFrame(self.scrollable_frame, fg_color=BG_COLOR, border_width=1, border_color=BORDER_COLOR, corner_radius=6)
-        row_frame.grid(row=index, column=0, sticky="ew", pady=4, padx=5)
-        
-        row_frame.grid_columnconfigure(1, weight=3) # Name gets space
-        row_frame.grid_columnconfigure(3, weight=4) # Details gets space
-        
+        grid_row = index * 2 + 2
+
         # Col 0: LED Indicator
-        lbl_led = ctk.CTkLabel(row_frame, text="●", font=ctk.CTkFont(size=14), text_color=LED_OFF, width=20)
-        lbl_led.grid(row=0, column=0, padx=(10, 5), pady=6)
+        lbl_led = ctk.CTkLabel(self.scrollable_frame, text="●", font=ctk.CTkFont(size=14), text_color=LED_OFF, width=20, anchor="w")
+        lbl_led.grid(row=grid_row, column=0, padx=(10, 5), pady=6, sticky="w")
         
         cc = mapping.get('midi_cc')
         if cc is not None:
              self.mapping_indicators.setdefault(cc, []).append(lbl_led)
              
-        # Col 1: Name
-        info_text = f"{mapping.get('name', '???')}"
-        lbl_name = ctk.CTkLabel(row_frame, text=info_text, anchor="w", font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), text_color=TEXT_PRIMARY)
-        lbl_name.grid(row=0, column=1, padx=5, pady=6, sticky="ew")
+        # Col 1: Name (No aggressive truncation, left justified, sticky ew)
+        raw_name = mapping.get('name', '???')
+        lbl_name = ctk.CTkLabel(self.scrollable_frame, text=raw_name, anchor="w", justify="left", font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), text_color=TEXT_PRIMARY)
+        lbl_name.grid(row=grid_row, column=1, padx=5, pady=6, sticky="ew")
         
-        # Col 2: Button Name
+        # Col 2: Button Name (No aggressive truncation, left justified, sticky ew)
         btn_label = f"CC {cc}"
         if self.current_device_def:
              match = next((b for b in self.current_device_def['buttons'] if b['cc'] == cc), None)
              if match:
                  btn_label = match['label']
-                 
-        lbl_btn = ctk.CTkLabel(row_frame, text=btn_label, anchor="w", font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), text_color=TEXT_SECONDARY)
-        lbl_btn.grid(row=0, column=2, padx=10, pady=6, sticky="w")
+        lbl_btn = ctk.CTkLabel(self.scrollable_frame, text=btn_label, anchor="w", justify="left", font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), text_color=TEXT_SECONDARY)
+        lbl_btn.grid(row=grid_row, column=2, padx=10, pady=6, sticky="ew")
         
-        # Col 3: Details
-        details_text = f"({cc}) {mapping.get('action_value')}"
-        lbl_details = ctk.CTkLabel(row_frame, text=details_text, text_color=ACCENT_LIGHT, font=ctk.CTkFont(family="Consolas", size=11), anchor="w")
-        lbl_details.grid(row=0, column=3, padx=10, pady=6, sticky="ew")
+        # Col 3: Details (No aggressive truncation, left justified, sticky ew)
+        raw_details = f"({cc}) {mapping.get('action_value')}"
+        lbl_details = ctk.CTkLabel(self.scrollable_frame, text=raw_details, text_color=ACCENT_LIGHT, font=ctk.CTkFont(family="Consolas", size=11), anchor="w", justify="left")
+        lbl_details.grid(row=grid_row, column=3, padx=10, pady=6, sticky="ew")
         
         # Col 4: Up
-        btn_up = ctk.CTkButton(row_frame, text="▲", width=24, height=22, fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY,
+        btn_up = ctk.CTkButton(self.scrollable_frame, text="▲", width=24, height=22, fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY,
                                font=ctk.CTkFont(size=10), command=lambda i=index: self.move_mapping_up(i))
-        btn_up.grid(row=0, column=4, padx=2, pady=6)
+        btn_up.grid(row=grid_row, column=4, padx=2, pady=6)
 
         # Col 5: Down
-        btn_down = ctk.CTkButton(row_frame, text="▼", width=24, height=22, fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY,
+        btn_down = ctk.CTkButton(self.scrollable_frame, text="▼", width=24, height=22, fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY,
                                  font=ctk.CTkFont(size=10), command=lambda i=index: self.move_mapping_down(i))
-        btn_down.grid(row=0, column=5, padx=2, pady=6)
+        btn_down.grid(row=grid_row, column=5, padx=2, pady=6)
 
         # Col 6: Edit
-        edit_btn = ctk.CTkButton(row_frame, text="✎", width=24, height=22, fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY,
+        edit_btn = ctk.CTkButton(self.scrollable_frame, text="✎", width=24, height=22, fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY,
                                  font=ctk.CTkFont(size=10), command=lambda i=index: self.edit_mapping(i))
-        edit_btn.grid(row=0, column=6, padx=2, pady=6)
+        edit_btn.grid(row=grid_row, column=6, padx=2, pady=6)
 
         # Col 7: Del
-        del_btn = ctk.CTkButton(row_frame, text="X", width=24, height=22, fg_color="#EF4444", hover_color="#DC2626", text_color="#FFFFFF",
+        del_btn = ctk.CTkButton(self.scrollable_frame, text="X", width=24, height=22, fg_color="#EF4444", hover_color="#DC2626", text_color="#FFFFFF",
                                 font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"), command=lambda i=index: self.delete_mapping(i))
-        del_btn.grid(row=0, column=7, padx=(2, 10), pady=6)
+        del_btn.grid(row=grid_row, column=7, padx=(2, 10), pady=6)
+
+        # Subtle separator line under the row
+        sep_row = grid_row + 1
+        sep = ctk.CTkFrame(self.scrollable_frame, height=1, fg_color=BORDER_COLOR)
+        sep.grid(row=sep_row, column=0, columnspan=8, sticky="ew", pady=(4, 0))
 
     # --- Actions Profils ---
     def create_new_profile(self):
@@ -3085,15 +3093,7 @@ class GuitarPracticeApp(ctk.CTk):
         # Auto apply
         self.apply_rules_to_profile()
 
-    # --- MIDI & System ---
-    def toggle_scan(self):
-        self.midi_manager.set_scanning(bool(self.switch_scan.get()))
 
-    def toggle_theme(self):
-        mode = "Dark" if self.theme_switch.get() else "Light"
-        ctk.set_appearance_mode(mode)
-        self.settings["theme"] = mode
-        self.save_all(silent=True)
 
 
 
@@ -3203,53 +3203,98 @@ class GuitarPracticeApp(ctk.CTk):
         self.after(1000, self._monitor_connection_status)
 
     def update_status(self, connected, message=None, is_virtual=False):
+        # Initialisation ou nettoyage des widgets dynamiques
+        if not hasattr(self, "dynamic_status_widgets"):
+            self.dynamic_status_widgets = []
+        for widget in self.dynamic_status_widgets:
+            try:
+                widget.destroy()
+            except:
+                pass
+        self.dynamic_status_widgets.clear()
+
         if is_virtual:
+            # Réafficher les labels de base si besoin
+            self.lbl_conn_led.pack(side="left", padx=(0, 5))
+            self.lbl_conn_text.pack(side="left")
             self.lbl_conn_led.configure(text_color="#00E5FF") # Bleu fluo
             self.lbl_conn_text.configure(text=_("gui.lbl_virtual_mode"))
-        elif connected:
-            self.lbl_conn_led.configure(text_color=LED_CONNECTED)
-            
-            # Récupération du mode et du device REEL d'après la définition
-            conn_type = "Virtuel"
-            if hasattr(self, 'current_device_def') and self.current_device_def:
-                conn_type = self.current_device_def.get("connection_type", "Virtuel")
-            
-            if conn_type == "Composite":
-                mode_str = _("gui.conn_composite", default="Composite")
-            else:
-                mode_str = "USB" if conn_type == "USB" else "Bluetooth"
-            
-            # Nom du device
-            dev_name = self.midi_manager.active_device_name
-            if not dev_name: 
-                 dev_name = self.current_device_def.get("midi_port", "Appareil") if hasattr(self, 'current_device_def') and self.current_device_def else "Appareil"
+            return
 
-            if dev_name in ["Recherche...", ""]: dev_name = "Appareil"
-            
-            self.lbl_conn_text.configure(text=f"{dev_name} ({mode_str})")
-        else:
-            self.lbl_conn_led.configure(text_color=LED_DISCONNECTED)
-            
+        # Si le mode de connexion physique est actif, on récupère le statut individuel de chaque périphérique
+        providers_status = []
+        if hasattr(self, "midi_manager") and self.midi_manager:
+            providers_status = self.midi_manager.get_providers_status()
+
+        if not providers_status:
+            # Mode de connexion par défaut ou aucun périphérique
+            self.lbl_conn_led.pack(side="left", padx=(0, 5))
+            self.lbl_conn_text.pack(side="left")
             conn_type = "Virtuel"
             if hasattr(self, 'current_device_def') and self.current_device_def:
                 conn_type = self.current_device_def.get("connection_type", "Virtuel")
-                
-            if conn_type == "Composite":
-                physical_devices = self.current_device_def.get("physical_devices", [])
-                target_ports = ", ".join([d["name"] for d in physical_devices]) if physical_devices else ""
-                if target_ports:
-                    self.lbl_conn_text.configure(text=f"{_('gui.lbl_disconnected')} ({target_ports})")
-                else:
-                    self.lbl_conn_text.configure(text=_("gui.lbl_disconnected"))
+            if conn_type == "Virtuel":
+                self.lbl_conn_led.configure(text_color="#00E5FF") # Bleu fluo
+                self.lbl_conn_text.configure(text=_("gui.lbl_virtual_mode"))
             else:
-                target_port = ""
-                if hasattr(self, 'current_device_def') and self.current_device_def:
-                    target_port = self.current_device_def.get("midi_port", "")
-                
-                if target_port:
-                    self.lbl_conn_text.configure(text=f"{_('gui.lbl_disconnected')} ({target_port})")
-                else:
-                    self.lbl_conn_text.configure(text=_("gui.lbl_disconnected"))
+                self.lbl_conn_led.configure(text_color=LED_DISCONNECTED)
+                self.lbl_conn_text.configure(text=_("gui.lbl_disconnected"))
+            return
+
+        # Si nous sommes en mode multi-périphériques / composite
+        num_connected = sum(1 for p in providers_status if p.get("connected", False))
+        num_total = len(providers_status)
+
+        # Détermination de la couleur de la LED globale
+        if num_connected == num_total:
+            global_led_color = LED_CONNECTED
+        elif num_connected > 0:
+            global_led_color = "#FFA500" # Orange
+        else:
+            global_led_color = LED_DISCONNECTED
+        self.lbl_conn_led.configure(text_color=global_led_color)
+
+        # C'est du multi-périphérique : on masque les labels standard de connexion mono-périphérique
+        # pour éviter d'avoir la LED globale ● doublée
+        self.lbl_conn_led.pack_forget()
+        self.lbl_conn_text.pack_forget()
+
+        # Construction dynamique des labels de chaque périphérique
+        for idx, p in enumerate(providers_status):
+            p_name = p.get("name", "Appareil")
+            p_connected = p.get("connected", False)
+            
+            # 1. LED pour ce périphérique
+            led_color = "#00FF00" if p_connected else "#FF0000"
+            led_lbl = ctk.CTkLabel(
+                self.conn_frame, 
+                text="●", 
+                font=ctk.CTkFont(size=14), 
+                text_color=led_color
+            )
+            led_lbl.pack(side="left", padx=(0, 2))
+            self.dynamic_status_widgets.append(led_lbl)
+
+            # 2. Nom du périphérique
+            name_lbl = ctk.CTkLabel(
+                self.conn_frame, 
+                text=p_name, 
+                font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), 
+                text_color=TEXT_PRIMARY
+            )
+            name_lbl.pack(side="left", padx=(0, 5))
+            self.dynamic_status_widgets.append(name_lbl)
+
+            # 3. Séparateur (sauf pour le dernier)
+            if idx < num_total - 1:
+                sep_lbl = ctk.CTkLabel(
+                    self.conn_frame, 
+                    text="|", 
+                    font=ctk.CTkFont(family="Segoe UI", size=11), 
+                    text_color="#555555"
+                )
+                sep_lbl.pack(side="left", padx=(2, 5))
+                self.dynamic_status_widgets.append(sep_lbl)
 
     def check_startup_status(self):
         startup_dir = os.path.join(os.getenv('APPDATA'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
