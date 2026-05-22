@@ -134,3 +134,41 @@ class DeviceManager:
         # but usage is minimized.
         self.save_definition(DEFAULT_AIRSTEP_DEF)
 
+    def get_definition_by_name(self, name):
+        if not name: return None
+        name_lower = name.lower()
+        for d in self.definitions:
+            if d.get("name", "").lower() == name_lower:
+                return d
+        return None
+
+    def delete_definition(self, name):
+        if not name: return False
+        
+        # Trouver la definition en memoire
+        defn = next((d for d in self.definitions if d.get("name", "").lower() == name.lower()), None)
+        if not defn:
+            return False
+            
+        self.definitions.remove(defn)
+        
+        # Determiner le chemin du fichier correspondants
+        safe_name = "".join([c for c in name if c.isalnum() or c in (' ', '-', '_')]).strip()
+        filename = f"{safe_name}.json"
+        filepath = os.path.join(self.abs_device_dir, filename)
+        
+        # Remplacement eventuel par le chemin relatif si l'autre n'existe pas
+        if not os.path.exists(filepath):
+            filepath = os.path.join(DEVICE_DIR, filename)
+            
+        if os.path.exists(filepath):
+            try:
+                os.remove(filepath)
+                return True
+            except Exception as e:
+                print(f"Error removing device file {filepath}: {e}")
+                return False
+        return True
+
+
+

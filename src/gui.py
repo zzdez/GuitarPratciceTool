@@ -522,124 +522,395 @@ class SettingsDialog(ctk.CTkToplevel):
 class DeviceEditorDialog(ctk.CTkToplevel):
     def __init__(self, parent, manager, current_def=None, callback=None):
         super().__init__(parent)
+        self.parent = parent
         self.manager = manager
         self.callback = callback
-        self.title(_("gui.title_device_editor"))
-        self.geometry("500x600")
+        
+        self.transient(parent)
+        self.grab_set()
+        
+        # Style & Design: Sticky Footer Layout
+        self.title(_("gui.title_device_editor", default="Éditeur de télécommande"))
+        self.geometry("620x750")
         self.configure(fg_color=BG_COLOR)
         self.attributes("-topmost", True)
+        self.resizable(False, False)
+        self.lift()
+        self.focus_force()
+        
+        self.definition = current_def if current_def else {"name": "", "buttons": []}
+        
+        # Initialisation des variables d'état
+        self.device_name = self.definition.get("name", "")
+        
+        # Migration rétrocompatible si l'ancien profil était simple (USB ou BLE)
+        self.physical_devices = self.definition.get("physical_devices", [])
+        if not self.physical_devices:
+            conn_type = self.definition.get("connection_type", "Virtuel")
+            midi_port = self.definition.get("midi_port", "")
+            if conn_type in ("USB", "BLE") and midi_port:
+                self.physical_devices = [{"type": conn_type, "name": midi_port}]
+                
+        self.buttons = self.definition.get("buttons", [])
+        self.key_rows = []
+        
+        # Variable du scan physique
+        self.last_scanned_ports = []
+        self.scanner_running = True
+        self.checkbox_vars = {}
+        
+        # Sticky Footer Layout
+        self.grid_rowconfigure(0, weight=0)  # Header
+        self.grid_rowconfigure(1, weight=1)  # Body
+        self.grid_rowconfigure(2, weight=0)  # Footer
+        self.grid_columnconfigure(0, weight=1)
+        
+        # 1. Header Frame
+        self.header_frame = ctk.CTkFrame(self, fg_color=CARD_BG, height=70, corner_radius=0)
+        self.header_frame.grid(row=0, column=0, sticky="nsew")
+        self.header_frame.grid_propagate(False)
+        self.header_frame.grid_columnconfigure(0, weight=1)
+        self.header_frame.grid_rowconfigure(0, weight=1)
+        
+        self.lbl_step_title = ctk.CTkLabel(self.header_frame, text=_("gui.title_device_editor", default="Éditeur de télécommande"), text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=15, weight="bold"))
+        self.lbl_step_title.grid(row=0, column=0, pady=20, padx=20, sticky="w")
+        
+        # 2. Body Container (Scrollable Frame unique pour tout le contenu)
+        self.body_container = ctk.CTkScrollableFrame(self, fg_color="transparent", corner_radius=0)
+        self.body_container.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
+        
+        # 3. Footer Frame
+        self.footer_frame = ctk.CTkFrame(self, fg_color=CARD_BG, height=60, corner_radius=0)
+        self.footer_frame.grid(row=2, column=0, sticky="nsew")
+        self.footer_frame.grid_propagate(False)
+        
+        self.btn_cancel = ctk.CTkButton(self.footer_frame, text=_("gui.btn_cancel"), width=100, fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), command=self.close_and_stop)
+        self.btn_cancel.pack(side="left", padx=20, pady=15)
+        
+        self.btn_save = ctk.CTkButton(self.footer_frame, text=_("gui.btn_save"), width=100, fg_color="#10B981", hover_color="#059669", text_color="#FFFFFF", font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), command=self.save)
+        self.btn_save.pack(side="right", padx=20, pady=15)
+        
+        # Dessiner le contenu statique
+        self.draw_ui_content()
+        
+        # Launch Scan Thread
+        import threading
+        self.scan_thread = threading.Thread(target=self._background_scan, daemon=True)
+        self.scan_thread.start()
+        
+        # Clean protocol on window close
+        self.protocol("WM_DELETE_WINDOW", self.close_and_stop)
 
-        self.definition = current_def if current_def else {"name": _("gui.new_device"), "buttons": []}
+    def close_and_stop(self):
+        self.scanner_running = False
+        self.destroy()
 
-        # Name
-        ctk.CTkLabel(self, text=_("gui.lbl_model_name"), text_color=TEXT_SECONDARY, font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold")).pack(pady=(15,2), padx=20, anchor="w")
-        self.entry_name = ctk.CTkEntry(self, fg_color=CARD_BG, border_color=BORDER_COLOR, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=12))
-        self.entry_name.insert(0, self.definition["name"])
-        self.entry_name.pack(pady=(0, 5), padx=20, fill="x")
+    def _background_scan(self):
+        import time
+        import asyncio
+        
+        midi_mgr = None
+        if hasattr(self, 'parent') and hasattr(self.parent, 'parent') and hasattr(self.parent.parent, 'midi_manager'):
+            midi_mgr = self.parent.parent.midi_manager
+            
+        has_active_ble_provider = False
+        if midi_mgr:
+            try:
+                from midi_engine import BleakProvider
+                active_ble_provs = [p for p in midi_mgr.active_providers if isinstance(p, BleakProvider)]
+                if active_ble_provs:
+                    has_active_ble_provider = True
+                    print(f"[WIZARD SCAN] Détection d'un BleakProvider principal actif ({len(active_ble_provs)}). Réutilisation du scan en cours.")
+            except Exception as e:
+                print(f"[WIZARD SCAN] Erreur détection provider BLE: {e}")
+                
+        if not has_active_ble_provider:
+            print("[WIZARD SCAN] Démarrage du scan BLE autonome robuste (event loop persistante)...")
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            async def scan_loop_async():
+                from bleak import BleakScanner
+                import mido
+                
+                scanner = None
+                try:
+                    scanner = BleakScanner()
+                except Exception as e:
+                    print(f"[WIZARD SCAN] Impossible d'initialiser BleakScanner: {e}")
+                    
+                while self.scanner_running:
+                    try:
+                        usb_ports = mido.get_input_names()
+                    except Exception as e:
+                        print(f"[WIZARD SCAN] Erreur scan USB: {e}")
+                        usb_ports = []
+                        
+                    ble_ports = []
+                    if scanner:
+                        try:
+                            devices = await scanner.discover(timeout=2.0)
+                            ble_ports = [d.name for d in devices if d.name]
+                        except Exception as e:
+                            print(f"[WIZARD SCAN] Erreur scan BLE autonome: {e}")
+                            
+                    scanned = []
+                    for p in usb_ports:
+                        if p not in scanned:
+                            scanned.append({"name": p, "type": "USB"})
+                    for p in ble_ports:
+                        if not any(x["name"] == p for x in scanned):
+                            scanned.append({"name": p, "type": "BLE"})
+                            
+                    if scanned != self.last_scanned_ports:
+                        self.last_scanned_ports = scanned
+                        if self.scanner_running:
+                            self.after(0, self.update_scanned_ports_ui)
+                            
+                    await asyncio.sleep(2.0)
+                    
+            try:
+                loop.run_until_complete(scan_loop_async())
+            except Exception as e:
+                print(f"[WIZARD SCAN] Échec de la boucle asynchrone autonome: {e}")
+            finally:
+                loop.close()
+                
+        else:
+            print("[WIZARD SCAN] Utilisation du scan passif via le BleakProvider principal...")
+            import mido
+            loop_count = 0
+            while self.scanner_running:
+                if midi_mgr and (loop_count % 4 == 0):
+                    try:
+                        midi_mgr.force_rescan()
+                    except Exception as e:
+                        print(f"[WIZARD SCAN] Erreur lors du force_rescan: {e}")
+                        
+                try:
+                    usb_ports = mido.get_input_names()
+                except:
+                    usb_ports = []
+                    
+                ble_ports = []
+                if midi_mgr:
+                    try:
+                        ble_ports = list(midi_mgr.get_ports())
+                    except Exception as e:
+                        print(f"[WIZARD SCAN] Erreur lecture ports passifs: {e}")
+                        
+                scanned = []
+                for p in usb_ports:
+                    if p not in scanned:
+                        scanned.append({"name": p, "type": "USB"})
+                for p in ble_ports:
+                    if not any(x["name"] == p for x in scanned):
+                        scanned.append({"name": p, "type": "BLE"})
+                        
+                if scanned != self.last_scanned_ports:
+                    self.last_scanned_ports = scanned
+                    if self.scanner_running:
+                        self.after(0, self.update_scanned_ports_ui)
+                        
+                time.sleep(2.0)
+                loop_count += 1
 
-        # Buttons List
-        self.scroll_frame = ctk.CTkScrollableFrame(self, label_text=_("gui.lbl_buttons_list"), fg_color=CARD_BG, border_width=1, border_color=BORDER_COLOR, corner_radius=8,
-                                                  label_text_color=TEXT_PRIMARY, label_fg_color=CARD_BG, label_font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"))
-        self.scroll_frame.pack(pady=10, padx=20, fill="both", expand=True)
+    def draw_ui_content(self):
+        # 1. Champ de nom de la télécommande
+        lbl_name = ctk.CTkLabel(self.body_container, text=_("gui.lbl_model_name", default="Nom du modèle :"), text_color=TEXT_SECONDARY, font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"))
+        lbl_name.pack(pady=(10, 2), padx=10, anchor="w")
+        self.entry_name = ctk.CTkEntry(self.body_container, fg_color=CARD_BG, border_color=BORDER_COLOR, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=12))
+        self.entry_name.pack(pady=(0, 15), padx=10, fill="x")
+        self.entry_name.insert(0, self.device_name)
+        
+        # 2. Section des périphériques physiques
+        lbl_ports = ctk.CTkLabel(self.body_container, text=_("gui.wizard_lbl_ports", default="Périphériques physiques à agréger (laisser vide si virtuel uniquement) :"), text_color=TEXT_SECONDARY, font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"))
+        lbl_ports.pack(pady=(5, 2), padx=10, anchor="w")
+        
+        self.ports_container = ctk.CTkFrame(self.body_container, fg_color=CARD_BG, border_width=1, border_color=BORDER_COLOR, corner_radius=8)
+        self.ports_container.pack(pady=(0, 15), padx=10, fill="x")
+        
+        self.update_scanned_ports_ui()
+        
+        # 3. Section de la liste des touches
+        lbl_keys = ctk.CTkLabel(self.body_container, text=_("gui.lbl_buttons_list", default="Grille des touches de contrôle :"), text_color=TEXT_SECONDARY, font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"))
+        lbl_keys.pack(pady=(10, 2), padx=10, anchor="w")
+        
+        btn_add = ctk.CTkButton(self.body_container, text=f"+ {_('gui.btn_add_button', default='Ajouter Bouton')}", fg_color=ACCENT_COLOR, hover_color=ACCENT_HOVER, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), command=lambda: self.draw_key_row("", "", ""))
+        btn_add.pack(pady=(0, 10), padx=10, anchor="w")
+        
+        self.keys_container = ctk.CTkFrame(self.body_container, fg_color=CARD_BG, border_width=1, border_color=BORDER_COLOR, corner_radius=8)
+        self.keys_container.pack(pady=(0, 10), padx=10, fill="x")
+        
+        for btn in self.buttons:
+            self.draw_key_row(btn.get("cc", ""), btn.get("label", ""), btn.get("short_label", ""), btn.get("is_virtual", btn.get("cc", 0) < 0))
 
-        self.rows = []
-        for btn in self.definition.get("buttons", []):
-            self.add_row(btn["cc"], btn["label"], btn.get("short_label", ""))
+    def update_scanned_ports_ui(self):
+        if not hasattr(self, "ports_container") or not self.ports_container.winfo_exists():
+            return
+            
+        for w in self.ports_container.winfo_children():
+            w.destroy()
+            
+        all_display_ports = list(self.last_scanned_ports)
+        for dev in self.physical_devices:
+            if not any(x["name"] == dev["name"] for x in all_display_ports):
+                all_display_ports.append({"name": dev["name"], "type": dev["type"], "absent": True})
+                
+        if not all_display_ports:
+            lbl_empty = ctk.CTkLabel(self.ports_container, text=_("gui.msg_no_device_found"), text_color=TEXT_SECONDARY, font=ctk.CTkFont(family="Segoe UI", size=11))
+            lbl_empty.pack(pady=20)
+            return
+            
+        for p in all_display_ports:
+            row = ctk.CTkFrame(self.ports_container, fg_color="transparent")
+            row.pack(fill="x", pady=4, padx=10)
+            
+            p_name = p["name"]
+            p_type = p["type"]
+            is_absent = p.get("absent", False)
+            
+            if p_name not in self.checkbox_vars:
+                var = ctk.BooleanVar(value=any(x["name"] == p_name for x in self.physical_devices))
+                self.checkbox_vars[p_name] = (var, p_type)
+            else:
+                var = self.checkbox_vars[p_name][0]
+                
+            def on_checkbox_toggled(n=p_name, v=var, t=p_type):
+                if v.get():
+                    if not any(x["name"] == n for x in self.physical_devices):
+                        self.physical_devices.append({"type": t, "name": n})
+                else:
+                    self.physical_devices = [x for x in self.physical_devices if x["name"] != n]
+            
+            chk = ctk.CTkCheckBox(row, text=p_name, variable=var, font=ctk.CTkFont(family="Segoe UI", size=11), fg_color=ACCENT_COLOR, hover_color=ACCENT_HOVER, command=on_checkbox_toggled)
+            chk.pack(side="left", padx=5)
+            
+            lbl_badge = ctk.CTkLabel(row, text=f" [{p_type}] ", font=ctk.CTkFont(family="Segoe UI", size=9, weight="bold"), text_color="#00E5FF" if p_type == "BLE" else TEXT_SECONDARY)
+            lbl_badge.pack(side="right", padx=5)
+            
+            if is_absent:
+                lbl_badge.configure(text=f" [{p_type} - {_('gui.lbl_hold', default='Absent')}] ", text_color="#EF4444")
 
-        # Add Button
-        ctk.CTkButton(self, text=f"+ {_('gui.btn_add_button')}", fg_color=ACCENT_COLOR, hover_color=ACCENT_HOVER, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), command=lambda: self.add_row("", "", "")).pack(pady=5)
-
-        # Save
-        ctk.CTkButton(self, text=_("gui.btn_save"), fg_color="#10B981", hover_color="#059669", text_color="#FFFFFF", font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), command=self.save).pack(pady=20, padx=20, fill="x")
-
-    def add_row(self, cc, label, short_label=""):
-        row = ctk.CTkFrame(self.scroll_frame, fg_color="transparent")
-        row.pack(fill="x", pady=4, padx=5)
-
+    def draw_key_row(self, cc, label, short_label="", is_virt=False):
+        if not hasattr(self, "keys_container") or not self.keys_container.winfo_exists():
+            return
+            
+        row = ctk.CTkFrame(self.keys_container, fg_color="transparent")
+        row.pack(fill="x", pady=4, padx=10)
+        
+        row_state = {
+            "widget": row,
+            "is_virtual": is_virt,
+            "orig_cc": cc
+        }
+        
         e_cc = ctk.CTkEntry(row, width=60, placeholder_text=_("gui.placeholder_cc"), fg_color=BG_COLOR, border_color=BORDER_COLOR, font=ctk.CTkFont(family="Consolas", size=11))
         
-        # Display logic
-        val_display = ""
-        if isinstance(cc, int) and cc < 0:
-            val_display = _("gui.lbl_virtual")
-            e_cc.configure(text_color="#00E5FF") # Neon cyan for virtual
-        elif cc != "" and cc is not None:
-             val_display = str(cc)
-             e_cc.configure(text_color=TEXT_PRIMARY)
-             
-        e_cc.insert(0, val_display)
+        def toggle_type(rs=row_state, entry=e_cc):
+            if rs["is_virtual"]:
+                rs["is_virtual"] = False
+                btn_type.configure(text=_("gui.lbl_btn_physical", default="Physique"), text_color=TEXT_PRIMARY)
+                entry.configure(state="normal", text_color=TEXT_PRIMARY)
+                entry.delete(0, "end")
+                
+                if isinstance(rs["orig_cc"], int) and rs["orig_cc"] >= 0:
+                    entry.insert(0, str(rs["orig_cc"]))
+                else:
+                    entry.insert(0, "")
+            else:
+                rs["is_virtual"] = True
+                btn_type.configure(text=_("gui.lbl_btn_virtual"), text_color="#00E5FF")
+                entry.delete(0, "end")
+                entry.insert(0, _("gui.lbl_virtual"))
+                entry.configure(state="disabled", text_color="#00E5FF")
+                
+        btn_type = ctk.CTkButton(row, width=80, height=26, text="", fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"), command=toggle_type)
+        btn_type.pack(side="left", padx=5)
+        row_state["btn_type"] = btn_type
+        
+        if is_virt:
+            btn_type.configure(text=_("gui.lbl_btn_virtual"), text_color="#00E5FF")
+            e_cc.insert(0, _("gui.lbl_virtual"))
+            e_cc.configure(state="disabled", text_color="#00E5FF")
+        else:
+            btn_type.configure(text=_("gui.lbl_btn_physical", default="Physique"), text_color=TEXT_PRIMARY)
+            val_display = str(cc) if (cc != "" and cc is not None) else ""
+            e_cc.insert(0, val_display)
+            e_cc.configure(state="normal", text_color=TEXT_PRIMARY)
+            
         e_cc.pack(side="left", padx=5)
-
-        # Label Court
+        row_state["entry_cc"] = e_cc
+        
         e_short = ctk.CTkEntry(row, width=70, placeholder_text=_("gui.placeholder_short_lbl"), fg_color=BG_COLOR, border_color=BORDER_COLOR, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=11))
         e_short.insert(0, str(short_label))
         e_short.pack(side="left", padx=5)
-
+        row_state["entry_short"] = e_short
+        
         e_lbl = ctk.CTkEntry(row, placeholder_text=_("gui.placeholder_btn_name"), fg_color=BG_COLOR, border_color=BORDER_COLOR, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=11))
         e_lbl.insert(0, str(label))
         e_lbl.pack(side="left", fill="x", expand=True, padx=5)
-
-        btn_del = ctk.CTkButton(row, text="✕", width=30, height=26, fg_color="#EF4444", hover_color="#DC2626", text_color="#FFFFFF", font=ctk.CTkFont(size=10, weight="bold"), command=lambda: self.delete_row(row))
+        row_state["entry_lbl"] = e_lbl
+        
+        def delete_key(rs=row_state):
+            if rs in self.key_rows:
+                self.key_rows.remove(rs)
+            rs["widget"].destroy()
+            
+        btn_del = ctk.CTkButton(row, text="✕", width=30, height=26, fg_color="#EF4444", hover_color="#DC2626", text_color="#FFFFFF", font=ctk.CTkFont(size=10, weight="bold"), command=delete_key)
         btn_del.pack(side="right", padx=5)
-
-        # Store original CC to preserve ID if not changed
-        self.rows.append((row, e_cc, e_lbl, e_short, cc))
-
-    def delete_row(self, row_widget):
-        for i, r in enumerate(self.rows):
-            if r[0] == row_widget:
-                self.rows.pop(i)
-                break
-        row_widget.destroy()
+        
+        self.key_rows.append(row_state)
 
     def save(self):
-        # 1. First pass: Collect explicit CCs and pending rows
         used_ccs = set()
         pending_rows = []
-
-        for r in self.rows:
-            # r = (row_widget, entry_cc, entry_lbl, entry_short, original_cc)
-            row_widget = r[0]
-            e_cc = r[1]
-            e_lbl = r[2]
-            e_short = r[3]
-            original_cc = r[4]
-            
-            val = e_cc.get().strip()
-            
-            # If user left "Virtuel" untouched, we try to keep original_cc if it was negative
-            if val.lower() == "virtuel":
-                if isinstance(original_cc, int) and original_cc < 0:
-                    used_ccs.add(original_cc)
-                    pending_rows.append((r, original_cc)) # Keep same ID
-                else:
-                    pending_rows.append((r, None)) # Re-assign
-            elif val and (val.isdigit() or (val.startswith('-') and val[1:].isdigit())):
-                 # Explicit number (positive or negative)
-                 cc = int(val)
-                 used_ccs.add(cc)
-                 pending_rows.append((r, cc))
-            else:
-                 # Empty or invalid -> Needs assignment
-                 pending_rows.append((r, None))
-
-        # 2. Second pass: Assign available negative IDs
-        next_virtual = -1
-        new_buttons = []
         
-        for r, assigned_cc in pending_rows:
-            lbl = r[2].get().strip()
-            short_lbl = r[3].get().strip()
+        for row in self.key_rows:
+            is_virt = row["is_virtual"]
+            orig_cc = row["orig_cc"]
+            lbl = row["entry_lbl"].get().strip()
+            
+            if not lbl:
+                CTkMessageBox.show_error(_("gui.msg_error"), _("gui.msg_config_error", default="Le label complet du bouton ne peut pas être vide."))
+                return
+                
+            if is_virt:
+                if isinstance(orig_cc, int) and orig_cc < 0:
+                    used_ccs.add(orig_cc)
+                    pending_rows.append((row, orig_cc))
+                else:
+                    pending_rows.append((row, None))
+            else:
+                cc_str = row["entry_cc"].get().strip()
+                if not cc_str:
+                    CTkMessageBox.show_error(_("gui.msg_error"), _("gui.msg_config_error", default="Veuillez spécifier un code CC pour tous les boutons physiques."))
+                    return
+                if not (cc_str.isdigit() or (cc_str.startswith("-") and cc_str[1:].isdigit())):
+                    CTkMessageBox.show_error(_("gui.msg_error"), _("gui.msg_config_error", default="Le code CC doit être un entier numérique valide."))
+                    return
+                cc = int(cc_str)
+                if cc in used_ccs:
+                    CTkMessageBox.show_error(_("gui.msg_error"), _("gui.msg_config_error", default=f"Le code CC {cc} est assigné en double."))
+                    return
+                used_ccs.add(cc)
+                pending_rows.append((row, cc))
+                
+        next_virtual = -1
+        buttons_data = []
+        
+        for row, assigned_cc in pending_rows:
+            lbl = row["entry_lbl"].get().strip()
+            short_lbl = row["entry_short"].get().strip()
+            is_virt = row["is_virtual"]
             
             final_cc = assigned_cc
             if final_cc is None:
-                # Find free negative ID
                 while next_virtual in used_ccs:
                     next_virtual -= 1
                 final_cc = next_virtual
                 used_ccs.add(final_cc)
-            
-            # Fallback automatique pour short_lbl s'il est vide
+                
             if not short_lbl:
                 if "Long Press" in lbl:
                     base = lbl.replace("Long Press ", "").strip()
@@ -649,18 +920,42 @@ class DeviceEditorDialog(ctk.CTkToplevel):
                     short = lbl.replace("Bouton ", "").replace("Button ", "").replace("Footswitch ", "")
                     if "(" in short: short = short.split("(")[0].strip()
                     short_lbl = short[:8]
+                    
+            buttons_data.append({
+                "cc": final_cc,
+                "short_label": short_lbl,
+                "label": lbl,
+                "is_virtual": is_virt
+            })
             
-            new_buttons.append({"cc": final_cc, "short_label": short_lbl, "label": lbl})
-
+        new_name = self.entry_name.get().strip() if hasattr(self, "entry_name") else self.device_name
+        if not new_name:
+            CTkMessageBox.show_error(_("gui.msg_error"), _("gui.msg_device_name_empty"))
+            return
+            
+        old_name = self.definition.get("name", "")
+        if new_name.lower() != old_name.lower():
+            if any(d.get("name", "").lower() == new_name.lower() for d in self.manager.definitions):
+                CTkMessageBox.show_error(_("gui.msg_error"), _("gui.msg_device_exists"))
+                return
+                
         data = {
-            "name": self.entry_name.get(),
-            "buttons": new_buttons
+            "name": new_name,
+            "connection_type": "Composite",
+            "physical_devices": self.physical_devices,
+            "buttons": buttons_data
         }
+        
+        self.scanner_running = False
+        
+        if old_name and new_name.lower() != old_name.lower():
+            self.manager.delete_definition(old_name)
+            
         self.manager.save_definition(data)
-
+        
         if self.callback:
             self.callback()
-
+            
         self.destroy()
 
 
@@ -670,18 +965,20 @@ class ProfileEditorDialog(ctk.CTkToplevel):
         self.callback = callback
         self.current_profile = current_profile
 
-        self.title(_("gui.title_profile_editor"))
-        self.geometry("380x250")
+        # V10: Unified Create/Edit UI
+        is_create = current_profile is None
+        self.title(_("gui.title_new_profile") if is_create else _("gui.title_profile_editor"))
+        self.geometry("380x320")
         self.configure(fg_color=BG_COLOR)
         self.resizable(False, False)
         self.transient(parent)
         self.grab_set()
 
         # Name
-        ctk.CTkLabel(self, text=_("gui.lbl_profile_full_name"), font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), text_color=TEXT_PRIMARY).pack(pady=(20, 5), padx=20, anchor="w")
+        ctk.CTkLabel(self, text=_("gui.lbl_profile_full_name"), font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), text_color=TEXT_PRIMARY).pack(pady=(15, 5), padx=20, anchor="w")
         self.entry_name = ctk.CTkEntry(self, width=340, fg_color=CARD_BG, border_color=BORDER_COLOR, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=12))
         self.entry_name.pack(padx=20)
-        self.entry_name.insert(0, current_profile.get("name", ""))
+        self.entry_name.insert(0, "" if is_create else current_profile.get("name", ""))
 
         # Master Vol Frame
         self.vol_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -696,7 +993,7 @@ class ProfileEditorDialog(ctk.CTkToplevel):
         self.slider_vol.pack(fill="x", pady=5)
         
         # Init value
-        saved_vol = current_profile.get("target_volume", "")
+        saved_vol = "" if is_create else current_profile.get("target_volume", "")
         if saved_vol:
             try:
                 val = float(saved_vol)
@@ -707,9 +1004,31 @@ class ProfileEditorDialog(ctk.CTkToplevel):
         self.slider_vol.set(val)
         self.on_slider_change(val)
 
-        # Save Set
+        # Associated Controller / Telecommande associee
+        ctk.CTkLabel(self, text=_("gui.lbl_associated_device"), font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), text_color=TEXT_PRIMARY).pack(pady=(15, 5), padx=20, anchor="w")
+        
+        none_lbl = _("gui.lbl_none")
+        devices = [d.get("name") for d in parent.device_manager.definitions]
+        device_values = [none_lbl] + devices
+        
+        self.combo_device = ctk.CTkComboBox(self, values=device_values, width=340, fg_color=CARD_BG, border_color=BORDER_COLOR, button_color=ACCENT_COLOR, button_hover_color=ACCENT_HOVER, dropdown_fg_color=CARD_BG, dropdown_hover_color=ACCENT_HOVER, dropdown_text_color=TEXT_PRIMARY, text_color=TEXT_PRIMARY)
+        self.combo_device.pack(padx=20)
+        
+        # Init value
+        device_name = none_lbl
+        if not is_create:
+            device_name = current_profile.get("device_name", none_lbl)
+            if not device_name:
+                device_name = none_lbl
+            
+        if device_name not in device_values:
+            device_values.append(device_name)
+            self.combo_device.configure(values=device_values)
+        self.combo_device.set(device_name)
+
+        # Save / Cancel Button Frame
         btn_frame = ctk.CTkFrame(self, fg_color="transparent")
-        btn_frame.pack(pady=25, fill="x", padx=20)
+        btn_frame.pack(pady=20, fill="x", padx=20)
         btn_cancel = ctk.CTkButton(btn_frame, text=_("gui.btn_cancel"), width=120, fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), command=self.destroy)
         btn_cancel.pack(side="left")
         btn_save = ctk.CTkButton(btn_frame, text=_("gui.btn_save"), width=120, fg_color="#10B981", hover_color="#059669", text_color="#FFFFFF", font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), command=self.save)
@@ -721,13 +1040,161 @@ class ProfileEditorDialog(ctk.CTkToplevel):
     def save(self):
         new_name = self.entry_name.get().strip()
         new_val = str(int(self.slider_vol.get()))
+        new_device = self.combo_device.get()
         
         if not new_name:
             CTkMessageBox.show_error(_("gui.msg_error"), _("gui.msg_profile_name_empty"))
             return
 
-        self.callback(new_name, new_val)
+        self.callback(new_name, new_val, new_device)
         self.destroy()
+
+
+
+class DeviceManagerDialog(ctk.CTkToplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+        self.manager = parent.device_manager
+        
+        self.title(_("gui.title_device_manager"))
+        self.geometry("520x450")
+        self.configure(fg_color=BG_COLOR)
+        self.attributes("-topmost", True)
+        self.resizable(False, False)
+        self.transient(parent)
+        self.grab_set()
+        self.lift()
+        self.focus_force()
+
+        # Header Frame
+        header = ctk.CTkFrame(self, fg_color="transparent")
+        header.pack(fill="x", padx=20, pady=(15, 10))
+        
+        ctk.CTkLabel(header, text=_("gui.title_device_manager"), font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"), text_color=TEXT_PRIMARY).pack(side="left")
+        
+        btn_new = ctk.CTkButton(header, text=_("gui.btn_new_device"), fg_color="#10B981", hover_color="#059669", text_color="#FFFFFF", font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), command=self.create_new_device, height=26)
+        btn_new.pack(side="right")
+
+        # Scroll Frame
+        self.scroll_frame = ctk.CTkScrollableFrame(self, fg_color=CARD_BG, border_width=1, border_color=BORDER_COLOR, corner_radius=8)
+        self.scroll_frame.pack(fill="both", expand=True, padx=20, pady=(0, 15))
+
+        self.refresh_list()
+
+    def refresh_list(self):
+        for widget in self.scroll_frame.winfo_children():
+            widget.destroy()
+
+        none_lbl = _("gui.lbl_none")
+        active_name = none_lbl
+        if self.parent.current_profile:
+            active_name = self.parent.current_profile.get("device_name", none_lbl)
+
+        self.manager.load_all_definitions()
+        
+        if not self.manager.definitions:
+            lbl_empty = ctk.CTkLabel(self.scroll_frame, text=_("gui.lbl_no_device_def"), text_color=TEXT_SECONDARY, font=ctk.CTkFont(family="Segoe UI", size=12))
+            lbl_empty.pack(pady=40)
+            return
+
+        for defn in self.manager.definitions:
+            name = defn.get("name", "Unknown")
+            is_active = (name.lower() == active_name.lower())
+
+            item = ctk.CTkFrame(self.scroll_frame, fg_color="transparent")
+            item.pack(fill="x", pady=4, padx=5)
+
+            if is_active:
+                item.configure(fg_color=BG_COLOR)
+
+            lbl_frame = ctk.CTkFrame(item, fg_color="transparent")
+            lbl_frame.pack(side="left", fill="both", expand=True, padx=5)
+
+            display_name = name[:25] + "..." if len(name) > 25 else name
+            lbl_name = ctk.CTkLabel(lbl_frame, text=display_name, font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold" if is_active else "normal"), text_color=ACCENT_COLOR if is_active else TEXT_PRIMARY)
+            lbl_name.pack(side="left", anchor="w")
+
+            if is_active:
+                lbl_act = ctk.CTkLabel(lbl_frame, text=f"  {_('gui.lbl_active_indicator')}", font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"), text_color="#10B981")
+                lbl_act.pack(side="left")
+
+            acts = ctk.CTkFrame(item, fg_color="transparent")
+            acts.pack(side="right", padx=5)
+
+            btn_dup = ctk.CTkButton(acts, text=_("gui.btn_duplicate"), width=70, height=24, fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=10), command=lambda d=defn: self.duplicate_device(d))
+            btn_dup.pack(side="left", padx=2)
+
+            btn_edit = ctk.CTkButton(acts, text="✎", width=30, height=24, fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=10), command=lambda d=defn: self.edit_device(d))
+            btn_edit.pack(side="left", padx=2)
+
+            btn_del = ctk.CTkButton(acts, text="✕", width=30, height=24, fg_color="#EF4444", hover_color="#DC2626", text_color="#FFFFFF", font=ctk.CTkFont(size=10, weight="bold"), command=lambda n=name: self.delete_device(n))
+            btn_del.pack(side="left", padx=2)
+
+    def create_new_device(self):
+        dialog = ctk.CTkInputDialog(title=_("gui.btn_new_device"), text=_("gui.msg_new_device_name", default="Nom de la nouvelle télécommande :"))
+        new_name = dialog.get_input()
+        if new_name is None: return
+        new_name = new_name.strip()
+        if not new_name:
+            CTkMessageBox.show_error(_("gui.msg_error"), _("gui.msg_device_name_empty"))
+            return
+
+        if any(d.get("name", "").lower() == new_name.lower() for d in self.manager.definitions):
+            CTkMessageBox.show_error(_("gui.msg_error"), _("gui.msg_device_exists"))
+            return
+
+        data = {
+            "name": new_name,
+            "connection_type": "Composite",
+            "physical_devices": [],
+            "buttons": []
+        }
+        self.manager.save_definition(data)
+        self.on_editor_saved()
+
+    def edit_device(self, defn):
+        DeviceEditorDialog(self, self.manager, defn, self.on_editor_saved)
+
+    def on_editor_saved(self):
+        self.refresh_list()
+        self.parent.update_profile_device_combo_list()
+        self.parent.update_device_def()
+
+    def duplicate_device(self, defn):
+        dialog = ctk.CTkInputDialog(title=_("gui.btn_duplicate"), text=_("gui.msg_new_profile_name"))
+        new_name = dialog.get_input()
+        if new_name is None: return
+        new_name = new_name.strip()
+        if not new_name:
+            CTkMessageBox.show_error(_("gui.msg_error"), _("gui.msg_device_name_empty"))
+            return
+
+        if any(d.get("name", "").lower() == new_name.lower() for d in self.manager.definitions):
+            CTkMessageBox.show_error(_("gui.msg_error"), _("gui.msg_device_exists"))
+            return
+
+        import copy
+        new_def = copy.deepcopy(defn)
+        new_def["name"] = new_name
+        
+        self.manager.save_definition(new_def)
+        self.refresh_list()
+        self.parent.update_profile_device_combo_list()
+
+    def delete_device(self, name):
+        if CTkMessageBox.ask_yes_no(_("gui.msg_confirm"), _("gui.msg_delete_device_confirm").replace("{name}", name)):
+            self.manager.delete_definition(name)
+            
+            # Si le profil actif utilisait cette telecommande, le remettre a None
+            none_lbl = _("gui.lbl_none")
+            if self.parent.current_profile and self.parent.current_profile.get("device_name", "") == name:
+                self.parent.current_profile["device_name"] = none_lbl
+                self.parent.profile_manager.save_profile(self.parent.current_profile)
+
+            self.refresh_list()
+            self.parent.update_profile_device_combo_list()
+            self.parent.update_device_def()
 
 
 class MappingDialog(ctk.CTkToplevel):
@@ -1150,20 +1617,8 @@ class GuitarPracticeApp(ctk.CTk):
 
     def start_engine(self):
         try:
-            mode = self.settings.get("connection_mode", "MIDO") # BLE or MIDO
-            
-            # SMART PERSISTENCE LOAD
-            target = ""
-            if mode == "BLE":
-                target = self.settings.get("midi_device_name_ble", "")
-            else:
-                target = self.settings.get("midi_device_name_usb", "")
-
-            # Sync legacy field just in case
-            self.settings["midi_device_name"] = target
-
-            self.log_debug(f"Starting Engine (Silent): Mode={mode}, Target={target}")
-            self.midi_manager.switch_mode(mode, target)
+            self.log_debug("Starting Engine (Silent): Delegating to update_device_def")
+            self.update_device_def()
         except Exception as e:
             self.log_debug(f"Startup Error: {e}")
 
@@ -1210,7 +1665,7 @@ class GuitarPracticeApp(ctk.CTk):
     def create_sidebar(self):
         self.sidebar_frame = ctk.CTkFrame(self, width=220, corner_radius=0, fg_color=CARD_BG)
         self.sidebar_frame.grid(row=0, column=0, rowspan=4, sticky="nsew")
-        self.sidebar_frame.grid_rowconfigure(8, weight=1) # Spacer is row 8
+        self.sidebar_frame.grid_rowconfigure(5, weight=1) # Spacer is row 5
 
         # 1. Logo
         try:
@@ -1222,47 +1677,67 @@ class GuitarPracticeApp(ctk.CTk):
              self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="MIDI-KBD\nControl", font=ctk.CTkFont(family="Segoe UI", size=20, weight="bold"), text_color=ACCENT_LIGHT)
         self.logo_label.grid(row=0, column=0, padx=10, pady=(10, 5))
 
-        # 2. MIDI Mode & Selector
-        self.lbl_mode = ctk.CTkLabel(self.sidebar_frame, text=_("gui.lbl_conn_mode"), anchor="w", text_color=TEXT_SECONDARY, font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"))
-        self.lbl_mode.grid(row=1, column=0, padx=20, pady=(5, 0), sticky="w")
+        # 2. Associated Controller (Télécommande associée)
+        self.lbl_profile_device = ctk.CTkLabel(self.sidebar_frame, text=_("gui.lbl_associated_device"), anchor="w", text_color=TEXT_SECONDARY, font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"))
+        self.lbl_profile_device.grid(row=1, column=0, padx=20, pady=(5, 0), sticky="w")
 
-        self.mode_combo = ctk.CTkComboBox(self.sidebar_frame, values=[_("gui.mode_usb"), _("gui.mode_ble")], command=self.change_mode, height=26,
-                                          fg_color=BG_COLOR, border_color=BORDER_COLOR, button_color=ACCENT_COLOR, button_hover_color=ACCENT_HOVER,
-                                          dropdown_fg_color=CARD_BG, dropdown_hover_color=ACCENT_HOVER, dropdown_text_color=TEXT_PRIMARY, text_color=TEXT_PRIMARY)
-        self.mode_combo.grid(row=2, column=0, padx=20, pady=(0, 5))
-
-        self.lbl_device = ctk.CTkLabel(self.sidebar_frame, text=_("gui.lbl_device"), anchor="w", text_color=TEXT_SECONDARY, font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"))
-        self.lbl_device.grid(row=3, column=0, padx=20, pady=(5, 0), sticky="w")
-
-        self.device_combo = ctk.CTkComboBox(self.sidebar_frame, values=[_("gui.msg_searching")], command=self.change_midi_device, height=26,
-                                            fg_color=BG_COLOR, border_color=BORDER_COLOR, button_color=ACCENT_COLOR, button_hover_color=ACCENT_HOVER,
-                                            dropdown_fg_color=CARD_BG, dropdown_hover_color=ACCENT_HOVER, dropdown_text_color=TEXT_PRIMARY, text_color=TEXT_PRIMARY)
-        self.device_combo.grid(row=4, column=0, padx=20, pady=(0, 5))
-
-        self.btn_refresh = ctk.CTkButton(self.sidebar_frame, text=_("gui.btn_refresh"), width=100, height=24, command=self.refresh_midi_ports,
-                                         fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY)
-        self.btn_refresh.grid(row=5, column=0, padx=20, pady=5)
+        self.profile_device_combo = ctk.CTkComboBox(self.sidebar_frame, values=[], command=self.change_profile_device, height=26,
+                                                    fg_color=BG_COLOR, border_color=BORDER_COLOR, button_color=ACCENT_COLOR, button_hover_color=ACCENT_HOVER,
+                                                    dropdown_fg_color=CARD_BG, dropdown_hover_color=ACCENT_HOVER, dropdown_text_color=TEXT_PRIMARY, text_color=TEXT_PRIMARY)
+        self.profile_device_combo.grid(row=2, column=0, padx=20, pady=(0, 5))
 
         # 3. Device & Settings
         self.settings_frame = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
-        self.settings_frame.grid(row=6, column=0, padx=10, pady=5)
-        self.btn_edit_device = ctk.CTkButton(self.settings_frame, text=f"⚙ {_('gui.btn_buttons')}", width=90, height=24, fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY, command=self.open_device_editor)
+        self.settings_frame.grid(row=3, column=0, padx=10, pady=5)
 
-        # Update text update logic
-        if self.current_device_def:
-            self.btn_edit_device.configure(text=f"⚙ {self.current_device_def['name'][:10]}")
-        else:
-            self.btn_edit_device.configure(text=f"⚙ {_('gui.btn_configure')}")
-        
-        # Missing Pack restored
+        # Ligne 1 : Bouton Modifier Direct (toute la largeur)
+        self.btn_modify_active_device = ctk.CTkButton(
+            self.settings_frame,
+            text=_("gui.btn_modify_device", default="✎ Modifier"),
+            width=184,
+            height=26,
+            fg_color=ACCENT_COLOR,
+            hover_color=ACCENT_HOVER,
+            text_color=TEXT_PRIMARY,
+            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
+            command=self.modify_active_device
+        )
+        self.btn_modify_active_device.pack(side="top", fill="x", pady=(0, 4))
+
+        # Ligne 2 : Conteneur des boutons d'administration
+        self.settings_row2 = ctk.CTkFrame(self.settings_frame, fg_color="transparent")
+        self.settings_row2.pack(side="top", fill="x")
+
+        # Bouton Bibliothèque (Gérer)
+        self.btn_edit_device = ctk.CTkButton(
+            self.settings_row2,
+            text=_("gui.btn_device_library", default="📁 Gérer"),
+            width=90,
+            height=24,
+            fg_color=BTN_SECONDARY,
+            hover_color=BTN_SECONDARY_HOVER,
+            text_color=TEXT_PRIMARY,
+            font=ctk.CTkFont(family="Segoe UI", size=10),
+            command=self.open_device_editor
+        )
         self.btn_edit_device.pack(side="left", padx=2)
 
-        # Missing Settings Button restored
-        self.btn_settings = ctk.CTkButton(self.settings_frame, text=f"🛠 {_('gui.btn_settings')}", width=90, height=24, fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY, command=self.open_settings)
+        # Bouton Paramètres Globaux
+        self.btn_settings = ctk.CTkButton(
+            self.settings_row2,
+            text=f"🛠 {_('gui.btn_settings')}",
+            width=90,
+            height=24,
+            fg_color=BTN_SECONDARY,
+            hover_color=BTN_SECONDARY_HOVER,
+            text_color=TEXT_PRIMARY,
+            font=ctk.CTkFont(family="Segoe UI", size=10),
+            command=self.open_settings
+        )
         self.btn_settings.pack(side="left", padx=2)
 
         self.status_frame = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
-        self.status_frame.grid(row=7, column=0, padx=20, pady=5, sticky="ew")
+        self.status_frame.grid(row=4, column=0, padx=20, pady=5, sticky="ew")
 
         # Connection State
         self.conn_frame = ctk.CTkFrame(self.status_frame, fg_color="transparent")
@@ -1304,25 +1779,26 @@ class GuitarPracticeApp(ctk.CTk):
 
         self.theme_switch.pack(pady=(5, 0), anchor="w")
 
-        # Spacer (Row 8)
-        ctk.CTkLabel(self.sidebar_frame, text="").grid(row=8, column=0)
+        # Spacer (Row 5 is Spacer row, let's add a label to push content up)
+        self.spacer_lbl = ctk.CTkLabel(self.sidebar_frame, text="")
+        self.spacer_lbl.grid(row=5, column=0)
 
         # 5. Startup
         is_startup = self.check_startup_status()
         self.startup_var = ctk.BooleanVar(value=is_startup)
         self.chk_startup = ctk.CTkCheckBox(self.sidebar_frame, text=_("gui.lbl_launch_at_startup"), variable=self.startup_var, command=self.toggle_startup,
                                            font=ctk.CTkFont(family="Segoe UI", size=11), text_color=TEXT_SECONDARY, fg_color=ACCENT_COLOR, hover_color=ACCENT_HOVER)
-        self.chk_startup.grid(row=9, column=0, padx=20, pady=10, sticky="w")
+        self.chk_startup.grid(row=6, column=0, padx=20, pady=10, sticky="w")
 
         # 6. Global Actions
         self.btn_remote = ctk.CTkButton(self.sidebar_frame, text=_("gui.btn_detach_remote"), command=self.open_remote_control, fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, text_color=TEXT_PRIMARY, height=28)
-        self.btn_remote.grid(row=10, column=0, padx=20, pady=(10, 2))
+        self.btn_remote.grid(row=7, column=0, padx=20, pady=(10, 2))
 
         self.btn_sync = ctk.CTkButton(self.sidebar_frame, text="☁ Sync", command=self.open_sync_dialog, fg_color=ACCENT_COLOR, hover_color=ACCENT_HOVER, text_color=TEXT_PRIMARY, height=28)
-        self.btn_sync.grid(row=11, column=0, padx=20, pady=(2, 5))
+        self.btn_sync.grid(row=8, column=0, padx=20, pady=(2, 5))
 
         self.save_button = ctk.CTkButton(self.sidebar_frame, text=_("gui.btn_save_all"), command=lambda: self.save_all(silent=False), fg_color="#10B981", hover_color="#059669", text_color="#FFFFFF", height=28)
-        self.save_button.grid(row=12, column=0, padx=20, pady=(5, 20))
+        self.save_button.grid(row=9, column=0, padx=20, pady=(5, 20))
 
     def create_main_area(self):
         # Configuration de la grille principale
@@ -1424,13 +1900,9 @@ class GuitarPracticeApp(ctk.CTk):
 
                     mode = self.settings.get("connection_mode", "MIDO")
                     if mode == "BLE": 
-                        self.mode_combo.set(_("gui.mode_ble"))
                         target = self.settings.get("midi_device_name_ble", self.settings.get("midi_device_name", ""))
                     else: 
-                        self.mode_combo.set(_("gui.mode_usb"))
                         target = self.settings.get("midi_device_name_usb", self.settings.get("midi_device_name", ""))
-                        
-                    self.device_combo.set(target)
                     
                     # LOAD MIDI OUTPUT
                     # LOAD MIDI OUTPUT (Multi-Port Support)
@@ -1473,21 +1945,24 @@ class GuitarPracticeApp(ctk.CTk):
         self.library_manager.set_force_profile_callback(self.force_profile_switch)
 
     def update_device_def(self):
-        port_name = self.device_combo.get()
-        
-        # If combo says "Recherche...", use the actual target for the current mode
-        if port_name in [_("gui.msg_searching_full"), _("gui.msg_searching"), ""]:
-            mode = self.settings.get("connection_mode", "MIDO")
-            if mode == "BLE":
-                port_name = self.settings.get("midi_device_name_ble", "")
-            else:
-                port_name = self.settings.get("midi_device_name_usb", "")
-
         none_lbl = _("gui.lbl_none")
-        if port_name == none_lbl or not port_name:
+        
+        # Le périphérique est associé au profil courant
+        device_name = none_lbl
+        if self.current_profile:
+            device_name = self.current_profile.get("device_name", none_lbl)
+            if not device_name:
+                device_name = none_lbl
+
+        if device_name == none_lbl or not device_name:
             new_def = {"name": none_lbl, "buttons": []}
         else:
-            new_def = self.device_manager.get_definition_for_port(port_name)
+            # Chercher dans les définitions par nom logique exact
+            new_def = self.device_manager.get_definition_by_name(device_name)
+            
+            # Fallback rétrocompatible
+            if not new_def:
+                new_def = self.device_manager.get_definition_for_port(device_name)
 
             # Ultimate Fallback: Just take the first one available
             if not new_def and self.device_manager.definitions:
@@ -1503,16 +1978,62 @@ class GuitarPracticeApp(ctk.CTk):
         if hasattr(self, 'virtual_pedalboard'):
             self.virtual_pedalboard.set_device_def(self.current_device_def)
 
-        # Update btn text for confirmation
-        if self.current_device_def and self.current_device_def.get("name") != none_lbl:
-            self.btn_edit_device.configure(text=f"⚙ {self.current_device_def['name']}")
-            self.btn_edit_device.configure(state="normal")
+        # Commutation dynamique du moteur MIDI d'après la télécommande associée
+        conn_type = self.current_device_def.get("connection_type", "Virtuel") if self.current_device_def else "Virtuel"
+        midi_port = self.current_device_def.get("midi_port", "") if self.current_device_def else ""
+
+        if conn_type == "Composite":
+            physical_devices = self.current_device_def.get("physical_devices", [])
+            if not physical_devices:
+                self.log_debug("Composite switching: no physical devices specified, fallback to virtual mode.")
+                self.settings["connection_mode"] = "Virtuel"
+                self.settings["midi_device_name"] = ""
+                self.midi_manager.switch_mode(None, None)
+            else:
+                self.log_debug(f"Switching engine to Composite. Physical devices: {physical_devices}")
+                self.settings["connection_mode"] = "Composite"
+                self.settings["midi_device_name"] = "Composite"
+                self.midi_manager.switch_composite(physical_devices)
+        elif conn_type in ("USB", "BLE"):
+            self.log_debug(f"Switching engine to physical: Mode={conn_type}, Port={midi_port}")
+            self.settings["connection_mode"] = "MIDO" if conn_type == "USB" else "BLE"
+            self.settings["midi_device_name"] = midi_port
+            if conn_type == "USB":
+                self.settings["midi_device_name_usb"] = midi_port
+            else:
+                self.settings["midi_device_name_ble"] = midi_port
+            self.midi_manager.switch_mode(conn_type, midi_port)
         else:
-            self.btn_edit_device.configure(text=f"⚙ {_('gui.lbl_none')}")
-            self.btn_edit_device.configure(state="disabled")
+            self.log_debug("Switching engine to virtual. Stopping physical connection.")
+            self.settings["connection_mode"] = "Virtuel"
+            self.settings["midi_device_name"] = ""
+            self.midi_manager.switch_mode(None, None)
+
+        # Persist connection mode and device name to config.json immediately
+        self.save_all(silent=True)
+
+
+        # Update buttons state and text
+        if self.current_device_def and self.current_device_def.get("name") not in (none_lbl, "None", "Aucun", ""):
+            btn_text = f"✎ {self.current_device_def['name'][:10]}"
+            self.btn_modify_active_device.configure(state="normal", text=btn_text)
+        else:
+            self.btn_modify_active_device.configure(state="disabled", text=f"✎ {none_lbl}")
+
+        self.btn_edit_device.configure(text=_("gui.btn_device_library", default="📁 Gérer"), state="normal")
+
+    def modify_active_device(self):
+        none_lbl = _("gui.lbl_none")
+        if self.current_device_def and self.current_device_def.get("name") not in (none_lbl, "None", "Aucun", ""):
+            DeviceEditorDialog(self, self.device_manager, self.current_device_def, self.on_active_device_saved)
+
+    def on_active_device_saved(self):
+        self.device_manager.load_all_definitions()
+        self.update_profile_device_combo_list()
+        self.update_device_def()
 
     def open_device_editor(self):
-        DeviceEditorDialog(self, self.device_manager, self.current_device_def, self.on_device_saved)
+        DeviceManagerDialog(self)
 
     def open_settings(self):
         SettingsDialog(self, self.profile_manager, self.action_handler, self.env_manager, self.midi_manager)
@@ -2042,7 +2563,7 @@ class GuitarPracticeApp(ctk.CTk):
         device_name = self.current_profile.get("device_name")
         none_lbl = _("gui.lbl_none")
         if not device_name:
-            # Fallback rétrocompatible vers les paramètres globaux
+            # Fallback rétrocompatible vers les paramètres globaux (ou "Aucun")
             mode = self.settings.get("connection_mode", "MIDO")
             device_name = self.settings.get("midi_device_name_ble" if mode == "BLE" else "midi_device_name_usb", self.settings.get("midi_device_name", none_lbl))
             if not device_name:
@@ -2053,23 +2574,16 @@ class GuitarPracticeApp(ctk.CTk):
             except Exception as e:
                 print(f"[GUI] Error auto-saving profile with default device: {e}")
 
-        # Mettre à jour l'affichage de la combo
-        if hasattr(self, "device_combo"):
-            current_values = list(self.device_combo.cget("values") or [])
-            if none_lbl not in current_values:
-                current_values.append(none_lbl)
+        # Mettre à jour l'affichage de la combo profile_device_combo
+        if hasattr(self, "profile_device_combo"):
+            # S'assurer que les valeurs proposées sont à jour
+            self.update_profile_device_combo_list()
+            
+            current_values = list(self.profile_device_combo.cget("values") or [])
             if device_name not in current_values:
                 current_values.insert(0, device_name)
-            self.device_combo.configure(values=current_values)
-            self.device_combo.set(device_name)
-            
-            # Mettre à jour les settings globaux pour ce mode
-            self.settings["midi_device_name"] = device_name
-            mode = self.settings.get("connection_mode", "MIDO")
-            if mode == "BLE":
-                self.settings["midi_device_name_ble"] = device_name
-            else:
-                self.settings["midi_device_name_usb"] = device_name
+                self.profile_device_combo.configure(values=current_values)
+            self.profile_device_combo.set(device_name)
 
         self.update_device_def()
 
@@ -2156,10 +2670,28 @@ class GuitarPracticeApp(ctk.CTk):
 
     # --- Actions Profils ---
     def create_new_profile(self):
-        dialog = ctk.CTkInputDialog(text=_("gui.msg_profile_name"), title=_("gui.title_new_profile"))
-        name = dialog.get_input()
-        if name:
-            self.create_profile_by_name(name)
+        ProfileEditorDialog(self, None, self.on_profile_created)
+
+    def on_profile_created(self, name, vol, device):
+        # Vérification des doublons
+        for p in self.profiles:
+            if p["name"] == name:
+                CTkMessageBox.show_error(_("gui.msg_error"), _("gui.msg_profile_exists"))
+                return
+
+        new_p = {
+            "name": name,
+            "app_context": f"{name.lower()}.exe",
+            "window_title_filter": "",
+            "target_volume": vol,
+            "device_name": device,
+            "mappings": []
+        }
+
+        if self.profile_manager.save_profile(new_p):
+            self.profiles = self.profile_manager.load_all_profiles()
+            self.update_profile_combo()
+            self.select_profile_by_name(name)
 
     def create_profile_by_name(self, name, auto_context=False):
         """Creates a profile programmatically and selects it."""
@@ -2178,6 +2710,7 @@ class GuitarPracticeApp(ctk.CTk):
             "app_context": context,
             "window_title_filter": "",
             "target_volume": "",
+            "device_name": _("gui.lbl_none"),
             "mappings": []
         }
 
@@ -2217,7 +2750,7 @@ class GuitarPracticeApp(ctk.CTk):
         if not self.current_profile: return
         ProfileEditorDialog(self, self.current_profile, self.on_profile_edited)
 
-    def on_profile_edited(self, new_name, new_vol):
+    def on_profile_edited(self, new_name, new_vol, new_device):
         old_name = self.current_profile.get("name")
         
         # Check name collision
@@ -2229,6 +2762,7 @@ class GuitarPracticeApp(ctk.CTk):
         
         self.current_profile["name"] = new_name
         self.current_profile["target_volume"] = new_vol
+        self.current_profile["device_name"] = new_device
         
         # Save new
         if self.profile_manager.save_profile(self.current_profile):
@@ -2561,205 +3095,39 @@ class GuitarPracticeApp(ctk.CTk):
         self.settings["theme"] = mode
         self.save_all(silent=True)
 
-    def change_mode(self, choice):
-        self.log_debug(f"change_mode called with choice: '{choice}'")
-        
-        # 1. SAVE CURRENT TARGET BEFORE SWITCHING
-        old_mode = self.settings.get("connection_mode", "MIDO")
-        current_target = self.settings.get("midi_device_name", "")
-        if old_mode == "BLE":
-             self.settings["midi_device_name_ble"] = current_target
-        else:
-             self.settings["midi_device_name_usb"] = current_target
 
-        # 2. DETERMINE NEW MODE
-        new_mode = "BLE" if "Bluetooth" in choice else "MIDO"
-        self.settings["connection_mode"] = new_mode
-        self.log_debug(f"Switching Mode: {old_mode} -> {new_mode}")
+
+    def change_profile_device(self, choice):
+        if not choice or not self.current_profile: return
+        self.current_profile["device_name"] = choice
         
-        # 3. RESTORE TARGET FOR NEW MODE
-        new_target = ""
-        if new_mode == "BLE":
-            new_target = self.settings.get("midi_device_name_ble", "")
-        else:
-            new_target = self.settings.get("midi_device_name_usb", "")
-            
-        self.settings["midi_device_name"] = new_target
-        
-        # 4. SAVE SETTINGS
         try:
-            self.save_all(silent=True)
+            self.profile_manager.save_profile(self.current_profile)
         except Exception as e:
-            self.log_debug(f"Error saving settings: {e}")
-
-        # 5. EXECUTE SWITCH
-        self.midi_manager.switch_mode(new_mode, new_target)
-
-        # 6. REFRESH UI (Passive & Silent)
-        self.refresh_midi_ports(silent=True)
-
-    def refresh_midi_ports(self, silent=False):
-        self.log_debug(f"Refresh requested (Silent={silent}).")
-        
-        # Use Manager's proxies
-        self.log_debug("Setting scanning=True")
-        self.midi_manager.set_scanning(True)
-        try: self.switch_scan.select()
-        except: pass
-        
-        # FORCE CLEAR CACHE
-        self.log_debug("Calling force_rescan()")
-        self.midi_manager.force_rescan()
-        
-        # UI Feedback
-        self.log_debug(f"Updating UI to '{_('gui.msg_searching_full')}'")
-        self.device_combo.set(_("gui.msg_searching_full"))
-        self.device_combo.configure(state="disabled")
-        self.btn_refresh.configure(state="disabled", text=f"{_('gui.btn_scan_short')}...")
-
-        # Schedule Finalization based on Mode
-        mode = self.settings.get("connection_mode", "MIDO")
-        # Increase initial BLE wait time to give it a better chance
-        delay = 4000 if mode == "BLE" else 800 
-        
-        self.log_debug(f"Scheduling _finalize_refresh in {delay}ms (Mode={mode})")
-        # Pass silent flag to finalizer
-        self.after(delay, lambda: self._finalize_refresh(silent=silent))
-
-    def _finalize_refresh(self, silent=False, retry_count=0):
-        self.log_debug(f"_finalize_refresh triggered (Silent={silent}, Retry={retry_count}).")
-        
-        ports = self.midi_manager.get_ports()
-        mode = self.settings.get("connection_mode", "MIDO")
-        
-        # --- SMART RETRY LOGIC (BLE & USB) ---
-        # If no ports found and we haven't retried yet, wait a bit silently
-        if not ports and retry_count < 1:
-             retry_delay = 3000 if mode == "BLE" else 1500
-             self.log_debug(f"No {mode} devices found yet. Retrying in {retry_delay}ms...")
-             self.after(retry_delay, lambda: self._finalize_refresh(silent=silent, retry_count=retry_count+1))
-             return
-
-        # --- FINALIZATION ---
-        # Restore UI State
-        self.device_combo.configure(state="normal")
-        self.btn_refresh.configure(state="normal", text=_("gui.btn_refresh"))
-
-        # SMART COMBOBOX HANDLING
-        # Retrieve the intended target for the CURRENT mode
-        if mode == "BLE":
-            target_name = self.settings.get("midi_device_name_ble", "")
-        else:
-            target_name = self.settings.get("midi_device_name_usb", "")
+            print(f"[GUI] Error saving profile device change: {e}")
             
-        # Fallback to general if empty
-        if not target_name:
-            target_name = self.settings.get("midi_device_name", "")
-        
-        display_ports = list(ports)
-        
-        # --- SMART INDEX MATCHING (GUI) ---
-        # If the exact target is missing, check if there is a version with a different trailing number
-        if target_name and target_name not in display_ports and target_name != _("gui.lbl_none"):
-            import re
-            base_target = re.sub(r'\s*\d+$', '', target_name).strip()
-            if base_target:
-                 for p in display_ports:
-                      base_p = re.sub(r'\s*\d+$', '', p).strip()
-                      if base_target.lower() == base_p.lower():
-                           # Found a sibling port! (e.g. target="FS1 1" but "FS1 2" exists)
-                           # We seamlessly UPDATE our target to match reality
-                           self.log_debug(f"GUI Smart Match: '{target_name}' -> updated to -> '{p}'")
-                           target_name = p
-                           
-                           # Update persistence immediately so the config button works
-                           self.settings["midi_device_name"] = p
-                           if mode == "BLE":
-                               self.settings["midi_device_name_ble"] = p
-                           else:
-                               self.settings["midi_device_name_usb"] = p
-                               
-                           cm = ConfigManager()
-                           cm.set("midi_device_name", p)
-                           if mode == "BLE": cm.set("midi_device_name_ble", p)
-                           else: cm.set("midi_device_name_usb", p)
-                           
-                           break
-
-        # --- LIST INJECTION ---
-        # If still not found, inject it visually so user knows what we are looking for
-        if target_name and target_name not in display_ports and target_name != _("gui.lbl_none"):
-            if mode == "BLE":
-                display_ports.insert(0, target_name) # Add text only
-            elif target_name not in display_ports:
-                 display_ports.insert(0, target_name)
-
-        none_label = _("gui.lbl_none")
-        if none_label not in display_ports:
-            display_ports.append(none_label)
-
-        self.device_combo.configure(values=display_ports)
-        
-        # Restore selection
-        if target_name in display_ports:
-            self.device_combo.set(target_name)
-        elif display_ports:
-            self.device_combo.set(display_ports[0])
-            
-        # VERY IMPORTANT: Update global settings so the rest of the app knows what's selected
-        self.settings["midi_device_name"] = self.device_combo.get()
-            
-        # Update definition based on what is selected/target
         self.update_device_def()
-
-        # --- DIAGNOSTIC POPUP (ONLY IF NOT SILENT) ---
-        if not silent:
-            info = f"{_('gui.lbl_current_mode')} : {mode}\n\n"
-            if ports:
-                info += f"{len(ports)} {_('gui.msg_devices_found')} :\n" + "\n".join([f"- {p}" for p in ports])
-            else:
-                info += f"{_('gui.msg_no_device_found')}.\n"
-                if mode == "BLE":
-                    info += f"{_('gui.msg_check_ble')}.\n({_('gui.msg_ble_delay')})."
-                else:
-                    info += f"{_('gui.msg_check_usb')}."
-
-            CTkMessageBox.show_info(_("gui.title_diag"), info)
-
-    def change_midi_device(self, choice):
-        if not choice: return
-        self.settings["midi_device_name"] = choice
         
-        # SMART PERSISTENCE SAVE
-        mode = self.settings.get("connection_mode", "MIDO")
-        if mode == "BLE":
-            self.settings["midi_device_name_ble"] = choice
+        # Feedback UI pour la télécommande virtuelle
+        if hasattr(self, 'virtual_pedalboard'):
+            self.virtual_pedalboard.set_device_def(self.current_device_def)
+            self.virtual_pedalboard.set_profile(self.current_profile)
+
+    def update_profile_device_combo_list(self):
+        if not hasattr(self, "profile_device_combo"):
+            return
+        none_lbl = _("gui.lbl_none")
+        devices = [d.get("name") for d in self.device_manager.definitions]
+        device_values = [none_lbl] + devices
+        
+        # Conserver la sélection actuelle
+        current_sel = self.profile_device_combo.get()
+        
+        self.profile_device_combo.configure(values=device_values)
+        if current_sel in device_values:
+            self.profile_device_combo.set(current_sel)
         else:
-            self.settings["midi_device_name_usb"] = choice
-
-        # Save to current profile immediately if loaded
-        if self.current_profile:
-            self.current_profile["device_name"] = choice
-            try:
-                self.profile_manager.save_profile(self.current_profile)
-            except Exception as e:
-                print(f"[GUI] Error saving profile device change: {e}")
-
-        # Persist immediately
-        cm = ConfigManager()
-        cm.set("midi_device_name", choice)
-        cm.set("midi_device_name_ble", self.settings.get("midi_device_name_ble", ""))
-        cm.set("midi_device_name_usb", self.settings.get("midi_device_name_usb", ""))
-        
-        self.update_device_def()
-
-        # Feedback UI
-        self.lbl_conn_text.configure(text=f"{_('gui.msg_connecting_to')} {choice}...")
-        self.lbl_conn_led.configure(text_color="orange")
-        self.update_idletasks() # Force UI Update
-
-        # Switch via Manager (which handles restart)
-        self.midi_manager.switch_mode(mode, choice)
+            self.profile_device_combo.set(none_lbl)
 
     def midi_callback(self, msg):
         """Callback principal du moteur MIDI"""
@@ -2812,16 +3180,17 @@ class GuitarPracticeApp(ctk.CTk):
              except: pass
 
     def _monitor_connection_status(self):
-        """Vérifie périodiquement l'état de la connexion"""
-        device_name = None
-        if self.current_profile:
-            device_name = self.current_profile.get("device_name")
-        if not device_name:
-            device_name = self.device_combo.get() if hasattr(self, 'device_combo') else None
-        
+        """Vérifie périodiquement l'état de la connexion d'après la télécommande active"""
+        conn_type = "Virtuel"
+        if hasattr(self, 'current_device_def') and self.current_device_def:
+            conn_type = self.current_device_def.get("connection_type", "Virtuel")
+            
         none_lbl = _("gui.lbl_none")
-        if device_name == none_lbl or not device_name:
-            # Profil virtuel / Aucun périphérique physique
+        if (hasattr(self, 'current_device_def') and self.current_device_def and 
+            self.current_device_def.get("name") == none_lbl):
+            conn_type = "Virtuel"
+
+        if conn_type == "Virtuel":
             self.midi_manager.set_scanning(False)
             self.update_status(True, is_virtual=True)
         else:
@@ -2840,21 +3209,47 @@ class GuitarPracticeApp(ctk.CTk):
         elif connected:
             self.lbl_conn_led.configure(text_color=LED_CONNECTED)
             
-            # Récupération du mode et du device REEL
-            mode = self.settings.get("connection_mode", "MIDO")
-            mode_str = "USB" if mode == "MIDO" else "Bluetooth"
+            # Récupération du mode et du device REEL d'après la définition
+            conn_type = "Virtuel"
+            if hasattr(self, 'current_device_def') and self.current_device_def:
+                conn_type = self.current_device_def.get("connection_type", "Virtuel")
+            
+            if conn_type == "Composite":
+                mode_str = _("gui.conn_composite", default="Composite")
+            else:
+                mode_str = "USB" if conn_type == "USB" else "Bluetooth"
             
             # Nom du device
             dev_name = self.midi_manager.active_device_name
             if not dev_name: 
-                 dev_name = self.settings.get("midi_device_name", "Appareil")
+                 dev_name = self.current_device_def.get("midi_port", "Appareil") if hasattr(self, 'current_device_def') and self.current_device_def else "Appareil"
 
             if dev_name in ["Recherche...", ""]: dev_name = "Appareil"
             
             self.lbl_conn_text.configure(text=f"{dev_name} ({mode_str})")
         else:
             self.lbl_conn_led.configure(text_color=LED_DISCONNECTED)
-            self.lbl_conn_text.configure(text=_("gui.lbl_disconnected"))
+            
+            conn_type = "Virtuel"
+            if hasattr(self, 'current_device_def') and self.current_device_def:
+                conn_type = self.current_device_def.get("connection_type", "Virtuel")
+                
+            if conn_type == "Composite":
+                physical_devices = self.current_device_def.get("physical_devices", [])
+                target_ports = ", ".join([d["name"] for d in physical_devices]) if physical_devices else ""
+                if target_ports:
+                    self.lbl_conn_text.configure(text=f"{_('gui.lbl_disconnected')} ({target_ports})")
+                else:
+                    self.lbl_conn_text.configure(text=_("gui.lbl_disconnected"))
+            else:
+                target_port = ""
+                if hasattr(self, 'current_device_def') and self.current_device_def:
+                    target_port = self.current_device_def.get("midi_port", "")
+                
+                if target_port:
+                    self.lbl_conn_text.configure(text=f"{_('gui.lbl_disconnected')} ({target_port})")
+                else:
+                    self.lbl_conn_text.configure(text=_("gui.lbl_disconnected"))
 
     def check_startup_status(self):
         startup_dir = os.path.join(os.getenv('APPDATA'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')

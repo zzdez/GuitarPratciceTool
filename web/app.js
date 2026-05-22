@@ -141,16 +141,21 @@ function startDeviceStatusPolling() {
                 // Update Header Device Status
                 const headerStatus = document.getElementById("header-device-status");
                 if (headerStatus) {
-                    let displayMode = currentConnectionMode === "BLE" ? t("web.bt") : t("web.usb");
-                    if (currentDeviceName === t("web.none") || !currentDeviceName) {
-                        headerStatus.innerHTML = `○ ` + t("web.status_waiting");
-                        headerStatus.style.color = "#888";
-                    } else if (!currentIsConnected) {
-                        headerStatus.innerHTML = `🔴 ${currentDeviceName} (${displayMode}) - ` + t("web.status_disconnected");
-                        headerStatus.style.color = "#cf6679";
-                    } else {
-                        headerStatus.innerHTML = `🟢 ${currentDeviceName} (${displayMode})`;
+                    if (currentConnectionMode === "Virtuel") {
+                        headerStatus.innerHTML = `🟢 ` + t("web.virtual_device", "Télécommande virtuelle");
                         headerStatus.style.color = "#03dac6";
+                    } else {
+                        let displayMode = currentConnectionMode === "BLE" ? t("web.bt") : (currentConnectionMode === "Composite" ? "Composite" : t("web.usb"));
+                        if (currentDeviceName === t("web.none") || !currentDeviceName) {
+                            headerStatus.innerHTML = `○ ` + t("web.status_waiting");
+                            headerStatus.style.color = "#888";
+                        } else if (!currentIsConnected) {
+                            headerStatus.innerHTML = `🔴 ${currentDeviceName} (${displayMode}) - ` + t("web.status_disconnected");
+                            headerStatus.style.color = "#cf6679";
+                        } else {
+                            headerStatus.innerHTML = `🟢 ${currentDeviceName} (${displayMode})`;
+                            headerStatus.style.color = "#03dac6";
+                        }
                     }
                 }
 

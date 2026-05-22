@@ -33,11 +33,13 @@ class CompactPedalboardFrame(ctk.CTkFrame):
         gui = _get_gui()
         if cc in self.btn_map:
             btn = self.btn_map[cc]
-            original_color = btn.cget("fg_color")
-            original_text_color = btn.cget("text_color")
+            # Utilisation des couleurs d'origine stockées pour éviter les race conditions de double appel rapide
+            orig_fg = getattr(btn, "original_fg_color", gui.ACCENT_COLOR)
+            orig_text = getattr(btn, "original_text_color", gui.TEXT_PRIMARY)
+            
             # Flash Color: Electric Neon Cyan
             btn.configure(fg_color="#00E5FF", text_color=gui.BG_COLOR) 
-            self.after(150, lambda: btn.configure(fg_color=original_color, text_color=original_text_color))
+            self.after(150, lambda: btn.configure(fg_color=orig_fg, text_color=orig_text))
 
     def _get_icon_for_name(self, name):
         """Convertit les mots clés en icônes pour le mode Remote"""
@@ -122,12 +124,17 @@ class CompactPedalboardFrame(ctk.CTkFrame):
 
         # Grid logic
         if is_virtual:
-            cols = min(5, len(buttons_def))
+            cols = min(10, len(buttons_def))
             if cols < 1: cols = 1
         else:
-            cols = 10 # 10 Columns for standard AIRSTEP (5 Short + 5 Long)
-            if len(buttons_def) > 10:
-                 cols = 10 # split into rows
+            is_composite = self.device_def.get("connection_type") == "Composite" if self.device_def else False
+            if is_composite:
+                cols = min(10, len(buttons_def))
+                if cols < 1: cols = 1
+            else:
+                cols = 10 # 10 Columns for standard AIRSTEP (5 Short + 5 Long)
+                if len(buttons_def) > 10:
+                     cols = 10 # split into rows
 
         for i, btn_data in enumerate(buttons_def):
             cc = btn_data["cc"]
@@ -183,7 +190,7 @@ class CompactPedalboardFrame(ctk.CTkFrame):
             
             # Container
             container = ctk.CTkFrame(self, fg_color="transparent")
-            container.grid(row=row, column=col, padx=4, pady=4, sticky="nsew")
+            container.grid(row=row, column=col, padx=2, pady=0, sticky="nsew")
 
             # 1. Top Label (Physical Index)
             gui = _get_gui()
@@ -193,9 +200,9 @@ class CompactPedalboardFrame(ctk.CTkFrame):
                 font=ctk.CTkFont(family="Segoe UI", size=9, weight="bold"),
                 text_color=gui.TEXT_SECONDARY,
                 wraplength=70,
-                height=24
+                height=12
             )
-            lbl_phy.pack(side="top", pady=(0, 2))
+            lbl_phy.pack(side="top", pady=0)
 
             # 2. Main Button (Icon)
             btn = ctk.CTkButton(
@@ -214,6 +221,8 @@ class CompactPedalboardFrame(ctk.CTkFrame):
                 command=lambda c=cc: self.on_btn_click(c)
             )
             btn.pack(side="top", fill="both", expand=True)
+            btn.original_fg_color = btn_color
+            btn.original_text_color = text_color
             
             # Store in map
             self.btn_map[cc] = btn
@@ -338,11 +347,11 @@ class RemoteControl(ctk.CTkToplevel):
 
         # --- Main Container (Holds Content) ---
         self.main_container = ctk.CTkFrame(self.main_border_frame, fg_color="transparent")
-        self.main_container.pack(fill="both", expand=True, padx=2, pady=2)
+        self.main_container.pack(fill="both", expand=True, padx=2, pady=(0, 2))
 
         # --- Content (Grid of Buttons) ---
         self.content_frame = ctk.CTkFrame(self.main_container, fg_color="transparent")
-        self.content_frame.pack(side="top", fill="both", expand=True, padx=4, pady=4)
+        self.content_frame.pack(side="top", fill="both", expand=True, padx=2, pady=1)
 
         # Instantiate Component
         self.pedalboard_frame = CompactPedalboardFrame(self.content_frame, self.device_def, self.profile, self.on_btn_click)
@@ -353,7 +362,7 @@ class RemoteControl(ctk.CTkToplevel):
         self.update_idletasks()
         
         w = self.content_frame.winfo_reqwidth() + 20
-        h = self.content_frame.winfo_reqheight() + 40 # + header
+        h = self.content_frame.winfo_reqheight() + 48 # + header et marge de confort en bas
 
         # Clamp min size
         w = max(200, w)
