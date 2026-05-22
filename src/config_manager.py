@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from utils import get_app_dir
 
 # Load env vars immediately
-load_dotenv()
+load_dotenv(os.path.join(get_app_dir(), ".env"))
 
 class ConfigManager:
     def __init__(self, config_file="config.json"):
@@ -95,6 +95,8 @@ class ConfigManager:
                 dotenv.set_key(env_path, env_key, str(value))
                 # Update OS environ so it's immediately available without restart
                 os.environ[env_key] = str(value)
+                # Synchronize and reload env to be 100% sure
+                load_dotenv(env_path)
             except Exception as e:
                 print(f"Error saving to .env: {e}")
             return

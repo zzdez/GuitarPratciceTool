@@ -769,11 +769,13 @@
 <div id="view-library" class="view-container">
 
                 <div class="sidebar-section">
-                    <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
-                        Setlist
-                        <button class="btn-icon" onclick="openAddModal()" data-i18n-title="web.btn_add_youtube"
-                            title="Ajouter">+</button>
+                    <div class="section-title">
+                        <span data-i18n="web.menu_setlist">Vidéos YouTube / Web</span>
                     </div>
+
+                    <button class="btn-primary-add" onclick="openAddModal()">
+                        <i class="ph ph-plus-circle"></i> <span data-i18n="web.btn_add_youtube_web">Ajouter une Vidéo YouTube / Web</span>
+                    </button>
 
                     <!-- Search / Filters -->
                     <div class="search-filters" style="align-items: center;">
@@ -832,24 +834,30 @@
             <!-- VIEW: APPS -->
             <div id="view-apps" class="view-container" style="display:none;">
                 <div class="sidebar-section">
-                    <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
-                        <span data-i18n="web.lbl_launcher">Lanceur</span>
-                        <button class="btn-icon" onclick="openAppModal()">+</button>
+                    <div class="section-title">
+                        <span data-i18n="web.lbl_launcher">Raccourcis Logiciels PC</span>
                     </div>
 
-                    <div id="apps-container" class="app-grid-large">
-                        <!-- Apps JS -->
-                    </div>
+                    <button class="btn-primary-add" onclick="openAppModal()">
+                        <i class="ph ph-windows-logo"></i> <span data-i18n="web.btn_add_windows_app">Ajouter une Application Windows</span>
+                    </button>
+                </div>
+
+                <div id="apps-container" class="app-grid-large">
+                    <!-- Apps JS -->
                 </div>
             </div>
 
             <!-- VIEW: WEB LINKS -->
             <div id="view-web-links" class="view-container" style="display:none;">
                 <div class="sidebar-section">
-                    <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
+                    <div class="section-title">
                         <span data-i18n="web.title_web_links">Autres Liens (Web)</span>
-                        <button class="btn-icon" onclick="openWebLinkModal()" title="Ajouter un lien web">+</button>
                     </div>
+
+                    <button class="btn-primary-add" onclick="openWebLinkModal()">
+                        <i class="ph ph-link"></i> <span data-i18n="web.btn_add_external_link">Ajouter un Lien Web Externe</span>
+                    </button>
 
                     <!-- Web Links Filters -->
                     <div class="search-filters" style="align-items: center;">
@@ -918,19 +926,21 @@
                 </div>
 
                 <div class="sidebar-section">
-                    <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
-                        Fichiers Locaux
-                        <div style="display:flex; gap:5px;">
-                            <button class="btn-icon" onclick="openLibraryManagerModal()"
-                                title="Gérer la Bibliothèque" data-i18n-title="web.btn_manage_library"><i
-                                    class="ph ph-books"></i></button>
-                            <button class="btn-icon" onclick="addLocalMultitrack()"
-                                title="Ajouter un Dossier Multipiste" data-i18n-title="web.hint_add_multitrack"><i
-                                    class="ph ph-folder-plus"></i></button>
-                            <button class="btn-icon" onclick="addLocalFile()" title="Ajouter un Fichier"
-                                data-i18n-title="web.hint_add_file">+</button>
-                        </div>
+                    <div class="section-title">
+                        <span data-i18n="web.tab_local">Médias locaux</span>
                     </div>
+
+                    <div class="action-grid-local">
+                        <button class="btn-action-add" onclick="addLocalFile()">
+                            <i class="ph ph-music-note"></i> <span data-i18n="web.btn_add_local_file">Fichier Simple (Audio/Vidéo)</span>
+                        </button>
+                        <button class="btn-action-add" onclick="addLocalMultitrack()">
+                            <i class="ph ph-folders"></i> <span data-i18n="web.btn_add_local_multitrack">Dossier Stems (Multipiste)</span>
+                        </button>
+                    </div>
+                    <button class="btn-action-manage" onclick="openLibraryManagerModal()">
+                        <i class="ph ph-books"></i> <span data-i18n="web.btn_manage_local_library">Gérer la Bibliothèque & Actions en masse</span>
+                    </button>
 
                     <!-- Local Filters -->
                     <div class="search-filters" style="align-items: center;">
@@ -989,10 +999,13 @@
             <!-- VIEW: SETLISTS V2 -->
             <div id="view-setlists" class="view-container" style="display:none;">
                 <div class="sidebar-section">
-                    <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
+                    <div class="section-title">
                         <span data-i18n="web.title_setlists">Setlists Live</span>
-                        <button class="btn-icon" onclick="openNewSetlistModal()" data-i18n-title="web.btn_add_setlist" title="Créer une Setlist">+</button>
                     </div>
+
+                    <button class="btn-primary-add" onclick="openNewSetlistModal()">
+                        <i class="ph ph-playlist"></i> <span data-i18n="web.btn_create_live_setlist">Créer une Setlist Live</span>
+                    </button>
 
                     <!-- Liste des Setlists -->
                     <div id="setlists-v2-list" class="setlist-grid" style="margin-top:10px;">
@@ -1378,20 +1391,20 @@
                     <button id="yt-search-btn" onclick="searchYouTube()">🔍</button>
                 </div>
                 <div id="no-api-key-msg"
-                    style="display:none; padding:10px; background:#2a2a2a; border-radius:5px; border-left:4px solid #f39c12; margin-bottom:10px; font-size:0.85em; line-height:1.4;">
-                    <strong>Info :</strong> Pour utiliser pleinement cette fonction, il vous faut une clé API YouTube
-                    (gratuite) a renseigner ici : <a href="#" onclick="closeModal(); openSettingsModal(); return false;"
-                        style="color:var(--accent);">Réglages</a>.<br>
-                    Vous pouvez cependant toujours ajouter une vidéo manuellement en collant son adresse URL (ex:
-                    <i>https://youtube.com/watch...</i>) directement dans le champ <b>URL du flux vidéo</b> ci-dessous,
-                    mais vous n'aurez pas les détails de la vidéo qu'il faudra entrer manuellement.<br>
-                    Pour obtenir une clé API (gratuite), <a href="https://console.cloud.google.com/" target="_blank"
-                        style="color:var(--accent); text-decoration:none;">allez a cette adresse ↗</a>.
+                    style="display:none; padding:8px 12px; background:rgba(243,156,18,0.06); border-radius:8px; border:1px solid rgba(243,156,18,0.2); border-left:4px solid #f39c12; margin-bottom:8px; font-size:0.82em; line-height:1.4; color:#eee;">
+                    <div style="font-weight:bold; color:#f39c12; margin-bottom:3px; display:flex; align-items:center; gap:6px;">
+                        <i class="ph ph-warning-circle" style="font-size:14px;"></i> Mode Saisie Manuelle YouTube
+                    </div>
+                    Renseignez ci-dessous le titre, l'artiste et l'URL de votre vidéo YouTube.
+                    <span style="font-size:0.92em; opacity:0.8; display:block; margin-top:4px;">
+                        💡 <i>Pour activer la recherche automatique, renseignez une clé API gratuite dans les <a href="#" onclick="closeModal(); openSettingsModal(); return false;" style="color:var(--accent); text-decoration:underline;">Réglages</a>.</i>
+                    </span>
                 </div>
                 <!-- Search Results Grid (Temporary) -->
                 <div id="search-results" class="results-grid" style="margin-top:10px;"></div>
             </div>
 
+            <div id="media-edit-fields-container" class="hidden">
             <hr class="separator">
 
             <!-- Zone 2: Media Stack (Sliders | Image | Switches) -->
@@ -1690,10 +1703,10 @@
                         style="width:0%; height:100%; background:var(--accent); transition:width 0.2s ease;"></div>
                 </div>
 
-        </div>
+            </div>
 
         <div class="modal-footer">
-            <button class="btn-secondary" onclick="previewItem()" data-i18n="web.btn_preview">Prévisualiser</button>
+            <button id="btn-preview-item" class="btn-secondary" onclick="previewItem()" data-i18n="web.btn_preview">Prévisualiser</button>
 
             <div style="flex:1"></div>
             <button class="btn-text" onclick="closeModal()" data-i18n="web.btn_cancel">Annuler</button>
@@ -1780,7 +1793,6 @@
                         <select id="web-link-type">
                             <option value="songsterr" data-i18n="web.opt_songsterr">Songsterr</option>
                             <option value="moises" data-i18n="web.opt_moises">Moises</option>
-                            <option value="spotify" data-i18n="web.opt_spotify">Spotify</option>
                             <option value="lesson" data-i18n="web.opt_lessons">Cours / Tuto</option>
                             <option value="other" data-i18n="web.opt_useful_links">Autre</option>
                         </select>
@@ -1997,7 +2009,7 @@
                 <button class="nav-btn active" onclick="switchSettingsTab('general')"
                     data-i18n="web.tab_general">Général</button>
                 <button class="nav-btn" onclick="switchSettingsTab('library')"
-                    data-i18n="web.tab_library">Médiathèque</button>
+                    data-i18n="web.tab_settings_library">Médiathèque</button>
                 <button class="nav-btn" onclick="switchSettingsTab('storage')"
                     data-i18n="web.tab_storage">Stockage</button>
                 <button class="nav-btn" onclick="switchSettingsTab('controller')"
@@ -2067,19 +2079,9 @@
 
                     <h4 data-i18n="web.lbl_music_apis">APIs Musique (BPM & Ton.)</h4>
                     <div class="settings-control-group" style="padding:4px 8px; margin-bottom:8px;">
-                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
-                            <div>
-                                <label data-i18n="web.lbl_spotify_client_id" style="font-size:0.7em;">ID Spotify</label>
-                                <input type="password" id="setting-spotify-client-id" placeholder="..." style="height:20px;">
-                            </div>
-                            <div>
-                                <label data-i18n="web.lbl_spotify_client_secret" style="font-size:0.7em;">Secret Spotify</label>
-                                <input type="password" id="setting-spotify-client-secret" placeholder="..." style="height:20px;">
-                            </div>
-                        </div>
-                        <div style="margin-top:4px; padding-top:4px; border-top:1px solid #333;">
+                        <div>
                             <label data-i18n="web.lbl_getsong_api_key" style="font-size:0.7em;">GetSongBPM Key</label>
-                            <input type="password" id="setting-getsong-api-key" placeholder="..." style="height:20px;">
+                            <input type="password" id="setting-getsong-api-key" placeholder="..." style="height:22px; width: 100%;">
                         </div>
                     </div>
                 </div>

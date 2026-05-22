@@ -1140,8 +1140,6 @@ async def get_settings():
     # Construct settings object
     return {
         "YOUTUBE_API_KEY": config_manager.get("YOUTUBE_API_KEY", ""),
-        "spotify_client_id": config_manager.get("spotify_client_id", ""),
-        "spotify_client_secret": config_manager.get("spotify_client_secret", ""),
         "getsong_api_key": config_manager.get("getsong_api_key") or config_manager.get("getsongbpm_api_key") or "",
         "media_folders": config_manager.get("media_folders", []),
         "midi_output_names": config_manager.get("midi_output_names", []),

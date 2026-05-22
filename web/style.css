@@ -3288,3 +3288,163 @@ input[type="color"].stem-color-input::-moz-color-swatch {
     outline: none;
     border-bottom: 1px solid var(--accent) !important;
 }
+
+/* ==========================================
+   ERGONOMIE PREMIUM SANS CLÉ API (GLOW & FOCUS)
+   ========================================== */
+#yt-search-input.no-api-active {
+    border: 2px solid var(--accent) !important;
+    box-shadow: 0 0 12px rgba(187, 134, 252, 0.15) !important;
+    font-size: 0.95em !important;
+    padding: 10px 14px !important;
+    border-radius: 6px !important;
+    background: #252525 !important;
+    transition: all 0.3s ease;
+}
+#yt-search-input.no-api-active:focus {
+    border-color: #3498db !important;
+    box-shadow: 0 0 18px rgba(52, 152, 219, 0.3) !important;
+    background: #2a2a2a !important;
+}
+#yt-search-btn.no-api-active {
+    font-size: 1.1em !important;
+    padding: 8px 16px !important;
+    border-radius: 6px !important;
+    background: var(--accent) !important;
+    color: #000 !important;
+    transition: all 0.2s ease;
+}
+#yt-search-btn.no-api-active:hover {
+    transform: scale(1.05);
+    opacity: 0.9;
+}
+
+/* ==========================================
+   MEDIA MODAL HEIGHT & COMPACTNESS (V27.1)
+   ========================================== */
+#media-modal[open] {
+    max-height: 90vh !important; /* Plus de hauteur relative à l'écran */
+}
+
+#media-modal .modal-body {
+    max-height: 80vh !important; /* Capacité de contenu augmentée de 77vh à 80vh */
+    padding-top: 5px !important; /* Réduction du padding supérieur */
+}
+
+#media-modal .separator {
+    margin: 8px 0 !important; /* Marge du séparateur réduite de 20px à 8px pour économiser ~24px */
+}
+
+/* ==========================================
+   V28: COMPACT ACTION BUTTONS FOR APPLETS
+   ========================================== */
+.btn-primary-add {
+    width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 5px 8px;
+    margin-bottom: 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text, #F3F4F6);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-primary-add i {
+    font-size: 1.1em;
+    color: var(--accent);
+    transition: transform 0.2s ease;
+}
+
+.btn-primary-add:hover {
+    background: var(--accent);
+    color: #000 !important;
+    border-color: var(--accent);
+}
+
+.btn-primary-add:hover i {
+    color: #000 !important;
+    transform: scale(1.15);
+}
+
+/* Grille locale pour l'applet Fichiers Locaux */
+.action-grid-local {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    margin-bottom: 4px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.btn-action-add {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 5px 6px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text, #F3F4F6);
+    cursor: pointer;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    transition: all 0.2s ease;
+}
+
+.btn-action-add i {
+    font-size: 1.05em;
+    color: var(--accent);
+}
+
+.btn-action-add:hover {
+    background: var(--accent);
+    color: #000 !important;
+    border-color: var(--accent);
+}
+
+.btn-action-add:hover i {
+    color: #000 !important;
+}
+
+.btn-action-manage {
+    width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 4px 8px;
+    margin-bottom: 6px;
+    font-size: 0.68rem;
+    font-weight: 500;
+    border-radius: 4px;
+    border: 1px dashed rgba(255, 255, 255, 0.15);
+    background: transparent;
+    color: #aaa;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-action-manage i {
+    font-size: 1.05em;
+}
+
+.btn-action-manage:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+

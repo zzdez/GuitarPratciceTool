@@ -2682,11 +2682,6 @@ async function openSettingsModal() {
         document.getElementById("setting-youtube-key").value = currentSettings.YOUTUBE_API_KEY || "";
 
         // Music APIs
-        const sClient = document.getElementById("setting-spotify-client-id");
-        if (sClient) sClient.value = currentSettings.spotify_client_id || "";
-
-        const sSecret = document.getElementById("setting-spotify-client-secret");
-        if (sSecret) sSecret.value = currentSettings.spotify_client_secret || "";
 
         const getsongKey = document.getElementById("setting-getsong-api-key");
         if (getsongKey) getsongKey.value = currentSettings.getsong_api_key || "";
@@ -2879,11 +2874,6 @@ async function saveSettings() {
     currentSettings.YOUTUBE_API_KEY = document.getElementById("setting-youtube-key").value;
 
     // Music APIs
-    const sClient = document.getElementById("setting-spotify-client-id");
-    if (sClient) currentSettings.spotify_client_id = sClient.value;
-
-    const sSecret = document.getElementById("setting-spotify-client-secret");
-    if (sSecret) currentSettings.spotify_client_secret = sSecret.value;
 
     const getsongKey = document.getElementById("setting-getsong-api-key");
     if (getsongKey) currentSettings.getsong_api_key = getsongKey.value;
@@ -3211,20 +3201,40 @@ function openAddModal() {
     currentEditingLinkedIds = [];
     renderModalLinkedItems();
 
-    // Check API Key
-    const searchInput = document.getElementById("yt-search-input");
-    const searchBtn = document.getElementById("yt-search-btn");
+    // Masquage/affichage intelligent du formulaire d'édition et des boutons d'action au démarrage selon la clé API
+    const editContainer = document.getElementById("media-edit-fields-container");
+    const saveBtnElem = document.getElementById("btn-save-item");
+    const previewBtnElem = document.getElementById("btn-preview-item");
+    const inputGroup = document.querySelector("#search-zone-container .input-group");
     const noKeyMsg = document.getElementById("no-api-key-msg");
+    const editTitle = document.getElementById("edit-title");
+    const searchInput = document.getElementById("yt-search-input");
 
-    if (!currentSettings || !currentSettings.YOUTUBE_API_KEY) {
-        if (searchInput) searchInput.style.display = "none";
-        if (searchBtn) searchBtn.style.display = "none";
+    const hasApiKey = currentSettings && currentSettings.YOUTUBE_API_KEY;
+
+    if (!hasApiKey) {
+        // Pas de clé API : masquer la barre de recherche supérieure et afficher le formulaire et le footer immédiatement
+        if (inputGroup) inputGroup.style.display = "none";
         if (noKeyMsg) noKeyMsg.style.display = "block";
+        if (editContainer) editContainer.classList.remove("hidden");
+        if (saveBtnElem) saveBtnElem.style.display = "inline-block";
+        if (previewBtnElem) previewBtnElem.style.display = "inline-block";
+
+        if (editTitle) {
+            editTitle.focus();
+        }
     } else {
-        if (searchInput) searchInput.style.display = "inline-block";
-        if (searchBtn) searchBtn.style.display = "inline-block";
+        // Avec clé API : afficher la recherche supérieure et masquer le formulaire d'édition au début
+        if (inputGroup) inputGroup.style.display = "flex";
         if (noKeyMsg) noKeyMsg.style.display = "none";
-        if (searchInput) searchInput.focus();
+        if (editContainer) editContainer.classList.add("hidden");
+        if (saveBtnElem) saveBtnElem.style.display = "none";
+        if (previewBtnElem) previewBtnElem.style.display = "none";
+
+        if (searchInput) {
+            searchInput.placeholder = typeof t === "function" ? t("web.search_placeholder", "Recherche YouTube ou URL...") : "Recherche YouTube ou URL...";
+            searchInput.focus();
+        }
     }
 }
 
@@ -3317,6 +3327,22 @@ function openEditModal(index) {
     document.getElementById("dl-progress-bar").style.width = "0%";
     document.getElementById("dl-status").innerText = t("web.status_ready");
 
+    // Affichage explicite du formulaire d'édition et des boutons d'action
+    const editContainer = document.getElementById("media-edit-fields-container");
+    if (editContainer) editContainer.classList.remove("hidden");
+
+    const saveBtnElem = document.getElementById("btn-save-item");
+    if (saveBtnElem) saveBtnElem.style.display = "inline-block";
+
+    const previewBtnElem = document.getElementById("btn-preview-item");
+    if (previewBtnElem) previewBtnElem.style.display = "inline-block";
+
+    // Nettoyer la classe no-api-active
+    const searchInput = document.getElementById("yt-search-input");
+    const searchBtn = document.getElementById("yt-search-btn");
+    if (searchInput) searchInput.classList.remove("no-api-active");
+    if (searchBtn) searchBtn.classList.remove("no-api-active");
+
     // Hide Search Zone in Edit Mode (Save Space)
     document.getElementById("search-zone-container").classList.add("hidden");
     document.getElementById("btn-back-search").style.display = "block"; // Start with "Back" button visible to allow new search    
@@ -3388,6 +3414,71 @@ async function searchYouTube() {
     const container = document.getElementById("search-results");
     container.innerHTML = "Chargement...";
 
+    const hasApiKey = currentSettings && currentSettings.YOUTUBE_API_KEY;
+
+    if (!hasApiKey) {
+        const isUrl = q.startsWith("http://") || q.startsWith("https://") || q.includes("youtube.com") || q.includes("youtu.be");
+        if (!isUrl) {
+            container.innerHTML = `<div style="padding:10px; color:#f39c12; font-size:0.9em; text-align:center;">
+                Veuillez saisir une URL complète (ex: https://www.youtube.com/watch?v=...) car la recherche par mot-clé requiert une clé API.
+            </div>`;
+            return;
+        }
+
+        container.innerHTML = `<div style="padding:10px; color:#3498db; font-size:0.9em; text-align:center;">
+            🔄 Extraction des métadonnées de la vidéo via yt-dlp...
+        </div>`;
+
+        try {
+            const res = await fetch("/api/dl/info", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ url: q })
+            });
+
+            if (res.ok) {
+                const info = await res.json();
+                if (info && !info.error) {
+                    const video = {
+                        title: info.title || "Vidéo YouTube",
+                        thumbnail_url: info.thumbnail || "",
+                        channel: "YouTube",
+                        description: "",
+                        url: q
+                    };
+                    selectResult(video);
+                    container.innerHTML = "";
+                    return;
+                }
+            }
+
+            // Fallback: direct add with raw URL if info service failed or returned error
+            const video = {
+                title: "",
+                thumbnail_url: "",
+                channel: "",
+                description: "",
+                url: q
+            };
+            selectResult(video);
+            container.innerHTML = `<div style="padding:10px; color:#2ecc71; font-size:0.85em; text-align:center;">
+                Ajout direct de l'URL réussi. Complétez le titre manuellement.
+            </div>`;
+        } catch (e) {
+            console.error("Direct URL fetch info error:", e);
+            const video = {
+                title: "",
+                thumbnail_url: "",
+                channel: "",
+                description: "",
+                url: q
+            };
+            selectResult(video);
+            container.innerHTML = "";
+        }
+        return;
+    }
+
     try {
         const res = await fetch(`/api/youtube/search?q=${encodeURIComponent(q)}`);
         const results = await res.json();
@@ -3428,10 +3519,20 @@ function selectResult(video) {
     document.getElementById("search-zone-container").classList.add("hidden");
     document.getElementById("btn-back-search").style.display = "block";
 
+    // Afficher le formulaire d'édition et les boutons d'action
+    const editContainer = document.getElementById("media-edit-fields-container");
+    if (editContainer) editContainer.classList.remove("hidden");
+
+    const saveBtnElem = document.getElementById("btn-save-item");
+    if (saveBtnElem) saveBtnElem.style.display = "inline-block";
+
+    const previewBtnElem = document.getElementById("btn-preview-item");
+    if (previewBtnElem) previewBtnElem.style.display = "inline-block";
+
     // 2. Title & URL
-    document.getElementById("edit-title").value = video.title;
+    document.getElementById("edit-title").value = video.title || "";
     setEditSharedStatus(false); // Reset for new video
-    const url = video.id ? `https://www.youtube.com/watch?v=${video.id}` : "";
+    const url = video.url || (video.id ? `https://www.youtube.com/watch?v=${video.id}` : "");
     if (url) document.getElementById("edit-url").value = url;
 
     // Show Download Button if URL
@@ -3465,7 +3566,27 @@ function resetSearchMode() {
     document.getElementById("search-zone-container").classList.remove("hidden");
     document.getElementById("btn-back-search").style.display = "none";
 
-    // Optional: Clear form if desired? For now we keep it so user doesn't lose data if they misclicked.
+    const hasApiKey = currentSettings && currentSettings.YOUTUBE_API_KEY;
+
+    const editContainer = document.getElementById("media-edit-fields-container");
+    const saveBtnElem = document.getElementById("btn-save-item");
+    const previewBtnElem = document.getElementById("btn-preview-item");
+    const inputGroup = document.querySelector("#search-zone-container .input-group");
+    const noKeyMsg = document.getElementById("no-api-key-msg");
+
+    if (!hasApiKey) {
+        if (inputGroup) inputGroup.style.display = "none";
+        if (noKeyMsg) noKeyMsg.style.display = "block";
+        if (editContainer) editContainer.classList.remove("hidden");
+        if (saveBtnElem) saveBtnElem.style.display = "inline-block";
+        if (previewBtnElem) previewBtnElem.style.display = "inline-block";
+    } else {
+        if (inputGroup) inputGroup.style.display = "flex";
+        if (noKeyMsg) noKeyMsg.style.display = "none";
+        if (editContainer) editContainer.classList.add("hidden");
+        if (saveBtnElem) saveBtnElem.style.display = "none";
+        if (previewBtnElem) previewBtnElem.style.display = "none";
+    }
 }
 
 function connectVideoWebSocket() {
@@ -7347,6 +7468,16 @@ function openEditLocalModal(index) {
     const isPrimaryVal = (item.is_primary === true || item.is_primary === "true");
     document.getElementById("edit-is-primary").checked = isPrimaryVal;
     console.log("[DEBUG] Opening EditLocal Modal - is_primary:", isPrimaryVal, "raw:", item.is_primary);
+
+    // Affichage explicite du formulaire d'édition et des boutons d'action
+    const editContainer = document.getElementById("media-edit-fields-container");
+    if (editContainer) editContainer.classList.remove("hidden");
+
+    const saveBtnElem = document.getElementById("btn-save-item");
+    if (saveBtnElem) saveBtnElem.style.display = "inline-block";
+
+    const previewBtnElem = document.getElementById("btn-preview-item");
+    if (previewBtnElem) previewBtnElem.style.display = "inline-block";
 
     // V58: Hide Action Selector for local files
     const actionSel = document.querySelector(".actions-selector");
