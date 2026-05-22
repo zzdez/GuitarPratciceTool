@@ -790,7 +790,7 @@ class DeviceEditorDialog(ctk.CTkToplevel):
             lbl_badge.pack(side="right", padx=5)
             
             if is_absent:
-                lbl_badge.configure(text=f" [{p_type} - {_('gui.lbl_hold', default='Absent')}] ", text_color="#EF4444")
+                lbl_badge.configure(text=f" [{p_type} - {_('gui.lbl_absent', default='Absent')}] ", text_color="#EF4444")
 
     def draw_key_row(self, cc, label, short_label="", is_virt=False):
         if not hasattr(self, "keys_container") or not self.keys_container.winfo_exists():

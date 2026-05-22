@@ -145,6 +145,7 @@
         "btn_settings": "Settings",
         "msg_error": "Error",
         "lbl_hold": "Hold",
+        "lbl_absent": "Absent",
         "title_remote": "Midi-Kbd Remote",
         "lbl_remote_prefix": "Remote",
         "msg_error_bleak_missing": "Bleak (lib) missing or Bluetooth disabled.",

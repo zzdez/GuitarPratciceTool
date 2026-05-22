@@ -145,6 +145,7 @@
         "btn_settings": "Réglages",
         "msg_error": "Erreur",
         "lbl_hold": "Maintenu",
+        "lbl_absent": "Absent",
         "title_remote": "Télécommande Midi-Kbd",
         "lbl_remote_prefix": "Remote",
         "msg_error_bleak_missing": "Bleak (lib) manquant ou Bluetooth désactivé.",

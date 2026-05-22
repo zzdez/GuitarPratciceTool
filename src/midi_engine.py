@@ -246,7 +246,12 @@ class BleakProvider(MidiProvider):
         self.log("BLE Engine Stopped.")
 
     def get_ports(self):
-        return [d.name for d in self.discovered_devices if d.name]
+        ports = [d.name for d in self.discovered_devices if d.name]
+        # Si le périphérique est déjà connecté en BLE, il n'émet plus de trames d'advertising actives
+        # et n'apparaîtrait plus dans le scan passif de découvrabilité. On l'injecte donc impérativement.
+        if self.is_connected and self.target_name and self.target_name not in ports:
+            ports.append(self.target_name)
+        return ports
 
     def _run_async_loop(self):
         self.log("Async Loop Thread Entering...")
