@@ -498,6 +498,10 @@ function changePitch(delta) {
 
 // --- INIT ---
 function onYouTubeIframeAPIReady() {
+    if (player) {
+        console.log("YouTube Player already initialized, skipping duplicate call.");
+        return;
+    }
     player = new YT.Player('player', {
         height: '100%',
         width: '100%',
@@ -4237,8 +4241,18 @@ function playMediaByUid(uid, isOrchestrated = false) {
         const realIdx = localFiles.indexOf(item);
         if (realIdx !== -1) playLocal(realIdx);
     } else if (uid.startsWith('web')) {
-        const realIdx = webLinks.indexOf(item);
-        if (realIdx !== -1) playWebLink(realIdx);
+        // V60: Unified YouTube/Web links logic
+        // If it's configured as embedded (iframe) or auto (resolved to iframe for YouTube), play internally
+        const openMode = item.open_mode || "auto";
+        const isYoutube = item.url && (item.url.includes("youtube.com") || item.url.includes("youtu.be"));
+        const shouldPlayInternal = openMode === "iframe" || (openMode === "auto" && isYoutube);
+        
+        if (shouldPlayInternal) {
+            playTrack(item);
+        } else {
+            const realIdx = webLinks.indexOf(item);
+            if (realIdx !== -1) playWebLink(realIdx);
+        }
     } else {
         // Ultimate Fallback
         playTrack(item); 
@@ -4363,10 +4377,13 @@ function playTrack(track) {
         return (item.target_profile && item.target_profile !== "Auto") ? item.target_profile : def;
     }
 
+    const isYoutube = track.url && (track.url.includes("youtube.com") || track.url.includes("youtu.be"));
+    const shouldPlayYTInternal = track.open_mode === "iframe" || (track.open_mode === "auto" && isYoutube);
+
     if (track.open_mode === "external") {
         fetch(`/api/open_external?url=${encodeURIComponent(track.url)}`);
         setMode("GENERIC", getProfile(track, track.profile_name)); // External apps don't have a web mode
-    } else if (track.open_mode === "iframe" && track.id) {
+    } else if (shouldPlayYTInternal && track.id) {
         // YouTube Iframe
         setMode("YOUTUBE", getProfile(track, "Web YouTube")); // Context Switch
 
@@ -11151,13 +11168,14 @@ function refreshSetlistHighlights() {
 }
 
 function handlePlayerError(el) {
-    // Si on est en train de charger un multipiste, on ignore les erreurs du joueur vidéo résiduel
-    if (window.currentActivePlayer === 'multitrack' && el.id === 'html5-player') {
+    if (!el.src || el.src === "" || el.src.includes('undefined')) return;
+
+    // Ignorer les erreurs résiduelles de html5-player si le lecteur actif n'est pas le lecteur local
+    if (el.id === 'html5-player' && window.currentActivePlayer !== 'local') {
         return; 
     }
 
     console.warn("Player Error detected on:", el.id);
-    if (!el.src || el.src === "" || el.src.includes('undefined')) return;
     
     if (window.currentPlayingIndex !== null) {
         const track = findTrackInLibraryOrSetlist(window.currentPlayingIndex, window.currentSource);
