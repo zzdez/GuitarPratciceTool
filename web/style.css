@@ -607,6 +607,17 @@ button:hover {
     border-radius: 0;
     font-size: 0.85em;
     /* Reduced from 0.9em */
+    cursor: grab;
+    user-select: none;
+}
+
+.nav-tabs button:active {
+    cursor: grabbing;
+}
+
+.nav-tabs button.dragging {
+    opacity: 0.4;
+    background: rgba(255, 255, 255, 0.05);
 }
 
 .nav-tabs button.active {

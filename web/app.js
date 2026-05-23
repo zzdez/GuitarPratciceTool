@@ -514,6 +514,69 @@ function onYouTubeIframeAPIReady() {
 }
 window.onYouTubeIframeAPIReady = onYouTubeIframeAPIReady;
 
+function initTabsDragAndDrop() {
+    const navTabs = document.querySelector(".nav-tabs");
+    if (!navTabs) return;
+
+    // 1. Charger et appliquer l'ordre sauvegardé
+    const savedOrder = localStorage.getItem("tabs_order");
+    if (savedOrder) {
+        const orderArr = savedOrder.split(",");
+        const buttons = Array.from(navTabs.children);
+        orderArr.forEach(id => {
+            const btn = buttons.find(b => b.id === id);
+            if (btn) {
+                navTabs.appendChild(btn);
+            }
+        });
+    }
+
+    // 2. Événements Drag & Drop
+    let dragSrcEl = null;
+
+    const buttons = navTabs.querySelectorAll("button");
+    buttons.forEach(btn => {
+        btn.addEventListener("dragstart", (e) => {
+            dragSrcEl = btn;
+            btn.classList.add("dragging");
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData("text/plain", btn.id);
+        });
+
+        btn.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+            
+            if (btn !== dragSrcEl) {
+                const rect = btn.getBoundingClientRect();
+                const next = (e.clientX - rect.left) > (rect.width / 2);
+                navTabs.insertBefore(dragSrcEl, next ? btn.nextSibling : btn);
+            }
+        });
+
+        btn.addEventListener("dragend", () => {
+            btn.classList.remove("dragging");
+            
+            // Sauvegarder le nouvel ordre
+            const newOrder = Array.from(navTabs.children).map(b => b.id).join(",");
+            localStorage.setItem("tabs_order", newOrder);
+        });
+    });
+
+    // 3. Activer automatiquement le premier onglet à gauche par défaut au démarrage
+    const firstTab = navTabs.firstElementChild;
+    if (firstTab) {
+        let viewName = "library";
+        if (firstTab.id === "tab-library") viewName = "library";
+        else if (firstTab.id === "tab-local") viewName = "local";
+        else if (firstTab.id === "tab-setlists") viewName = "setlists";
+        else if (firstTab.id === "tab-web-links") viewName = "web-links";
+        else if (firstTab.id === "tab-apps") viewName = "apps";
+        
+        switchView(viewName, false);
+    }
+}
+
 
 let queuedVideoId = null;
 
@@ -797,7 +860,7 @@ function setMode(mode, forcedProfileName = null) {
 }
 
 // --- VIEW NAVIGATION ---
-function switchView(viewName) {
+function switchView(viewName, forceReload = true) {
     // Buttons
     document.getElementById("tab-library").classList.toggle("active", viewName === "library");
     document.getElementById("tab-apps").classList.toggle("active", viewName === "apps");
@@ -812,13 +875,15 @@ function switchView(viewName) {
     document.getElementById("view-web-links").style.display = viewName === "web-links" ? "block" : "none";
     document.getElementById("view-setlists").style.display = viewName === "setlists" ? "block" : "none";
 
-    if (viewName === "local") {
-        loadLocalFiles();
-        checkMissingItems();
-    } else if (viewName === "web-links") {
-        loadWebLinks();
-    } else if (viewName === "setlists") {
-        loadAllSetlists();
+    if (forceReload) {
+        if (viewName === "local") {
+            loadLocalFiles();
+            checkMissingItems();
+        } else if (viewName === "web-links") {
+            loadWebLinks();
+        } else if (viewName === "setlists") {
+            loadAllSetlists();
+        }
     }
 }
 
@@ -2313,7 +2378,8 @@ function getLinkedItem(uid) {
         if (type === 'web') return findIn(webLinks, idx);
     }
     
-    console.warn("[LINK] Résolution échouée pour UID:", uid);
+    // Silence console au démarrage ou pour les liens orphelins (simple log de debug de bas niveau)
+    console.debug("[LINK] Résolution transitoire ou orpheline pour UID:", uid);
     return null;
 }
 
@@ -7927,6 +7993,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     setupUniversalLoopSelection();
+    if (typeof initTabsDragAndDrop === "function") initTabsDragAndDrop();
     setupSliderReset(document.getElementById("mt-modal-volume"), "volume");
 
     // V60: Initialization of resizing engines
