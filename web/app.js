@@ -11981,6 +11981,455 @@ async function confirmRelocateUnitary() {
     }
 }
 
+// ==========================================
+// LOGIQUE DE RENOMMAGE PHYSIQUE DES MÉDIAS & STEMS (V10+)
+// ==========================================
+let renameStemsData = []; // Stockage temporaire des stems pour le renommage
+const DEFAULT_INSTRUMENTS = ["Drums", "Bass", "Rhythm", "Vocals", "Lead", "Keys", "Acoustic", "Synth", "Percussion", "Click"];
+
+function getInstrumentsList() {
+    let list = localStorage.getItem("airstep_instruments");
+    if (!list) {
+        localStorage.setItem("airstep_instruments", JSON.stringify(DEFAULT_INSTRUMENTS));
+        return DEFAULT_INSTRUMENTS;
+    }
+    try {
+        return JSON.parse(list);
+    } catch (e) {
+        return DEFAULT_INSTRUMENTS;
+    }
+}
+
+function saveInstrumentsList(list) {
+    localStorage.setItem("airstep_instruments", JSON.stringify(list));
+}
+
+async function openPhysicalRenameModal() {
+    const idx = editingLocalIndex;
+    if (idx === null || idx === undefined || idx === -1) return;
+    const item = localFiles[idx];
+    if (!item || !item.path) {
+        alert(t('web.msg_error_path_not_found', "Action impossible : chemin du média introuvable."));
+        return;
+    }
+
+    // Récupérer les éléments UI
+    const modal = document.getElementById("modal-physical-rename");
+    const currentPathEl = document.getElementById("rename-current-path");
+    const mainLabelEl = document.getElementById("rename-main-label");
+    const mainInputEl = document.getElementById("rename-main-input");
+    const stemsContainer = document.getElementById("rename-stems-container");
+
+    if (!modal || !currentPathEl || !mainInputEl) return;
+
+    // Remplir le chemin actuel
+    currentPathEl.innerText = item.path;
+
+    // Déterminer le nom de base
+    let baseName = "";
+    if (item.is_multitrack) {
+        baseName = item.path.split(/[\\/]/).pop();
+        mainLabelEl.innerText = t("web.lbl_new_foldername", "Nouveau nom de dossier");
+        stemsContainer.style.display = "flex";
+        // Coche par défaut "none"
+        const radioNone = document.querySelector('input[name="rename_stems_option"][value="none"]');
+        if (radioNone) radioNone.checked = true;
+        document.getElementById("rename-stems-mapping-area").style.display = "none";
+        
+        // Charger les stems
+        await loadPhysicalRenameStems(idx, item);
+    } else {
+        const filename = item.path.split(/[\\/]/).pop();
+        const dotIdx = filename.lastIndexOf('.');
+        baseName = dotIdx !== -1 ? filename.substring(0, dotIdx) : filename;
+        mainLabelEl.innerText = t("web.lbl_new_filename", "Nouveau nom physique (sans extension)");
+        stemsContainer.style.display = "none";
+        renameStemsData = [];
+    }
+
+    mainInputEl.value = baseName;
+
+    // Appliquer les traductions à la modale
+    if (window.translatePage) {
+        window.translatePage(modal);
+    }
+
+    modal.showModal();
+}
+
+async function loadPhysicalRenameStems(idx, item) {
+    renameStemsData = [];
+    try {
+        const res = await fetch(`/api/local/multitrack_settings/${idx}`);
+        const data = await res.json();
+        if (data && data.tracks && data.tracks.length > 0) {
+            renameStemsData = data.tracks.map(t => ({
+                path: t.path,
+                name: t.name || t.path.split(/[\\/]/).pop().split('.')[0]
+            }));
+        }
+    } catch (e) {
+        console.warn("Failed to load multitrack settings for rename, fallback to stems array", e);
+    }
+
+    if (renameStemsData.length === 0 && item.stems) {
+        renameStemsData = item.stems.map(s => ({
+            path: s,
+            name: s.split(/[\\/]/).pop().split('.')[0]
+        }));
+    }
+}
+
+function onRenameOptionChanged() {
+    const option = document.querySelector('input[name="rename_stems_option"]:checked').value;
+    const mappingArea = document.getElementById("rename-stems-mapping-area");
+    
+    if (option === "none") {
+        mappingArea.style.display = "none";
+    } else {
+        mappingArea.style.display = "flex";
+        renderRenameStemsList();
+    }
+}
+
+function onRenameMainInputChanged() {
+    const option = document.querySelector('input[name="rename_stems_option"]:checked').value;
+    if (option !== "none") {
+        updateStemsPreviews();
+    }
+}
+
+function renderRenameStemsList() {
+    const container = document.getElementById("rename-stems-rows-container");
+    if (!container) return;
+    container.innerHTML = "";
+
+    const option = document.querySelector('input[name="rename_stems_option"]:checked').value;
+    const instruments = getInstrumentsList();
+
+    renameStemsData.forEach((stem, i) => {
+        const row = document.createElement("div");
+        row.className = "rename-stem-row";
+
+        const originalFilename = stem.path.split(/[\\/]/).pop();
+        const extIdx = originalFilename.lastIndexOf('.');
+        const ext = extIdx !== -1 ? originalFilename.substring(extIdx) : "";
+        const originalBase = extIdx !== -1 ? originalFilename.substring(0, extIdx) : originalFilename;
+
+        // Label d'origine
+        const nameLabel = document.createElement("div");
+        nameLabel.style.flex = "1";
+        nameLabel.style.fontWeight = "bold";
+        nameLabel.style.overflow = "hidden";
+        nameLabel.style.textOverflow = "ellipsis";
+        nameLabel.style.whiteSpace = "nowrap";
+        nameLabel.innerText = stem.name || originalBase;
+        nameLabel.title = originalFilename;
+        row.appendChild(nameLabel);
+
+        if (option === "by_instrument") {
+            // Select d'instrument
+            const select = document.createElement("select");
+            select.id = `rename-stem-select-${i}`;
+            select.onchange = () => onStemSelectorChanged(i);
+
+            // Remplir le select
+            instruments.forEach(inst => {
+                const opt = document.createElement("option");
+                opt.value = inst;
+                opt.innerText = inst;
+                select.appendChild(opt);
+            });
+
+            const optCustom = document.createElement("option");
+            optCustom.value = "CUSTOM";
+            optCustom.innerText = t("web.lbl_add_custom_instrument", "Personnalisé...");
+            select.appendChild(optCustom);
+
+            // Essayer de trouver une correspondance intelligente par défaut
+            let matched = "Rhythm";
+            const lowerName = (stem.name || "").toLowerCase();
+            const lowerFile = originalBase.toLowerCase();
+            
+            if (lowerName.includes("drum") || lowerFile.includes("drum") || lowerName.includes("batterie")) matched = "Drums";
+            else if (lowerName.includes("bass") || lowerFile.includes("bass") || lowerName.includes("basse")) matched = "Bass";
+            else if (lowerName.includes("vocal") || lowerFile.includes("vocal") || lowerName.includes("chant") || lowerName.includes("voice") || lowerName.includes("lead voc")) matched = "Vocals";
+            else if (lowerName.includes("lead") || lowerFile.includes("lead") || lowerName.includes("solo")) matched = "Lead";
+            else if (lowerName.includes("key") || lowerFile.includes("key") || lowerName.includes("synth") || lowerName.includes("piano") || lowerName.includes("clavier")) matched = "Keys";
+            else if (lowerName.includes("acoustic") || lowerFile.includes("acoustic") || lowerName.includes("folk")) matched = "Acoustic";
+            else if (lowerName.includes("click") || lowerFile.includes("click") || lowerName.includes("metronome") || lowerName.includes("tempo")) matched = "Click";
+            
+            if (instruments.includes(matched)) {
+                select.value = matched;
+            } else {
+                select.value = instruments[0] || "Rhythm";
+            }
+
+            row.appendChild(select);
+
+            // Input personnalisé masqué par défaut
+            const customInput = document.createElement("input");
+            customInput.type = "text";
+            customInput.id = `rename-stem-custom-${i}`;
+            customInput.className = "custom-inst-input";
+            customInput.style.display = "none";
+            customInput.placeholder = "...";
+            customInput.oninput = () => updateStemsPreviews();
+            row.appendChild(customInput);
+        }
+
+        // Aperçu du résultat
+        const preview = document.createElement("div");
+        preview.id = `rename-stem-preview-${i}`;
+        preview.className = "stem-result-name";
+        preview.innerText = "-";
+        row.appendChild(preview);
+
+        container.appendChild(row);
+    });
+
+    updateStemsPreviews();
+}
+
+function onStemSelectorChanged(idx) {
+    const select = document.getElementById(`rename-stem-select-${idx}`);
+    const customInput = document.getElementById(`rename-stem-custom-${idx}`);
+    
+    if (select && customInput) {
+        if (select.value === "CUSTOM") {
+            customInput.style.display = "block";
+            customInput.focus();
+        } else {
+            customInput.style.display = "none";
+        }
+    }
+    updateStemsPreviews();
+}
+
+function updateStemsPreviews() {
+    const option = document.querySelector('input[name="rename_stems_option"]:checked').value;
+    const folderName = document.getElementById("rename-main-input").value.trim();
+
+    renameStemsData.forEach((stem, i) => {
+        const previewEl = document.getElementById(`rename-stem-preview-${i}`);
+        if (!previewEl) return;
+
+        const originalFilename = stem.path.split(/[\\/]/).pop();
+        const extIdx = originalFilename.lastIndexOf('.');
+        const ext = extIdx !== -1 ? originalFilename.substring(extIdx) : "";
+
+        let stemName = "";
+        let finalFilename = "";
+
+        if (option === "as_stems") {
+            stemName = stem.name || originalFilename.split('.')[0];
+            finalFilename = stemName;
+        } else if (option === "by_instrument") {
+            const select = document.getElementById(`rename-stem-select-${i}`);
+            const customInput = document.getElementById(`rename-stem-custom-${i}`);
+            
+            if (select) {
+                if (select.value === "CUSTOM") {
+                    stemName = customInput ? customInput.value.trim() : "Custom";
+                } else {
+                    stemName = select.value;
+                }
+            }
+            if (!stemName) stemName = "Track";
+            finalFilename = `${folderName} - ${stemName}`;
+        }
+
+        previewEl.innerText = finalFilename + ext;
+    });
+}
+
+function toggleInstrumentEditor() {
+    const editor = document.getElementById("instrument-list-editor");
+    const btn = document.getElementById("btn-toggle-instrument-editor");
+    if (!editor) return;
+
+    if (editor.style.display === "none") {
+        editor.style.display = "flex";
+        if (btn) btn.innerHTML = '<i class="ph ph-caret-up"></i> ' + t("web.btn_close", "Fermer");
+        renderInstrumentsBag();
+    } else {
+        editor.style.display = "none";
+        if (btn) btn.innerHTML = '<i class="ph ph-gear"></i> ' + t("web.btn_configure", "Gérer la liste");
+    }
+}
+
+function renderInstrumentsBag() {
+    const container = document.getElementById("instruments-bag-list");
+    if (!container) return;
+    container.innerHTML = "";
+
+    const list = getInstrumentsList();
+    list.forEach(inst => {
+        const badge = document.createElement("span");
+        badge.className = "instrument-badge";
+        badge.innerText = inst;
+        badge.onclick = () => {
+            // Remplir le champ d'ajout rapide ou faire une action
+            const input = document.getElementById("new-instrument-name");
+            if (input) {
+                input.value = inst;
+                input.focus();
+            }
+        };
+
+        const delBtn = document.createElement("span");
+        delBtn.className = "btn-del-badge";
+        delBtn.innerText = " ×";
+        delBtn.onclick = (e) => {
+            e.stopPropagation();
+            deleteCustomInstrument(inst);
+        };
+        badge.appendChild(delBtn);
+
+        container.appendChild(badge);
+    });
+}
+
+function addCustomInstrument() {
+    const input = document.getElementById("new-instrument-name");
+    if (!input) return;
+    const val = input.value.trim();
+    if (!val) return;
+
+    let list = getInstrumentsList();
+    if (!list.includes(val)) {
+        list.push(val);
+        saveInstrumentsList(list);
+        input.value = "";
+        renderInstrumentsBag();
+        // Regénérer la liste des selects
+        renderRenameStemsList();
+    }
+}
+
+function deleteCustomInstrument(name) {
+    let list = getInstrumentsList();
+    list = list.filter(item => item !== name);
+    saveInstrumentsList(list);
+    renderInstrumentsBag();
+    // Regénérer la liste des selects
+    renderRenameStemsList();
+}
+
+async function submitPhysicalRename() {
+    const idx = editingLocalIndex;
+    if (idx === null || idx === undefined || idx === -1) return;
+
+    const item = localFiles[idx];
+    if (!item) return;
+
+    const newName = document.getElementById("rename-main-input").value.trim();
+    if (!newName) {
+        alert(t("web.msg_rename_error", "Nom invalide."));
+        return;
+    }
+
+    // Récupérer l'option stems
+    let renameStemsOption = "none";
+    let stemsMapping = [];
+
+    if (item.is_multitrack) {
+        renameStemsOption = document.querySelector('input[name="rename_stems_option"]:checked').value;
+        if (renameStemsOption !== "none") {
+            renameStemsData.forEach((stem, i) => {
+                const originalFilename = stem.path.split(/[\\/]/).pop();
+                const extIdx = originalFilename.lastIndexOf('.');
+                const ext = extIdx !== -1 ? originalFilename.substring(extIdx) : "";
+
+                let stemName = "";
+                let newFilename = "";
+
+                if (renameStemsOption === "as_stems") {
+                    stemName = stem.name || originalFilename.split('.')[0];
+                    newFilename = stemName;
+                } else if (renameStemsOption === "by_instrument") {
+                    const select = document.getElementById(`rename-stem-select-${i}`);
+                    const customInput = document.getElementById(`rename-stem-custom-${i}`);
+                    if (select) {
+                        if (select.value === "CUSTOM") {
+                            stemName = customInput ? customInput.value.trim() : "Custom";
+                        } else {
+                            stemName = select.value;
+                        }
+                    }
+                    if (!stemName) stemName = "Track";
+                    newFilename = `${newName} - ${stemName}`;
+                }
+
+                stemsMapping.push({
+                    old_path: stem.path,
+                    new_filename: newFilename, // Sans extension
+                    name: stemName // Nom d'affichage
+                });
+            });
+        }
+    }
+
+    // Confirmation
+    const confirmTitle = t("web.msg_rename_confirm_title", "Confirmer le renommage physique");
+    const confirmText = t("web.msg_rename_confirm_text", "Attention : cette action modifie réellement les fichiers et dossiers sur votre disque dur. Voulez-vous continuer ?");
+    
+    if (!confirm(`${confirmTitle}\n\n${confirmText}`)) {
+        return;
+    }
+
+    try {
+        console.log(`[RenamePhysical] Sending rename for index ${idx}: ${newName} (${renameStemsOption})`);
+        const res = await fetch(`/api/local/rename_physical/${idx}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                new_name: newName,
+                rename_stems_option: renameStemsOption,
+                stems_mapping: stemsMapping
+            })
+        });
+
+        const data = await res.json();
+        if (data && data.status === "ok") {
+            alert(t("web.msg_rename_success", "Média renommé physiquement avec succès !"));
+            
+            // Fermer la modale
+            document.getElementById("modal-physical-rename").close();
+
+            // Mettre à jour l'élément en cours d'édition s'il y a des champs d'édition ouverts
+            const isMT = document.getElementById("modal-multitrack").open;
+            const isLocal = document.getElementById("media-modal").open;
+
+            // Mettre à jour le chemin dans l'UI d'édition
+            if (isMT) {
+                const mtPath = document.getElementById("mt-path-display");
+                if (mtPath) mtPath.innerText = data.new_path;
+            } else if (isLocal) {
+                const lp = document.getElementById("local-path-display");
+                if (lp) lp.innerText = data.new_path;
+            }
+
+            // Mettre à jour localFiles en mémoire
+            if (localFiles && localFiles[idx]) {
+                localFiles[idx].path = data.new_path;
+                if (data.items) {
+                    localFiles = data.items;
+                }
+            }
+
+            // Recharger la bibliothèque
+            loadLocalFiles();
+            
+        } else {
+            alert((t("web.msg_rename_error", "Erreur lors du renommage physique : ")) + (data.message || "Inconnue"));
+        }
+    } catch (e) {
+        console.error("[RenamePhysical] Fetch error:", e);
+        alert(t("web.msg_rename_error", "Erreur lors du renommage physique : ") + e.toString());
+    }
+}
+
 function updateBulkProgress(current, total, text = null) {
     const container = document.getElementById('bulk-progress-container');
     const fill = document.getElementById('bulk-progress-fill');

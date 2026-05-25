@@ -1273,6 +1273,9 @@
                         <button class="btn-secondary" style="padding:2px 6px; font-size:0.75em; height:24px; border-color:#444;" onclick="relocateFromEdit('move')" title="Déplacer vers..." data-i18n-title="web.btn_move_to">
                             <i class="ph ph-arrows-out-cardinal" style="font-size:1.1em;"></i>
                         </button>
+                        <button class="btn-secondary" style="padding:2px 6px; font-size:0.75em; height:24px; border-color:#444;" onclick="openPhysicalRenameModal()" title="Renommer physiquement..." data-i18n-title="web.btn_physical_rename">
+                            <i class="ph ph-textbox" style="font-size:1.1em;"></i>
+                        </button>
                     </div>
                 </div>
 
@@ -1493,6 +1496,9 @@
                     </button>
                     <button class="btn-secondary" style="padding:2px 6px; font-size:0.75em; height:24px; border-color:#444;" onclick="relocateFromEdit('move')" title="Déplacer vers..." data-i18n-title="web.btn_move_to">
                         <i class="ph ph-arrows-out-cardinal" style="font-size:1.1em;"></i>
+                    </button>
+                    <button class="btn-secondary" style="padding:2px 6px; font-size:0.75em; height:24px; border-color:#444;" onclick="openPhysicalRenameModal()" title="Renommer physiquement..." data-i18n-title="web.btn_physical_rename">
+                        <i class="ph ph-textbox" style="font-size:1.1em;"></i>
                     </button>
                 </div>
             </div>
@@ -3226,6 +3232,83 @@
         <div class="modal-footer">
             <button class="btn-text" onclick="document.getElementById('modal-new-setlist').close()" data-i18n="web.btn_cancel">Annuler</button>
             <button class="btn-primary" onclick="createNewSetlist()" data-i18n="web.btn_validate">Créer</button>
+        </div>
+    </dialog>
+
+    <!-- MODAL: PHYSICAL RENAME (V10+) -->
+    <dialog id="modal-physical-rename" style="width: 750px; max-width: 95vw; height: 80vh; border: 1px solid #444; border-radius: 12px; background: #1a1a1a; color: #eee; padding: 0; overflow: hidden;">
+        <div class="modal-header" style="flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; border-bottom: 1px solid #333; background: #222;">
+            <h3 style="margin: 0; font-size: 1.2em; display: flex; align-items: center; gap: 8px;">
+                <i class="ph ph-textbox" style="color: var(--accent);"></i>
+                <span data-i18n="web.modal_rename_title">Renommage physique du média</span>
+            </h3>
+            <button class="btn-close-modal" style="background: transparent; border: none; color: #aaa; font-size: 1.5em; cursor: pointer;" onclick="document.getElementById('modal-physical-rename').close()">×</button>
+        </div>
+        <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 20px; font-size: 0.9em; display: flex; flex-direction: column; gap: 15px;">
+            <!-- Current Path Display -->
+            <div class="form-group">
+                <label data-i18n="web.lbl_current_path" style="font-weight: bold; color: #888; display: block; margin-bottom: 5px;">Chemin actuel :</label>
+                <div id="rename-current-path" style="font-family: monospace; font-size: 0.85em; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px; border: 1px solid #333; word-break: break-all; color: #aaa;"></div>
+            </div>
+
+            <!-- Main New Name -->
+            <div class="form-group">
+                <label id="rename-main-label" data-i18n="web.lbl_new_filename" style="font-weight: bold; display: block; margin-bottom: 5px;">Nouveau nom physique (sans extension)</label>
+                <input type="text" id="rename-main-input" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #444; background: #2a2a2a; color: #fff; box-sizing: border-box;" oninput="onRenameMainInputChanged()">
+            </div>
+
+            <!-- Multi-track Stems Options -->
+            <div id="rename-stems-container" style="display: none; border-top: 1px solid #333; padding-top: 15px; flex-direction: column; gap: 15px;">
+                <!-- Radio Options -->
+                <div class="form-group">
+                    <label style="font-weight: bold; display: block; margin-bottom: 8px;" data-i18n="web.lbl_rename_folder_and_stems">Options pour les stems :</label>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="radio" name="rename_stems_option" value="none" checked onchange="onRenameOptionChanged()">
+                            <span data-i18n="web.lbl_rename_folder_only">Renommer le dossier parent uniquement</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="radio" name="rename_stems_option" value="as_stems" onchange="onRenameOptionChanged()">
+                            <span data-i18n="web.lbl_rename_stems_as_display">Renommer les fichiers selon leurs noms d'affichage</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="radio" name="rename_stems_option" value="by_instrument" onchange="onRenameOptionChanged()">
+                            <span data-i18n="web.lbl_rename_stems_by_instrument">Renommer en attribuant une nomenclature d'instrument</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Stems Mapping List Area -->
+                <div id="rename-stems-mapping-area" style="display: none; flex-direction: column; gap: 10px; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; border: 1px solid #333;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h4 style="margin: 0; font-size: 1em;" data-i18n="web.lbl_stem_rename_list">Nomenclature des fichiers de stems</h4>
+                        <!-- Instrument List Manager button -->
+                        <button id="btn-toggle-instrument-editor" class="btn-secondary" style="padding: 2px 8px; font-size: 0.8em;" onclick="toggleInstrumentEditor()">
+                            <i class="ph ph-gear"></i> <span data-i18n="web.btn_configure">Gérer la liste</span>
+                        </button>
+                    </div>
+
+                    <!-- Custom Instrument Editor (Collapsed by default) -->
+                    <div id="instrument-list-editor" style="display: none; flex-direction: column; gap: 10px; margin-bottom: 15px; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px solid #444;">
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" id="new-instrument-name" style="flex: 1; padding: 6px; border: 1px solid #444; background: #2a2a2a; color: #fff; border-radius: 4px;" data-i18n-placeholder="web.lbl_add_custom_instrument" placeholder="Ajouter un instrument...">
+                            <button class="btn-primary" style="padding: 6px 12px;" onclick="addCustomInstrument()" data-i18n="web.btn_add_instrument">Ajouter</button>
+                        </div>
+                        <div id="instruments-bag-list" style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 120px; overflow-y: auto; padding: 5px; background: rgba(0,0,0,0.2); border-radius: 4px;">
+                            <!-- Bag elements injected here dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Stems Rows -->
+                    <div id="rename-stems-rows-container" style="display: flex; flex-direction: column; gap: 8px; max-height: 250px; overflow-y: auto; padding-right: 5px;">
+                        <!-- Rows dynamically generated here by JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer" style="flex-shrink: 0; padding: 15px 20px; border-top: 1px solid #333; background: #222; display: flex; justify-content: flex-end; gap: 10px;">
+            <button class="btn-text" onclick="document.getElementById('modal-physical-rename').close()" data-i18n="web.btn_cancel" style="color: #aaa; background: transparent; border: none; padding: 8px 16px; cursor: pointer;">Annuler</button>
+            <button class="btn-primary" onclick="submitPhysicalRename()" data-i18n="web.btn_validate" style="padding: 8px 20px; border-radius: 6px; font-weight: bold;">Enregistrer</button>
         </div>
     </dialog>
 
