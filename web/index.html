@@ -3236,7 +3236,7 @@
     </dialog>
 
     <!-- MODAL: PHYSICAL RENAME (V10+) -->
-    <dialog id="modal-physical-rename" style="width: 750px; max-width: 95vw; height: 80vh; border: 1px solid #444; border-radius: 12px; background: #1a1a1a; color: #eee; padding: 0; overflow: hidden;">
+    <dialog id="modal-physical-rename" style="width: 900px; max-width: 95vw; height: 80vh; border: 1px solid #444; border-radius: 12px; background: #1a1a1a; color: #eee; padding: 0; overflow: hidden;">
         <div class="modal-header" style="flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; border-bottom: 1px solid #333; background: #222;">
             <h3 style="margin: 0; font-size: 1.2em; display: flex; align-items: center; gap: 8px;">
                 <i class="ph ph-textbox" style="color: var(--accent);"></i>
@@ -3251,29 +3251,66 @@
                 <div id="rename-current-path" style="font-family: monospace; font-size: 0.85em; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px; border: 1px solid #333; word-break: break-all; color: #aaa;"></div>
             </div>
 
-            <!-- Main New Name -->
-            <div class="form-group">
+            <!-- Classic File Options (Single File) -->
+            <div id="rename-classic-container" class="form-group">
                 <label id="rename-main-label" data-i18n="web.lbl_new_filename" style="font-weight: bold; display: block; margin-bottom: 5px;">Nouveau nom physique (sans extension)</label>
-                <input type="text" id="rename-main-input" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #444; background: #2a2a2a; color: #fff; box-sizing: border-box;" oninput="onRenameMainInputChanged()">
+                <input type="text" id="rename-main-input-classic" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #444; background: #2a2a2a; color: #fff; box-sizing: border-box;">
             </div>
 
             <!-- Multi-track Stems Options -->
             <div id="rename-stems-container" style="display: none; border-top: 1px solid #333; padding-top: 15px; flex-direction: column; gap: 15px;">
-                <!-- Radio Options -->
-                <div class="form-group">
-                    <label style="font-weight: bold; display: block; margin-bottom: 8px;" data-i18n="web.lbl_rename_folder_and_stems">Options pour les stems :</label>
-                    <div style="display: flex; flex-direction: column; gap: 8px;">
-                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                            <input type="radio" name="rename_stems_option" value="none" checked onchange="onRenameOptionChanged()">
-                            <span data-i18n="web.lbl_rename_folder_only">Renommer le dossier parent uniquement</span>
-                        </label>
-                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                            <input type="radio" name="rename_stems_option" value="as_stems" onchange="onRenameOptionChanged()">
+                
+                <!-- Option A: Renommer le dossier parent -->
+                <div class="form-group" style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 6px; border: 1px solid #333; flex: none !important;">
+                    <label style="display: flex; align-items: center; gap: 8px; font-weight: bold; cursor: pointer; margin-bottom: 0;">
+                        <input type="checkbox" id="rename-folder-chk" checked onchange="onRenameFolderChkChanged()">
+                        <span data-i18n="web.lbl_rename_folder_chk">Renommer le dossier parent</span>
+                    </label>
+                    <div id="rename-folder-input-container" style="margin-top: 10px; padding-left: 24px; display: flex; flex-direction: column; gap: 5px;">
+                        <label id="rename-folder-label" data-i18n="web.lbl_new_foldername" style="font-size: 0.85em; color: #aaa; margin-bottom: 0;">Nouveau nom de dossier</label>
+                        <input type="text" id="rename-main-input" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #444; background: #2a2a2a; color: #fff; box-sizing: border-box; flex: none !important; height: auto !important;" oninput="onRenameMainInputChanged()">
+                    </div>
+                </div>
+
+                <!-- Option B: Renommer les fichiers et les étiquettes des stems -->
+                <div class="form-group" style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 6px; border: 1px solid #333; display: flex; flex-direction: column; gap: 12px; flex: none !important;">
+                    <label style="display: flex; align-items: center; gap: 8px; font-weight: bold; cursor: pointer; margin-bottom: 0;">
+                        <input type="checkbox" id="rename-stems-chk" onchange="onRenameStemsChkChanged()">
+                        <span data-i18n="web.lbl_rename_stems_chk">Renommer les fichiers de stems</span>
+                    </label>
+                    
+                    <label style="display: flex; align-items: center; gap: 8px; font-weight: bold; cursor: pointer; margin-bottom: 0;">
+                        <input type="checkbox" id="rename-stems-labels-chk" checked onchange="onRenameStemsLabelsChkChanged()">
+                        <span data-i18n="web.lbl_rename_stems_labels_chk">Renommer les étiquettes d'affichage dans le lecteur multipiste</span>
+                    </label>
+                    
+                    <div id="rename-stems-options-wrapper" style="display: none; flex-direction: column; gap: 10px; padding-left: 24px; border-left: 2px solid #444;">
+                        <!-- Radio Options -->
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 0;">
+                            <input type="radio" name="rename_stems_option" value="as_stems" checked onchange="onRenameOptionChanged()">
                             <span data-i18n="web.lbl_rename_stems_as_display">Renommer les fichiers selon leurs noms d'affichage</span>
                         </label>
-                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <!-- Champ pour le nom de base des stems -->
+                        <div id="rename-stems-base-container" style="display: flex; flex-direction: column; padding-left: 24px; margin-top: -4px; margin-bottom: 4px; gap: 4px;">
+                            <label style="font-size: 0.8em; color: #aaa; margin-bottom: 0;" data-i18n="web.lbl_stems_base_name">Nom de base des fichiers de stems :</label>
+                            <input type="text" id="rename-stems-base-input" style="width: 95%; padding: 4px 8px; border-radius: 4px; border: 1px solid #444; background: #2a2a2a; color: #fff; font-size: 0.85em; flex: none !important; height: auto !important;" oninput="updateStemsPreviews()">
+                        </div>
+
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 0;">
                             <input type="radio" name="rename_stems_option" value="by_instrument" onchange="onRenameOptionChanged()">
                             <span data-i18n="web.lbl_rename_stems_by_instrument">Renommer en attribuant une nomenclature d'instrument</span>
+                        </label>
+                        <!-- La case à cocher de préfixe pour l'instrument -->
+                        <div id="rename-prefix-container" style="display: none; align-items: center; padding-left: 24px; margin-top: -4px; margin-bottom: 4px;">
+                            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.8em; color: #aaa; cursor: pointer; margin-bottom: 0;">
+                                <input type="checkbox" id="rename-prefix-instrument-chk" onchange="updateStemsPreviews()">
+                                <span data-i18n="web.lbl_prefix_instrument">Afficher l'instrument/nom en premier (ex: Drums - Titre)</span>
+                            </label>
+                        </div>
+
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 0;">
+                            <input type="radio" name="rename_stems_option" value="individual" onchange="onRenameOptionChanged()">
+                            <span data-i18n="web.lbl_rename_stems_individually">Renommer chaque fichier de stem individuellement</span>
                         </label>
                     </div>
                 </div>

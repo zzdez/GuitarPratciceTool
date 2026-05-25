@@ -3798,7 +3798,8 @@ input[type="color"].stem-color-input::-moz-color-swatch {
     flex-direction: column;
 }
 
-#modal-physical-rename input[type="radio"] {
+#modal-physical-rename input[type="radio"],
+#modal-physical-rename input[type="checkbox"] {
     flex: none !important;
     width: auto !important;
     height: auto !important;

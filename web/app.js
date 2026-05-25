@@ -619,7 +619,7 @@ function onPlayerReady() {
 function onPlayerStateChange(event) {
     if (currentWebMode === 'GENERIC' || currentActivePlayer === 'youtube') {
         if (event.data === YT.PlayerState.ENDED) {
-            if (window.currentAutoreplay === true) {
+            if (window.currentAutoreplay === true && !(window.isLiveMode && isSetlistMode)) {
                 player.playVideo();
                 // TRAINING HOOK: Autoreplay YouTube
                 if (window.MediaTrainingManager && window.MediaTrainingManager.video && window.MediaTrainingManager.video.active) {
@@ -5040,7 +5040,7 @@ function initWaveSurfer() {
         wavesurfer.on('finish', () => {
             wavesurfer.pause();
             wavesurfer.seekTo(0);
-            if (window.currentAutoreplay === true) {
+            if (window.currentAutoreplay === true && !(window.isLiveMode && isSetlistMode)) {
                 wavesurfer.play();
                 updatePlayPauseUI();
                 // TRAINING HOOK: Local Audio Autoreplay
@@ -6474,7 +6474,7 @@ async function playLocal(index) {
         v.onended = () => {
             v.pause();
             v.currentTime = 0;
-            if (window.currentAutoreplay === true) {
+            if (window.currentAutoreplay === true && !(window.isLiveMode && isSetlistMode)) {
                 v.play();
             } else {
                 handleMediaEnd();
@@ -8677,7 +8677,7 @@ function setupVideoTimeline() {
 
     // --- NEW: Autoreplay & Training Hook ---
     v.onended = () => {
-        if (window.currentAutoreplay === true) {
+        if (window.currentAutoreplay === true && !(window.isLiveMode && isSetlistMode)) {
             v.currentTime = 0;
             v.play();
             // TRAINING HOOK: Local Video Autoreplay
@@ -8692,6 +8692,9 @@ function setupVideoTimeline() {
             v.currentTime = 0;
             v.pause();
             updatePlayPauseIcon('video', false);
+            if (window.isLiveMode && isSetlistMode) {
+                handleMediaEnd();
+            }
         }
     };
 }
@@ -9124,7 +9127,7 @@ setInterval(() => {
             // Fin atteinte !
             window.multitrack.pause();
             window.multitrack.setTime(0);
-            if (window.currentAutoreplay === true) {
+            if (window.currentAutoreplay === true && !(window.isLiveMode && isSetlistMode)) {
                 window.multitrack.play();
                 // TRAINING HOOK: Autoreplay
                 if (window.MediaTrainingManager && window.MediaTrainingManager['multitrack'] && window.MediaTrainingManager['multitrack'].active) {
@@ -12016,11 +12019,12 @@ async function openPhysicalRenameModal() {
     // Récupérer les éléments UI
     const modal = document.getElementById("modal-physical-rename");
     const currentPathEl = document.getElementById("rename-current-path");
-    const mainLabelEl = document.getElementById("rename-main-label");
-    const mainInputEl = document.getElementById("rename-main-input");
+    const classicContainer = document.getElementById("rename-classic-container");
+    const mainInputClassic = document.getElementById("rename-main-input-classic");
     const stemsContainer = document.getElementById("rename-stems-container");
+    const mainInputEl = document.getElementById("rename-main-input");
 
-    if (!modal || !currentPathEl || !mainInputEl) return;
+    if (!modal || !currentPathEl) return;
 
     // Remplir le chemin actuel
     currentPathEl.innerText = item.path;
@@ -12029,12 +12033,35 @@ async function openPhysicalRenameModal() {
     let baseName = "";
     if (item.is_multitrack) {
         baseName = item.path.split(/[\\/]/).pop();
-        mainLabelEl.innerText = t("web.lbl_new_foldername", "Nouveau nom de dossier");
+        if (classicContainer) classicContainer.style.display = "none";
         stemsContainer.style.display = "flex";
-        // Coche par défaut "none"
-        const radioNone = document.querySelector('input[name="rename_stems_option"][value="none"]');
-        if (radioNone) radioNone.checked = true;
-        document.getElementById("rename-stems-mapping-area").style.display = "none";
+        
+        // Configurer les cases à cocher par défaut (décochées pour éviter les fausses manipulations)
+        const folderChk = document.getElementById("rename-folder-chk");
+        if (folderChk) folderChk.checked = false;
+        
+        const stemsChk = document.getElementById("rename-stems-chk");
+        if (stemsChk) stemsChk.checked = false;
+
+        const stemsLabelsChk = document.getElementById("rename-stems-labels-chk");
+        if (stemsLabelsChk) stemsLabelsChk.checked = false;
+
+        // Coche par défaut radio "as_stems"
+        const radioAsStems = document.querySelector('input[name="rename_stems_option"][value="as_stems"]');
+        if (radioAsStems) radioAsStems.checked = true;
+
+        const prefixChk = document.getElementById("rename-prefix-instrument-chk");
+        if (prefixChk) prefixChk.checked = false;
+        
+        if (mainInputEl) mainInputEl.value = baseName;
+        
+        // Réinitialiser le conteneur et l'input de base des stems
+        const stemsBaseInput = document.getElementById("rename-stems-base-input");
+        if (stemsBaseInput) stemsBaseInput.value = baseName;
+        
+        // Ajuster l'affichage des sections
+        onRenameFolderChkChanged();
+        onRenameStemsOrLabelsChanged();
         
         // Charger les stems
         await loadPhysicalRenameStems(idx, item);
@@ -12042,12 +12069,12 @@ async function openPhysicalRenameModal() {
         const filename = item.path.split(/[\\/]/).pop();
         const dotIdx = filename.lastIndexOf('.');
         baseName = dotIdx !== -1 ? filename.substring(0, dotIdx) : filename;
-        mainLabelEl.innerText = t("web.lbl_new_filename", "Nouveau nom physique (sans extension)");
+        
+        if (classicContainer) classicContainer.style.display = "block";
         stemsContainer.style.display = "none";
+        if (mainInputClassic) mainInputClassic.value = baseName;
         renameStemsData = [];
     }
-
-    mainInputEl.value = baseName;
 
     // Appliquer les traductions à la modale
     if (window.translatePage) {
@@ -12080,23 +12107,62 @@ async function loadPhysicalRenameStems(idx, item) {
     }
 }
 
+function onRenameFolderChkChanged() {
+    const chk = document.getElementById("rename-folder-chk");
+    const container = document.getElementById("rename-folder-input-container");
+    if (chk && container) {
+        container.style.display = chk.checked ? "flex" : "none";
+    }
+    updateStemsPreviews();
+}
+
+function onRenameStemsChkChanged() {
+    onRenameStemsOrLabelsChanged();
+}
+
+function onRenameStemsLabelsChkChanged() {
+    onRenameStemsOrLabelsChanged();
+}
+
+function onRenameStemsOrLabelsChanged() {
+    const stemsChk = document.getElementById("rename-stems-chk");
+    const labelsChk = document.getElementById("rename-stems-labels-chk");
+    const wrapper = document.getElementById("rename-stems-options-wrapper");
+    const mappingArea = document.getElementById("rename-stems-mapping-area");
+
+    const anyChecked = (stemsChk?.checked || false) || (labelsChk?.checked || false);
+
+    if (wrapper && mappingArea) {
+        if (anyChecked) {
+            wrapper.style.display = "flex";
+            mappingArea.style.display = "flex";
+            renderRenameStemsList();
+        } else {
+            wrapper.style.display = "none";
+            mappingArea.style.display = "none";
+        }
+    }
+    updateStemsPreviews();
+}
+
 function onRenameOptionChanged() {
     const option = document.querySelector('input[name="rename_stems_option"]:checked').value;
-    const mappingArea = document.getElementById("rename-stems-mapping-area");
+    const prefixContainer = document.getElementById("rename-prefix-container");
+    const stemsBaseContainer = document.getElementById("rename-stems-base-container");
     
-    if (option === "none") {
-        mappingArea.style.display = "none";
-    } else {
-        mappingArea.style.display = "flex";
-        renderRenameStemsList();
+    if (prefixContainer) {
+        prefixContainer.style.display = (option === "by_instrument") ? "flex" : "none";
     }
+
+    if (stemsBaseContainer) {
+        stemsBaseContainer.style.display = (option === "as_stems") ? "flex" : "none";
+    }
+
+    renderRenameStemsList();
 }
 
 function onRenameMainInputChanged() {
-    const option = document.querySelector('input[name="rename_stems_option"]:checked').value;
-    if (option !== "none") {
-        updateStemsPreviews();
-    }
+    updateStemsPreviews();
 }
 
 function renderRenameStemsList() {
@@ -12147,17 +12213,34 @@ function renderRenameStemsList() {
             select.appendChild(optCustom);
 
             // Essayer de trouver une correspondance intelligente par défaut
-            let matched = "Rhythm";
+            let matched = "";
             const lowerName = (stem.name || "").toLowerCase();
             const lowerFile = originalBase.toLowerCase();
-            
-            if (lowerName.includes("drum") || lowerFile.includes("drum") || lowerName.includes("batterie")) matched = "Drums";
-            else if (lowerName.includes("bass") || lowerFile.includes("bass") || lowerName.includes("basse")) matched = "Bass";
-            else if (lowerName.includes("vocal") || lowerFile.includes("vocal") || lowerName.includes("chant") || lowerName.includes("voice") || lowerName.includes("lead voc")) matched = "Vocals";
-            else if (lowerName.includes("lead") || lowerFile.includes("lead") || lowerName.includes("solo")) matched = "Lead";
-            else if (lowerName.includes("key") || lowerFile.includes("key") || lowerName.includes("synth") || lowerName.includes("piano") || lowerName.includes("clavier")) matched = "Keys";
-            else if (lowerName.includes("acoustic") || lowerFile.includes("acoustic") || lowerName.includes("folk")) matched = "Acoustic";
-            else if (lowerName.includes("click") || lowerFile.includes("click") || lowerName.includes("metronome") || lowerName.includes("tempo")) matched = "Click";
+
+            // Parcourir la liste dynamique des instruments (y compris les customs !)
+            for (const inst of instruments) {
+                const lowerInst = inst.toLowerCase();
+                if (lowerName.includes(lowerInst) || lowerFile.includes(lowerInst)) {
+                    matched = inst;
+                    break;
+                }
+            }
+
+            // Fallback synonymes si aucune correspondance directe dynamique
+            if (!matched) {
+                if (lowerName.includes("drum") || lowerFile.includes("drum") || lowerName.includes("batterie")) matched = "Drums";
+                else if (lowerName.includes("bass") || lowerFile.includes("bass") || lowerName.includes("basse")) matched = "Bass";
+                else if (lowerName.includes("vocal") || lowerFile.includes("vocal") || lowerName.includes("chant") || lowerName.includes("voice") || lowerName.includes("lead voc")) matched = "Vocals";
+                else if (lowerName.includes("lead") || lowerFile.includes("lead") || lowerName.includes("solo")) matched = "Lead";
+                else if (lowerName.includes("key") || lowerFile.includes("key") || lowerName.includes("synth") || lowerName.includes("piano") || lowerName.includes("clavier")) matched = "Keys";
+                else if (lowerName.includes("acoustic") || lowerFile.includes("acoustic") || lowerName.includes("folk")) matched = "Acoustic";
+                else if (lowerName.includes("click") || lowerFile.includes("click") || lowerName.includes("metronome") || lowerName.includes("tempo")) matched = "Click";
+            }
+
+            // Si toujours pas trouvé, on se replie sur "Rhythm" (ou le premier disponible)
+            if (!matched) {
+                matched = instruments.includes("Rhythm") ? "Rhythm" : (instruments[0] || "Other");
+            }
             
             if (instruments.includes(matched)) {
                 select.value = matched;
@@ -12176,6 +12259,16 @@ function renderRenameStemsList() {
             customInput.placeholder = "...";
             customInput.oninput = () => updateStemsPreviews();
             row.appendChild(customInput);
+        } else if (option === "individual") {
+            // Input individuel de saisie libre
+            const indInput = document.createElement("input");
+            indInput.type = "text";
+            indInput.id = `rename-stem-individual-input-${i}`;
+            indInput.className = "custom-inst-input";
+            indInput.style.flex = "1";
+            indInput.value = stem.name || originalBase; // Nom d'affichage ou base
+            indInput.oninput = () => updateStemsPreviews();
+            row.appendChild(indInput);
         }
 
         // Aperçu du résultat
@@ -12207,8 +12300,28 @@ function onStemSelectorChanged(idx) {
 }
 
 function updateStemsPreviews() {
+    const idx = editingLocalIndex;
+    if (idx === null || idx === undefined || idx === -1) return;
+    const item = localFiles[idx];
+    if (!item) return;
+
+    const renameFolder = document.getElementById("rename-folder-chk")?.checked || false;
+    const renameStems = document.getElementById("rename-stems-chk")?.checked || false;
+    const renameLabels = document.getElementById("rename-stems-labels-chk")?.checked || false;
+    
+    // Déterminer le nom du dossier parent
+    let folderPart = item.path.split(/[\\/]/).pop();
+    if (renameFolder) {
+        const folderNameVal = document.getElementById("rename-main-input").value.trim();
+        if (folderNameVal) {
+            folderPart = folderNameVal;
+        }
+    }
+
     const option = document.querySelector('input[name="rename_stems_option"]:checked').value;
-    const folderName = document.getElementById("rename-main-input").value.trim();
+    const prefixFirst = document.getElementById("rename-prefix-instrument-chk")?.checked || false;
+    const stemsBaseInput = document.getElementById("rename-stems-base-input");
+    const stemsBaseName = stemsBaseInput ? stemsBaseInput.value.trim() : "";
 
     renameStemsData.forEach((stem, i) => {
         const previewEl = document.getElementById(`rename-stem-preview-${i}`);
@@ -12217,29 +12330,47 @@ function updateStemsPreviews() {
         const originalFilename = stem.path.split(/[\\/]/).pop();
         const extIdx = originalFilename.lastIndexOf('.');
         const ext = extIdx !== -1 ? originalFilename.substring(extIdx) : "";
+        const originalBase = extIdx !== -1 ? originalFilename.substring(0, extIdx) : originalFilename;
 
         let stemName = "";
         let finalFilename = "";
 
-        if (option === "as_stems") {
-            stemName = stem.name || originalFilename.split('.')[0];
-            finalFilename = stemName;
-        } else if (option === "by_instrument") {
-            const select = document.getElementById(`rename-stem-select-${i}`);
-            const customInput = document.getElementById(`rename-stem-custom-${i}`);
-            
-            if (select) {
-                if (select.value === "CUSTOM") {
-                    stemName = customInput ? customInput.value.trim() : "Custom";
+        if (!renameStems && !renameLabels) {
+            finalFilename = originalBase;
+        } else {
+            if (option === "as_stems") {
+                stemName = stem.name || originalBase;
+                if (stemsBaseName) {
+                    finalFilename = `${stemsBaseName} - ${stemName}`;
                 } else {
-                    stemName = select.value;
+                    finalFilename = stemName;
                 }
+            } else if (option === "by_instrument") {
+                const select = document.getElementById(`rename-stem-select-${i}`);
+                const customInput = document.getElementById(`rename-stem-custom-${i}`);
+                
+                if (select) {
+                    if (select.value === "CUSTOM") {
+                        stemName = customInput ? customInput.value.trim() : "Custom";
+                    } else {
+                        stemName = select.value;
+                    }
+                }
+                if (!stemName) stemName = "Track";
+                if (folderPart) {
+                    finalFilename = prefixFirst ? `${stemName} - ${folderPart}` : `${folderPart} - ${stemName}`;
+                } else {
+                    finalFilename = stemName;
+                }
+            } else if (option === "individual") {
+                const indInput = document.getElementById(`rename-stem-individual-input-${i}`);
+                stemName = indInput ? indInput.value.trim() : "";
+                if (!stemName) stemName = originalBase;
+                finalFilename = stemName;
             }
-            if (!stemName) stemName = "Track";
-            finalFilename = `${folderName} - ${stemName}`;
         }
 
-        previewEl.innerText = finalFilename + ext;
+        previewEl.innerText = `${folderPart} \\ ${finalFilename}${ext}`;
     });
 }
 
@@ -12323,30 +12454,64 @@ async function submitPhysicalRename() {
     const item = localFiles[idx];
     if (!item) return;
 
-    const newName = document.getElementById("rename-main-input").value.trim();
-    if (!newName) {
-        alert(t("web.msg_rename_error", "Nom invalide."));
-        return;
-    }
-
-    // Récupérer l'option stems
+    let newFolderName = "";
+    let renameFolder = false;
+    let renameStems = false;
     let renameStemsOption = "none";
     let stemsMapping = [];
 
-    if (item.is_multitrack) {
-        renameStemsOption = document.querySelector('input[name="rename_stems_option"]:checked').value;
-        if (renameStemsOption !== "none") {
+    if (!item.is_multitrack) {
+        // --- CAS CLASSIQUE (FICHIER UNIQUE) ---
+        newFolderName = document.getElementById("rename-main-input-classic").value.trim();
+        if (!newFolderName) {
+            alert(t("web.msg_rename_error", "Nom invalide."));
+            return;
+        }
+        renameFolder = true;
+    } else {
+        // --- CAS MULTIPISTE (DOSSIER + STEMS) ---
+        renameFolder = document.getElementById("rename-folder-chk")?.checked || false;
+        renameStems = document.getElementById("rename-stems-chk")?.checked || false;
+        const renameStemsLabels = document.getElementById("rename-stems-labels-chk")?.checked || false;
+
+        if (!renameFolder && !renameStems && !renameStemsLabels) {
+            alert(t("web.msg_rename_select_option", "Veuillez cocher au moins une option (Renommer le dossier, les fichiers de stems ou les étiquettes)."));
+            return;
+        }
+
+        if (renameFolder) {
+            newFolderName = document.getElementById("rename-main-input").value.trim();
+            if (!newFolderName) {
+                alert(t("web.msg_rename_error", "Nom de dossier invalide."));
+                return;
+            }
+        } else {
+            // Conserver le nom actuel
+            newFolderName = item.path.split(/[\\/]/).pop();
+        }
+
+        if (renameStems || renameStemsLabels) {
+            renameStemsOption = document.querySelector('input[name="rename_stems_option"]:checked').value;
+            const prefixFirst = document.getElementById("rename-prefix-instrument-chk")?.checked || false;
+            const stemsBaseInput = document.getElementById("rename-stems-base-input");
+            const stemsBaseName = stemsBaseInput ? stemsBaseInput.value.trim() : "";
+
             renameStemsData.forEach((stem, i) => {
                 const originalFilename = stem.path.split(/[\\/]/).pop();
                 const extIdx = originalFilename.lastIndexOf('.');
                 const ext = extIdx !== -1 ? originalFilename.substring(extIdx) : "";
+                const originalBase = extIdx !== -1 ? originalFilename.substring(0, extIdx) : originalFilename;
 
                 let stemName = "";
                 let newFilename = "";
 
                 if (renameStemsOption === "as_stems") {
-                    stemName = stem.name || originalFilename.split('.')[0];
-                    newFilename = stemName;
+                    stemName = stem.name || originalBase;
+                    if (stemsBaseName) {
+                        newFilename = `${stemsBaseName} - ${stemName}`;
+                    } else {
+                        newFilename = stemName;
+                    }
                 } else if (renameStemsOption === "by_instrument") {
                     const select = document.getElementById(`rename-stem-select-${i}`);
                     const customInput = document.getElementById(`rename-stem-custom-${i}`);
@@ -12358,7 +12523,16 @@ async function submitPhysicalRename() {
                         }
                     }
                     if (!stemName) stemName = "Track";
-                    newFilename = `${newName} - ${stemName}`;
+                    if (newFolderName) {
+                        newFilename = prefixFirst ? `${stemName} - ${newFolderName}` : `${newFolderName} - ${stemName}`;
+                    } else {
+                        newFilename = stemName;
+                    }
+                } else if (renameStemsOption === "individual") {
+                    const indInput = document.getElementById(`rename-stem-individual-input-${i}`);
+                    stemName = indInput ? indInput.value.trim() : "";
+                    if (!stemName) stemName = originalBase;
+                    newFilename = stemName;
                 }
 
                 stemsMapping.push({
@@ -12379,12 +12553,16 @@ async function submitPhysicalRename() {
     }
 
     try {
-        console.log(`[RenamePhysical] Sending rename for index ${idx}: ${newName} (${renameStemsOption})`);
+        const renameStemsLabels = document.getElementById("rename-stems-labels-chk")?.checked || false;
+        console.log(`[RenamePhysical] Sending rename for index ${idx}: Folder=${renameFolder} (${newFolderName}), Stems=${renameStems} (${renameStemsOption}), Labels=${renameStemsLabels}`);
         const res = await fetch(`/api/local/rename_physical/${idx}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                new_name: newName,
+                new_name: newFolderName,
+                rename_folder: renameFolder,
+                rename_stems: renameStems,
+                rename_stems_labels: renameStemsLabels,
                 rename_stems_option: renameStemsOption,
                 stems_mapping: stemsMapping
             })

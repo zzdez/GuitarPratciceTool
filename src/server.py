@@ -2603,12 +2603,19 @@ async def rename_physical_media(index: int, data: Dict):
 
         else:
             # --- CAS 2 : MULTIPISTE (DOSSIER) ---
-            new_dir_abs = os.path.normpath(os.path.join(parent_dir, new_name))
-            if os.path.exists(new_dir_abs) and new_dir_abs.lower() != old_path_abs.lower():
-                return {"status": "error", "message": f"Un dossier nommé '{new_name}' existe déjà."}
+            rename_folder = data.get("rename_folder", True)
+            rename_stems = data.get("rename_stems", True)
+            rename_stems_labels = data.get("rename_stems_labels", True)
 
-            rename_stems_option = data.get("rename_stems_option", "none") # "none", "as_stems", "by_instrument"
-            stems_mapping = data.get("stems_mapping", []) # list of dict: {old_path, new_filename, name}
+            if rename_folder:
+                new_dir_abs = os.path.normpath(os.path.join(parent_dir, new_name))
+                if os.path.exists(new_dir_abs) and new_dir_abs.lower() != old_path_abs.lower():
+                    return {"status": "error", "message": f"Un dossier nommé '{new_name}' existe déjà."}
+            else:
+                new_dir_abs = old_path_abs
+
+            rename_stems_option = data.get("rename_stems_option", "none") if (rename_stems or rename_stems_labels) else "none"
+            stems_mapping = data.get("stems_mapping", []) if (rename_stems or rename_stems_labels) else []
 
             # Charger les métadonnées internes du dossier multitrack
             settings_file = os.path.join(old_path_abs, "airstep_meta.json")
@@ -2623,8 +2630,8 @@ async def rename_physical_media(index: int, data: Dict):
             current_stems_portable = current_item.get("stems", [])
             current_stems_abs = [resolve_portable_path(s) for s in current_stems_portable]
 
-            # Étape A : Renommer physiquement les fichiers de stems individuels à l'intérieur du dossier d'origine
-            if rename_stems_option != "none" and current_stems_abs and stems_mapping:
+            # Étape A : Traitement des stems (fichiers physiques et/ou étiquettes JSON)
+            if (rename_stems or rename_stems_labels) and current_stems_abs and stems_mapping:
                 for mapping in stems_mapping:
                     m_old_path_abs = resolve_portable_path(mapping.get("old_path", ""))
                     m_new_filename = mapping.get("new_filename", "").strip()
@@ -2633,28 +2640,30 @@ async def rename_physical_media(index: int, data: Dict):
                     # Nettoyer le nom de fichier
                     m_new_filename = re.sub(r'[\\/*?:"<>|]', '_', m_new_filename)
 
-                    if m_old_path_abs and os.path.exists(m_old_path_abs) and m_new_filename:
-                        m_ext = os.path.splitext(m_old_path_abs)[1]
-                        m_new_path_abs = os.path.normpath(os.path.join(old_path_abs, m_new_filename + m_ext))
+                    if m_old_path_abs and os.path.exists(m_old_path_abs):
+                        final_stem_abs = m_old_path_abs
                         
-                        if m_new_path_abs.lower() != m_old_path_abs.lower():
-                            # Éviter écrasement si conflit
-                            if os.path.exists(m_new_path_abs):
-                                base_s, ext_s = os.path.splitext(m_new_filename)
-                                ct = 1
-                                while os.path.exists(os.path.normpath(os.path.join(old_path_abs, f"{base_s}_{ct}{m_ext}"))):
-                                    ct += 1
-                                m_new_path_abs = os.path.normpath(os.path.join(old_path_abs, f"{base_s}_{ct}{m_ext}"))
+                        # A.1 Renommage physique du fichier stem si demandé
+                        if rename_stems and m_new_filename:
+                            m_ext = os.path.splitext(m_old_path_abs)[1]
+                            m_new_path_abs = os.path.normpath(os.path.join(old_path_abs, m_new_filename + m_ext))
                             
-                            os.rename(m_old_path_abs, m_new_path_abs)
-                            logging.info(f"[RenamePhysical] Renamed stem: {m_old_path_abs} -> {m_new_path_abs}")
-                            final_stem_abs = m_new_path_abs
-                        else:
-                            final_stem_abs = m_old_path_abs
-                        
+                            if m_new_path_abs.lower() != m_old_path_abs.lower():
+                                # Éviter écrasement si conflit
+                                if os.path.exists(m_new_path_abs):
+                                    base_s, ext_s = os.path.splitext(m_new_filename)
+                                    ct = 1
+                                    while os.path.exists(os.path.normpath(os.path.join(old_path_abs, f"{base_s}_{ct}{m_ext}"))):
+                                        ct += 1
+                                    m_new_path_abs = os.path.normpath(os.path.join(old_path_abs, f"{base_s}_{ct}{m_ext}"))
+                                
+                                os.rename(m_old_path_abs, m_new_path_abs)
+                                logging.info(f"[RenamePhysical] Renamed stem file: {m_old_path_abs} -> {m_new_path_abs}")
+                                final_stem_abs = m_new_path_abs
+
                         new_stems_portable.append(to_portable_path(final_stem_abs))
 
-                        # Mettre à jour l'airstep_meta.json pour cette piste
+                        # A.2 Mettre à jour l'airstep_meta.json pour cette piste
                         if "tracks" not in mt_settings:
                             mt_settings["tracks"] = []
 
@@ -2662,13 +2671,14 @@ async def rename_physical_media(index: int, data: Dict):
                         for track in mt_settings["tracks"]:
                             if resolve_portable_path(track.get("path", "")) == m_old_path_abs:
                                 track["path"] = to_portable_path(final_stem_abs)
-                                track["name"] = m_new_name
+                                if rename_stems_labels:
+                                    track["name"] = m_new_name
                                 found_track = True
                                 break
                         if not found_track:
                             mt_settings["tracks"].append({
                                 "path": to_portable_path(final_stem_abs),
-                                "name": m_new_name,
+                                "name": m_new_name if rename_stems_labels else os.path.basename(final_stem_abs).split('.')[0],
                                 "volume": 1.0,
                                 "pan": 0.0,
                                 "mute": False,
@@ -2696,9 +2706,12 @@ async def rename_physical_media(index: int, data: Dict):
                     logging.error(f"[RenamePhysical] Failed to write airstep_meta.json before rename: {esf}")
 
             # Étape B : Renommer physiquement le dossier parent
-            logging.warning(f"[RenamePhysical] Renaming directory: {old_path_abs} -> {new_dir_abs}")
-            os.rename(old_path_abs, new_dir_abs)
-            new_path_abs = new_dir_abs
+            if rename_folder and new_dir_abs.lower() != old_path_abs.lower():
+                logging.warning(f"[RenamePhysical] Renaming directory: {old_path_abs} -> {new_dir_abs}")
+                os.rename(old_path_abs, new_dir_abs)
+                new_path_abs = new_dir_abs
+            else:
+                new_path_abs = old_path_abs
 
             # Ajuster les chemins portables des stems avec le nouveau nom du dossier
             if new_stems_portable:
