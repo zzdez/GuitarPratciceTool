@@ -179,6 +179,8 @@
         "lbl_title": "Titre",
         "lbl_artist": "Artiste",
         "lbl_album": "Album",
+        "lbl_no_media_title": "Aucun média actif",
+        "lbl_no_media_desc": "Sélectionnez un morceau dans la liste pour démarrer la lecture",
         "btn_playpause": "Lecture/Pause",
         "btn_slow": "Ralentir",
         "btn_fast": "Accélérer",

@@ -1,7 +1,7 @@
 let currentMode = "WIN";
 let websocket;
 let currentProfile = null;
-let currentActivePlayer = 'youtube';
+let currentActivePlayer = null;
 let isInitialSettingsLoad = true;
 let sidebarUserOverride = false;
 let isDraggingLayout = false; // Global lock to prevent sorting during resize
@@ -574,6 +574,25 @@ function initTabsDragAndDrop() {
         else if (firstTab.id === "tab-apps") viewName = "apps";
         
         switchView(viewName, false);
+    }
+}
+
+function showActivePlayerContainer(playerType) {
+    const placeholder = document.getElementById("media-placeholder");
+    const videoContainer = document.getElementById("video-container");
+    const audioContainer = document.getElementById("audio-player-container");
+    const multitrackContainer = document.getElementById("multitrack-container");
+    
+    if (placeholder) placeholder.style.display = playerType ? "none" : "flex";
+    
+    if (videoContainer) {
+        videoContainer.style.display = (playerType === 'youtube' || playerType === 'local_video' || playerType === 'generic') ? "flex" : "none";
+    }
+    if (audioContainer) {
+        audioContainer.style.display = (playerType === 'waveform') ? "flex" : "none";
+    }
+    if (multitrackContainer) {
+        multitrackContainer.style.display = (playerType === 'multitrack') ? "flex" : "none";
     }
 }
 
@@ -4391,13 +4410,8 @@ function playTrack(track) {
     window.currentAutoreplay = isAutoreplay; // Global state for end-of-track logic
     updatePlaybackOptionsUI(isAutoreplay, isAutoplay);
 
-    // Reset Containers
-    const videoContainer = document.getElementById("video-container");
-    const audioContainer = document.getElementById("audio-player-container");
-    const multitrackContainer = document.getElementById("multitrack-container");
-    videoContainer.style.display = "flex";
-    audioContainer.style.display = "none";
-    if (multitrackContainer) multitrackContainer.style.display = "none";
+    // Reset Containers V37
+    showActivePlayerContainer('youtube');
 
     // Volume Default logic
     const trackVolume = (track.volume !== undefined) ? parseInt(track.volume, 10) : 100;
@@ -5485,6 +5499,13 @@ async function loadMultitrackSettings(file) {
             if (settings.autoreplay !== undefined) file.autoreplay = settings.autoreplay;
 
             settings.tracks.forEach((trackData, i) => {
+                if (i < file.stems.length) {
+                    if (trackData.name) {
+                        file.stems[i].name = trackData.name;
+                        const titleSpan = document.getElementById(`mt-title-${i}`);
+                        if (titleSpan) titleSpan.innerText = trackData.name;
+                    }
+                }
                 const muteBtn = document.getElementById(`mt-mute-${i}`);
                 const soloBtn = document.getElementById(`mt-solo-${i}`);
                 const hideBtn = document.getElementById(`mt-hide-${i}`);
@@ -5715,24 +5736,34 @@ async function playLocal(index) {
             file.stems = file.stems.map(s => ({ path: s, name: s.split(/[\\/]/).pop().replace(/\.[^/.]+$/, "") }));
         }
 
-        // Restore Stem Order from localStorage
+        // Restore Stem Order & Names from Backend (or localStorage fallback)
         try {
-            const saved = localStorage.getItem(getMultitrackStorageKey(file));
-            if (saved) {
-                const settings = JSON.parse(saved);
-                if (settings.tracks && Array.isArray(settings.tracks) && settings.tracks.length === file.stems.length) {
-                    const orderedStems = [];
-                    const availableStems = [...file.stems];
-                    settings.tracks.forEach(trackData => {
-                        const matchIdx = availableStems.findIndex(s => s.path === trackData.path);
-                        if (matchIdx !== -1) {
-                            orderedStems.push(availableStems.splice(matchIdx, 1)[0]);
-                        }
-                    });
-                    file.stems = orderedStems.concat(availableStems);
-                }
+            let settings = null;
+            const resp = await fetch(`/api/local/multitrack_settings/${index}`);
+            if (resp.ok) {
+                settings = await resp.json();
             }
-        } catch (e) { console.error("Order restore failed", e); }
+            if (!settings || !settings.tracks) {
+                const saved = localStorage.getItem(getMultitrackStorageKey(file));
+                if (saved) settings = JSON.parse(saved);
+            }
+
+            if (settings && settings.tracks && settings.tracks.length === file.stems.length) {
+                const orderedStems = [];
+                const availableStems = [...file.stems];
+                settings.tracks.forEach(trackData => {
+                    const matchIdx = availableStems.findIndex(s => s.path === trackData.path);
+                    if (matchIdx !== -1) {
+                        const stemObj = availableStems.splice(matchIdx, 1)[0];
+                        if (trackData.name) {
+                            stemObj.name = trackData.name;
+                        }
+                        orderedStems.push(stemObj);
+                    }
+                });
+                file.stems = orderedStems.concat(availableStems);
+            }
+        } catch (e) { console.error("Order and names restore failed", e); }
 
         // --- MULTITRACK MODE ---
         const target = getProfile(file, "Web Audio Local");
@@ -5745,12 +5776,8 @@ async function playLocal(index) {
         updateHeaderScaleDisplay(file);
 
 
-        videoContainer.style.display = "none";
-        audioContainer.style.display = "none";
+        showActivePlayerContainer('multitrack');
         document.getElementById("video-controls-container").style.display = "none";
-
-        const multitrackContainer = document.getElementById("multitrack-container");
-        if (multitrackContainer) multitrackContainer.style.display = "flex";
 
         // Fix Loop Bar persistence: Hide Video Timeline when switching to Multitrack
         const valT = document.getElementById("video-timeline-container");
@@ -6061,6 +6088,7 @@ async function playLocal(index) {
                     if (newName) {
                         file.stems[i].name = newName;
                         titleSpan.innerText = newName;
+                        saveMultitrackSettings(file); // Persist settings on rename
                     }
                     input.replaceWith(titleSpan);
                 };
@@ -6280,8 +6308,7 @@ async function playLocal(index) {
             globalCover.src = `/api/local/art/${index}?t=${Date.now()}`;
         }
 
-        videoContainer.style.display = "none";
-        audioContainer.style.display = "flex";
+        showActivePlayerContainer('waveform');
         document.getElementById("video-controls-container").style.display = "none";
         // Hide Custom Timeline
         const valT = document.getElementById("video-timeline-container");
@@ -6289,9 +6316,6 @@ async function playLocal(index) {
 
         const vPitch = document.getElementById("video-pitch-control-inline");
         if (vPitch) vPitch.style.display = "none";
-
-        const multitrackContainer = document.getElementById("multitrack-container");
-        if (multitrackContainer) multitrackContainer.style.display = "none";
 
         v.style.display = "none";
 
@@ -6376,12 +6400,9 @@ async function playLocal(index) {
             globalCover.src = `/api/local/art/${index}?t=${Date.now()}`;
         }
 
-        videoContainer.style.display = "flex";
-        audioContainer.style.display = "none";
+        showActivePlayerContainer('local_video');
         v.style.display = "block";
         document.getElementById("video-controls-container").style.display = "flex";
-        const multitrackContainer = document.getElementById("multitrack-container");
-        if (multitrackContainer) multitrackContainer.style.display = "none";
 
         // Show Custom Timeline
         const timeline = document.getElementById("video-timeline-container");
@@ -12128,27 +12149,37 @@ function renderLibraryManagerItems() {
         const isSelected = libManagerSelectedIndices.has(originalIndex);
         
         const div = document.createElement("div");
-        div.className = "bulk-item-row";
-        div.style.display = "flex";
-        div.style.alignItems = "center";
-        div.style.padding = "8px";
-        div.style.borderBottom = "1px solid #222";
-        div.style.gap = "10px";
+        div.className = "bulk-item-row" + (isSelected ? " selected" : "");
 
         const chk = document.createElement("input");
         chk.type = "checkbox";
         chk.checked = isSelected;
         chk.onchange = (e) => {
-            if (e.target.checked) libManagerSelectedIndices.add(originalIndex);
-            else libManagerSelectedIndices.delete(originalIndex);
+            if (e.target.checked) {
+                libManagerSelectedIndices.add(originalIndex);
+                div.classList.add("selected");
+            } else {
+                libManagerSelectedIndices.delete(originalIndex);
+                div.classList.remove("selected");
+            }
             updateLibManagerStatus();
-        }
+        };
+
+        // Rendre toute la ligne cliquable pour cocher/décocher
+        div.onclick = (e) => {
+            if (e.target !== chk) {
+                chk.checked = !chk.checked;
+                chk.dispatchEvent(new Event('change'));
+            }
+        };
 
         const info = document.createElement("div");
-        info.style.flex = "1";
-        info.innerHTML = `<div style="font-weight:bold; font-size:0.9em;">${item.title}</div>
-                          <div style="font-size:0.75em; color:#888;">${item.artist || "---"}</div>
-                          <div style="font-size:0.75em; color:#555; word-break:break-all;">${item.path}</div>`;
+        info.className = "bulk-item-info";
+        info.innerHTML = `
+            <div class="bulk-item-title">${item.title}</div>
+            <div class="bulk-item-artist">${item.artist || "---"}</div>
+            <div class="bulk-item-path">${item.path}</div>
+        `;
 
         div.appendChild(chk);
         div.appendChild(info);

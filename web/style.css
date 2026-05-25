@@ -203,7 +203,8 @@ header {
     display: flex;
     flex-direction: column;
     overflow: hidden; /* V60: Scroll Moved to table-wrapper */
-    height: calc(100vh - 76px); /* Fixed Height below header */
+    height: calc(100vh - 82px); /* Fixed Height below header V14 (82px) */
+    box-sizing: border-box;
 }
 
 /* ==========================================
@@ -504,12 +505,13 @@ iframe {
 /* SIDEBAR COMPONENTS */
 .sidebar-section {
     background: #222;
-    padding: 6px;
+    padding: 6px 6px 16px 6px; /* V66: Added bottom safe area to prevent truncation */
     border-radius: 8px;
     display: flex; /* V60 Flex Layout */
     flex-direction: column;
     height: 100%;
     min-height: 0;
+    box-sizing: border-box;
 }
 
 .section-title {
@@ -3456,6 +3458,224 @@ input[type="color"].stem-color-input::-moz-color-swatch {
     border-color: var(--accent);
     color: var(--accent);
     background: rgba(255, 255, 255, 0.02);
+}
+
+/* ==========================================
+   MASS TREATMENT & BULK DIALOGS (V35)
+   ========================================== */
+.modal-advanced-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    height: 100%;
+    min-height: 0;
+}
+
+.bulk-control-panel {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    box-sizing: border-box;
+}
+
+.bulk-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    width: 100%;
+}
+
+.bulk-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.bulk-field label {
+    font-size: 0.68rem;
+    color: #888;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.bulk-field input, 
+.bulk-field select {
+    background: #1e1e1e;
+    border: 1px solid #333;
+    color: #fff;
+    padding: 5px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    width: 100%;
+    box-sizing: border-box;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.bulk-field input:focus, 
+.bulk-field select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(187, 134, 252, 0.15);
+    outline: none;
+}
+
+.bulk-dest-row {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+}
+
+.bulk-list-container {
+    flex: 1;
+    overflow-y: auto;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    background: #161616;
+    max-height: 260px;
+    min-height: 150px;
+}
+
+.bulk-item-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    transition: background-color 0.2s ease;
+    cursor: pointer;
+    user-select: none;
+}
+
+.bulk-item-row:hover {
+    background-color: rgba(255, 255, 255, 0.02);
+}
+
+.bulk-item-row.selected {
+    background-color: rgba(187, 134, 252, 0.06);
+    border-left: 3px solid var(--accent);
+    padding-left: 7px; /* Compensation pour la bordure gauche */
+}
+
+.bulk-item-row input[type="checkbox"] {
+    cursor: pointer;
+    width: 14px;
+    height: 14px;
+    accent-color: var(--accent);
+    flex: none !important;
+    margin: 0;
+}
+
+.bulk-item-info {
+    flex: 1;
+    min-width: 0; /* Important pour forcer l'ellipse sur les enfants flex */
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.bulk-item-title {
+    font-weight: 600;
+    font-size: 0.82rem;
+    color: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bulk-item-artist {
+    font-size: 0.72rem;
+    color: #aaaaaa;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bulk-item-path {
+    font-family: 'JetBrains Mono', 'Roboto Mono', monospace;
+    font-size: 0.62rem;
+    color: #555555;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    word-break: break-all;
+}
+
+.bulk-item-row.selected .bulk-item-artist {
+    color: #ccc;
+}
+
+.bulk-item-row.selected .bulk-item-path {
+    color: #777;
+}
+
+@keyframes swing-guitar {
+    0% { transform: rotate(-30deg) translateY(-8px); }
+    50% { transform: rotate(-2deg) translateY(12px); }
+    100% { transform: rotate(-30deg) translateY(-8px); }
+}
+
+#placeholder-disc {
+    width: 196px;
+    height: 196px;
+    color: var(--accent);
+    opacity: 0.28;
+    animation: swing-guitar 5s ease-in-out infinite;
+    transform-origin: center;
+    transition: opacity 0.3s ease, filter 0.3s ease;
+}
+
+#media-placeholder:hover #placeholder-disc {
+    opacity: 0.65;
+    filter: drop-shadow(0 0 20px var(--accent));
+}
+
+/* ==========================================
+   SCROLLBAR ULTRA-DISCRÈTE & DÉFILEMENT APPS/SETLISTS
+   ========================================== */
+#apps-container, #setlists-v2-list {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+/* Scrollbar ultra-fine et discrète (Webkit - Chrome/Edge/Safari) */
+.table-wrapper::-webkit-scrollbar,
+#apps-container::-webkit-scrollbar,
+#setlists-v2-list::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+}
+
+.table-wrapper::-webkit-scrollbar-track,
+#apps-container::-webkit-scrollbar-track,
+#setlists-v2-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.table-wrapper::-webkit-scrollbar-thumb,
+#apps-container::-webkit-scrollbar-thumb,
+#setlists-v2-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    transition: background 0.3s ease;
+}
+
+.table-wrapper::-webkit-scrollbar-thumb:hover,
+#apps-container::-webkit-scrollbar-thumb:hover,
+#setlists-v2-list::-webkit-scrollbar-thumb:hover {
+    background: var(--accent);
+}
+
+/* Firefox Support */
+.table-wrapper,
+#apps-container,
+#setlists-v2-list {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
 }
 
 

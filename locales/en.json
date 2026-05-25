@@ -179,6 +179,8 @@
         "lbl_title": "Title",
         "lbl_artist": "Artist",
         "lbl_album": "Album",
+        "lbl_no_media_title": "No active media",
+        "lbl_no_media_desc": "Select a song in the list to start playback",
         "btn_playpause": "Play/Pause",
         "btn_slow": "Slow Down",
         "btn_fast": "Speed Up",
