@@ -3836,6 +3836,51 @@ async def upload_cover_generic(request: Request):
 
     return {"status": "ok", "path": to_portable_path(dest_path)}
 
+@app.get("/api/youtube/cover/{video_id}")
+async def get_youtube_cover(video_id: str):
+    """
+    Downloads the YouTube cover image for a video_id if not present locally,
+    stores it in data/youtube_covers/, and serves it locally.
+    This respects the user's wish to have local offline assets.
+    """
+    import urllib.request
+    import shutil
+    
+    # Destination folder in data/youtube_covers
+    dest_dir = os.path.join(get_data_dir(), "youtube_covers")
+    if not os.path.exists(dest_dir):
+        os.makedirs(dest_dir, exist_ok=True)
+        
+    dest_path = os.path.join(dest_dir, f"{video_id}.jpg")
+    
+    if not os.path.exists(dest_path):
+        # Let's download it
+        yt_urls = [
+            f"https://i.ytimg.com/vi/{video_id}/mqdefault.jpg",
+            f"https://i.ytimg.com/vi/{video_id}/default.jpg"
+        ]
+        downloaded = False
+        for url in yt_urls:
+            try:
+                # Set a user-agent to avoid getting blocked
+                req = urllib.request.Request(
+                    url, 
+                    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+                )
+                with urllib.request.urlopen(req, timeout=5) as response, open(dest_path, 'wb') as out_file:
+                    shutil.copyfileobj(response, out_file)
+                downloaded = True
+                logging.info(f"[YT_COVER] Successfully downloaded: {url} -> {dest_path}")
+                break
+            except Exception as e:
+                logging.warning(f"[YT_COVER] Failed to download {url}: {e}")
+                
+        if not downloaded:
+            # Fallback to an empty or default picture if download completely fails
+            raise HTTPException(status_code=404, detail="Could not download YouTube cover")
+            
+    return FileResponse(dest_path, media_type="image/jpeg")
+
 @app.get("/api/local/find_artist_folder")
 async def find_artist_folder(name: str, preferred_root: str = None):
     """

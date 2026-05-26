@@ -1,4 +1,41 @@
 let currentMode = "WIN";
+
+// Helper global pour extraire l'ID YouTube
+function getYouTubeId(url) {
+    if (!url) return null;
+    let videoId = null;
+    try {
+        if (url.includes('youtu.be/')) {
+            videoId = url.split('youtu.be/')[1].split(/[?#]/)[0];
+        } else if (url.includes('youtube.com/embed/')) {
+            videoId = url.split('youtube.com/embed/')[1].split(/[?#]/)[0];
+        } else if (url.includes('youtube.com/v/')) {
+            videoId = url.split('youtube.com/v/')[1].split(/[?#]/)[0];
+        } else if (url.includes('watch?v=')) {
+            videoId = url.split('watch?v=')[1].split('&')[0].split(/[?#]/)[0];
+        } else if (url.includes('&v=')) {
+            videoId = url.split('&v=')[1].split('&')[0].split(/[?#]/)[0];
+        } else if (url.includes('/vi/')) {
+            videoId = url.split('/vi/')[1].split('/')[0];
+        }
+    } catch(e) {
+        console.error("Error parsing YouTube ID:", e);
+    }
+    return (videoId && videoId.length === 11) ? videoId : null;
+}
+
+// Helper global pour résoudre et forcer le cache local des vignettes YouTube
+function resolveThumbnail(urlOrThumbnail) {
+    if (!urlOrThumbnail) return urlOrThumbnail;
+    const isYoutube = urlOrThumbnail.includes("youtube.com") || urlOrThumbnail.includes("youtu.be") || urlOrThumbnail.includes("ytimg.com");
+    if (isYoutube) {
+        const ytId = getYouTubeId(urlOrThumbnail);
+        if (ytId) {
+            return `/api/youtube/cover/${ytId}`;
+        }
+    }
+    return urlOrThumbnail;
+}
 let websocket;
 let currentProfile = null;
 let currentActivePlayer = null;
@@ -2314,32 +2351,71 @@ function openInterconnectionChoice(type, list) {
     };
     const iconClass = icons[type] || 'ph ph-link';
 
+
+
     list.forEach(item => {
         const btn = document.createElement("button");
         btn.className = "btn-secondary";
-        btn.style = "width:100%; display:flex; align-items:center; gap:12px; padding:12px; text-align:left; border-radius:8px; background:rgba(255,255,255,0.03);";
+        btn.style = "width:100%; display:flex; align-items:center; gap:16px; padding:12px 16px; text-align:left; border-radius:8px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); margin-bottom:8px; transition:all 0.2s ease;";
         
+        btn.onmouseover = () => {
+            btn.style.background = "rgba(255,255,255,0.07)";
+            btn.style.borderColor = "var(--accent)";
+        };
+        btn.onmouseout = () => {
+            btn.style.background = "rgba(255,255,255,0.03)";
+            btn.style.borderColor = "rgba(255,255,255,0.05)";
+        };
+
         let coverHtml = "";
+        const isYoutubeUrl = item.url && (item.url.includes("youtube.com") || item.url.includes("youtu.be"));
+        const ytId = isYoutubeUrl ? getYouTubeId(item.url) : null;
+
         if (type.endsWith('_local')) {
-            coverHtml = `<img src="/api/local/art/${item.originalIndex}" style="width:40px; height:25px; object-fit:cover; border-radius:4px; background:#222;" onerror="this.style.display='none'">`;
-        } else if (type === 'youtube') {
-            coverHtml = `<img src="https://img.youtube.com/vi/${item.url.split('v=')[1]?.split('&')[0]}/default.jpg" style="width:40px; height:25px; object-fit:cover; border-radius:4px;" onerror="this.style.display='none'">`;
+            coverHtml = `<img src="/api/local/art/${item.originalIndex}" style="width:70px; height:45px; object-fit:cover; border-radius:6px; background:#222; border:1px solid #333;" onerror="this.style.display='none'">`;
+        } else if (ytId) {
+            // Lien YouTube détecté (qu'il soit typé 'youtube' ou non)
+            let thumbUrl = "";
+            if (item.cover) {
+                thumbUrl = item.cover.startsWith('http') ? item.cover : `/api/cover?path=${encodeURIComponent(item.cover)}`;
+            } else {
+                thumbUrl = `/api/youtube/cover/${ytId}`;
+            }
+            coverHtml = `<img src="${thumbUrl}" style="width:70px; height:45px; object-fit:cover; border-radius:6px; background:#222; border:1px solid #333;" onerror="this.style.display='none'">`;
+        } else {
+            let thumbUrl = "";
+            if (item.cover) {
+                thumbUrl = item.cover.startsWith('http') ? item.cover : `/api/cover?path=${encodeURIComponent(item.cover)}`;
+            }
+            coverHtml = thumbUrl ? `<img src="${thumbUrl}" style="width:70px; height:45px; object-fit:cover; border-radius:6px; background:#222; border:1px solid #333;">` : `<div style="width:70px; height:45px; border-radius:6px; background:#222; display:flex; align-items:center; justify-content:center; border:1px solid #333;"><i class="${iconClass}" style="font-size:1.8em; color:var(--accent);"></i></div>`;
+        }
+
+        let detailsHtml = [];
+        if (item.artist) {
+            detailsHtml.push(`<span style="color:#bbb; font-weight:500; display:inline-flex; align-items:center; gap:4px;"><i class="ph ph-user" style="font-size:1.1em;"></i> ${item.artist}</span>`);
+        }
+        if (item.channel) {
+            detailsHtml.push(`<span style="color:#888; display:inline-flex; align-items:center; gap:4px;"><i class="ph ph-television" style="font-size:1.1em;"></i> ${item.channel}</span>`);
+        }
+        if (item.category) {
+            detailsHtml.push(`<span class="tag-category" style="background:rgba(187,134,252,0.15); color:var(--accent); padding:2px 8px; border-radius:4px; font-size:0.85em; font-weight:bold; display:inline-flex; align-items:center; gap:4px;"><i class="ph ph-folder" style="font-size:1.1em;"></i> ${item.category}</span>`);
         }
 
         btn.innerHTML = `
             ${coverHtml}
-            <div style="flex:1; overflow:hidden;">
-                <div style="font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.title}</div>
-                <div style="font-size:0.8em; color:#888; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.artist || ""}</div>
+            <div style="flex:1; overflow:hidden; display:flex; flex-direction:column; gap:6px;">
+                <div style="font-weight:bold; color:#fff; font-size:1em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.title}</div>
+                <div style="font-size:0.85em; display:flex; flex-wrap:wrap; align-items:center; gap:12px;">
+                    ${detailsHtml.join("")}
+                </div>
             </div>
-            <i class="ph ph-caret-right" style="color:var(--accent);"></i>
+            <i class="ph ph-caret-right" style="color:var(--accent); font-size:1.3em; margin-left:8px;"></i>
         `;
 
         btn.onclick = () => {
             dialog.close();
-            if (type === 'youtube') playTrackAt(item.originalIndex);
-            else if (type.endsWith('_local')) playLocal(item.originalIndex);
-            else playWebLink(item.originalIndex);
+            const uid = item.uid || (type.endsWith('_local') ? `lib:${item.originalIndex}` : `web:${item.originalIndex}`);
+            playMediaByUid(uid);
         };
 
         listContainer.appendChild(btn);
@@ -3401,7 +3477,7 @@ function openEditModal(index) {
     if (track.thumbnail) {
         thumbContainer.classList.add("wide-art");
         // Update only the image/content part, preserving the button if possible, or just re-inject
-        thumbContainer.innerHTML = `<img src="${track.thumbnail}" style="width:100%; height:100%; object-fit:contain;">
+        thumbContainer.innerHTML = `<img src="${resolveThumbnail(track.thumbnail)}" style="width:100%; height:100%; object-fit:contain;">
                                     <div id="btn-edit-delete-cover" class="btn-delete-cover" style="display:flex;"
                                          onclick="event.stopPropagation(); removeEditCover();">×</div>`;
     } else {
@@ -3582,7 +3658,7 @@ async function searchYouTube() {
             // We pass the simplified object
             card.onclick = () => selectResult(video);
             card.innerHTML = `
-                <img src="${video.thumbnail_url}">
+                <img src="${resolveThumbnail(video.thumbnail_url)}">
                 <div class="info">
                     <div class="title" title="${video.title}">${video.title}</div>
                     <div style="color:#888; margin-top:2px; font-size:0.7em;">${video.channel}</div>
@@ -3633,7 +3709,7 @@ function selectResult(video) {
 
     // 4. Thumbnail Preview
     if (video.thumbnail_url) {
-        document.getElementById("preview-thumbnail").innerHTML = `<img src="${video.thumbnail_url}">`;
+        document.getElementById("preview-thumbnail").innerHTML = `<img src="${resolveThumbnail(video.thumbnail_url)}">`;
     } else {
         document.getElementById("preview-thumbnail").innerHTML = '<span style="font-size:40px;">🎵</span>';
     }
@@ -4480,7 +4556,7 @@ function playTrack(track) {
         const globalCover = document.getElementById("global-video-cover");
         if (globalCover) {
             globalCover.style.display = "block";
-            globalCover.src = track.thumbnail || `https://i.ytimg.com/vi/${track.id}/mqdefault.jpg`;
+            globalCover.src = resolveThumbnail(track.thumbnail || `https://i.ytimg.com/vi/${track.id}/mqdefault.jpg`);
             globalCover.onerror = () => { globalCover.style.display = "none"; };
         }
 
