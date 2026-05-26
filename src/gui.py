@@ -741,9 +741,38 @@ class DeviceEditorDialog(ctk.CTkToplevel):
         
         self.keys_container = ctk.CTkFrame(self.body_container, fg_color=CARD_BG, border_width=1, border_color=BORDER_COLOR, corner_radius=8)
         self.keys_container.pack(pady=(0, 10), padx=10, fill="x")
+
+        # Ligne d'en-têtes de colonnes stylisée
+        header_row = ctk.CTkFrame(self.keys_container, fg_color="transparent")
+        header_row.pack(fill="x", pady=(8, 4), padx=10)
+        
+        lbl_h_type = ctk.CTkLabel(header_row, text=_("gui.col_h_type", default="Type"), width=80, text_color=TEXT_SECONDARY, font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"), anchor="w")
+        lbl_h_type.pack(side="left", padx=5)
+        
+        lbl_h_cc = ctk.CTkLabel(header_row, text=_("gui.col_h_cc", default="Code CC"), width=50, text_color=TEXT_SECONDARY, font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"), anchor="w")
+        lbl_h_cc.pack(side="left", padx=5)
+        
+        lbl_h_chan = ctk.CTkLabel(header_row, text=_("gui.col_h_chan", default="Canal"), width=70, text_color=TEXT_SECONDARY, font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"), anchor="w")
+        lbl_h_chan.pack(side="left", padx=5)
+        
+        lbl_h_short = ctk.CTkLabel(header_row, text=_("gui.col_h_short", default="Label Court"), width=60, text_color=TEXT_SECONDARY, font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"), anchor="w")
+        lbl_h_short.pack(side="left", padx=5)
+        
+        lbl_h_desc = ctk.CTkLabel(header_row, text=_("gui.col_h_desc", default="Description complète du Bouton"), text_color=TEXT_SECONDARY, font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"), anchor="w")
+        lbl_h_desc.pack(side="left", fill="x", expand=True, padx=5)
+        
+        # Subtle horizontal separator under headers
+        h_sep = ctk.CTkFrame(self.keys_container, height=1, fg_color=BORDER_COLOR)
+        h_sep.pack(fill="x", padx=10, pady=(2, 6))
         
         for btn in self.buttons:
-            self.draw_key_row(btn.get("cc", ""), btn.get("label", ""), btn.get("short_label", ""), btn.get("is_virtual", btn.get("cc", 0) < 0))
+            self.draw_key_row(
+                cc=btn.get("cc", ""), 
+                label=btn.get("label", ""), 
+                short_label=btn.get("short_label", ""), 
+                is_virt=btn.get("is_virtual", btn.get("cc", 0) < 0),
+                midi_channel=btn.get("midi_channel", 16)
+            )
 
     def update_scanned_ports_ui(self):
         if not hasattr(self, "ports_container") or not self.ports_container.winfo_exists():
@@ -792,7 +821,7 @@ class DeviceEditorDialog(ctk.CTkToplevel):
             if is_absent:
                 lbl_badge.configure(text=f" [{p_type} - {_('gui.lbl_absent', default='Absent')}] ", text_color="#EF4444")
 
-    def draw_key_row(self, cc, label, short_label="", is_virt=False):
+    def draw_key_row(self, cc, label, short_label="", is_virt=False, midi_channel=16):
         if not hasattr(self, "keys_container") or not self.keys_container.winfo_exists():
             return
             
@@ -805,14 +834,24 @@ class DeviceEditorDialog(ctk.CTkToplevel):
             "orig_cc": cc
         }
         
-        e_cc = ctk.CTkEntry(row, width=60, placeholder_text=_("gui.placeholder_cc"), fg_color=BG_COLOR, border_color=BORDER_COLOR, font=ctk.CTkFont(family="Consolas", size=11))
+        e_cc = ctk.CTkEntry(row, width=50, placeholder_text=_("gui.placeholder_cc"), fg_color=BG_COLOR, border_color=BORDER_COLOR, font=ctk.CTkFont(family="Consolas", size=11))
         
-        def toggle_type(rs=row_state, entry=e_cc):
+        # ComboBox pour le canal MIDI d'entrée
+        combo_ch = ctk.CTkComboBox(row, width=70, fg_color=BG_COLOR, border_color=BORDER_COLOR, button_color=ACCENT_COLOR, button_hover_color=ACCENT_HOVER,
+                                    dropdown_fg_color=CARD_BG, dropdown_hover_color=ACCENT_HOVER, dropdown_text_color=TEXT_PRIMARY, text_color=TEXT_PRIMARY,
+                                    font=ctk.CTkFont(family="Segoe UI", size=11))
+        
+        input_ch_values = [str(i) for i in range(1, 16)] + ["16"]
+        combo_ch.configure(values=input_ch_values)
+        combo_ch.set(str(midi_channel))
+        
+        def toggle_type(rs=row_state, entry=e_cc, cmb=combo_ch):
             if rs["is_virtual"]:
                 rs["is_virtual"] = False
                 btn_type.configure(text=_("gui.lbl_btn_physical", default="Physique"), text_color=TEXT_PRIMARY)
                 entry.configure(state="normal", text_color=TEXT_PRIMARY)
                 entry.delete(0, "end")
+                cmb.configure(state="normal")
                 
                 if isinstance(rs["orig_cc"], int) and rs["orig_cc"] >= 0:
                     entry.insert(0, str(rs["orig_cc"]))
@@ -824,6 +863,8 @@ class DeviceEditorDialog(ctk.CTkToplevel):
                 entry.delete(0, "end")
                 entry.insert(0, _("gui.lbl_virtual"))
                 entry.configure(state="disabled", text_color="#00E5FF")
+                cmb.set("16")
+                cmb.configure(state="disabled")
                 
         btn_type = ctk.CTkButton(row, width=80, height=26, text="", fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER, font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"), command=toggle_type)
         btn_type.pack(side="left", padx=5)
@@ -833,16 +874,23 @@ class DeviceEditorDialog(ctk.CTkToplevel):
             btn_type.configure(text=_("gui.lbl_btn_virtual"), text_color="#00E5FF")
             e_cc.insert(0, _("gui.lbl_virtual"))
             e_cc.configure(state="disabled", text_color="#00E5FF")
+            combo_ch.set("16")
+            combo_ch.configure(state="disabled")
         else:
             btn_type.configure(text=_("gui.lbl_btn_physical", default="Physique"), text_color=TEXT_PRIMARY)
             val_display = str(cc) if (cc != "" and cc is not None) else ""
             e_cc.insert(0, val_display)
             e_cc.configure(state="normal", text_color=TEXT_PRIMARY)
+            combo_ch.configure(state="normal")
             
         e_cc.pack(side="left", padx=5)
         row_state["entry_cc"] = e_cc
         
-        e_short = ctk.CTkEntry(row, width=70, placeholder_text=_("gui.placeholder_short_lbl"), fg_color=BG_COLOR, border_color=BORDER_COLOR, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=11))
+        # Pack canal d'entrée juste à côté du CC
+        combo_ch.pack(side="left", padx=5)
+        row_state["combo_ch"] = combo_ch
+        
+        e_short = ctk.CTkEntry(row, width=60, placeholder_text=_("gui.placeholder_short_lbl"), fg_color=BG_COLOR, border_color=BORDER_COLOR, text_color=TEXT_PRIMARY, font=ctk.CTkFont(family="Segoe UI", size=11))
         e_short.insert(0, str(short_label))
         e_short.pack(side="left", padx=5)
         row_state["entry_short"] = e_short
@@ -921,11 +969,20 @@ class DeviceEditorDialog(ctk.CTkToplevel):
                     if "(" in short: short = short.split("(")[0].strip()
                     short_lbl = short[:8]
                     
+            # Extraction du canal MIDI d'entrée configuré
+            in_ch = 16
+            if "combo_ch" in row:
+                try:
+                    in_ch = int(row["combo_ch"].get())
+                except:
+                    pass
+
             buttons_data.append({
                 "cc": final_cc,
                 "short_label": short_lbl,
                 "label": lbl,
-                "is_virtual": is_virt
+                "is_virtual": is_virt,
+                "midi_channel": in_ch
             })
             
         new_name = self.entry_name.get().strip() if hasattr(self, "entry_name") else self.device_name
@@ -1522,7 +1579,7 @@ class MappingDialog(ctk.CTkToplevel):
         return {
             "name": self.entry_name.get() or _("gui.lbl_no_name"),
             "midi_cc": cc,
-            "midi_channel": 16, # Input Channel
+            "midi_channel": 16, # Input Channel (Default Omni)
             "trigger_value": "any",
             
             "action_type": action_type,
@@ -1955,6 +2012,10 @@ class GuitarPracticeApp(ctk.CTk):
 
         self.current_device_def = new_def
         self.log_debug(f"Device Definition set to: {self.current_device_def.get('name')}")
+        
+        # Propager la configuration de télécommande active au ActionHandler pour le filtrage par canal
+        if hasattr(self, 'action_handler') and self.action_handler:
+            self.action_handler.set_active_device_def(self.current_device_def)
 
         if hasattr(self, 'virtual_pedalboard'):
             self.virtual_pedalboard.set_device_def(self.current_device_def)
@@ -2643,6 +2704,12 @@ class GuitarPracticeApp(ctk.CTk):
              match = next((b for b in self.current_device_def['buttons'] if b['cc'] == cc), None)
              if match:
                  btn_label = match['label']
+                 
+                 # Récupération du canal défini sur la télécommande pour ce bouton physique
+                 map_ch = match.get('midi_channel')
+                 if map_ch is not None and int(map_ch) != 16:
+                      btn_label += f" (Ch {map_ch})"
+             
         lbl_btn = ctk.CTkLabel(self.scrollable_frame, text=btn_label, anchor="w", justify="left", font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), text_color=TEXT_SECONDARY)
         lbl_btn.grid(row=grid_row, column=2, padx=10, pady=6, sticky="ew")
         

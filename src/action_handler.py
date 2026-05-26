@@ -28,12 +28,17 @@ class ActionHandler:
         self.listeners = [] # Callbacks for visual feedback (cc, value, channel)
         self.midi_manager = None # Reference to Stateful Manager
         self.profile_manager = None # Reference to ProfileManager
+        self.active_device_def = None # Active Remote Controller config (V20)
 
     def set_profile_manager(self, manager):
         self.profile_manager = manager
 
     def set_midi_manager(self, manager):
         self.midi_manager = manager
+
+    def set_active_device_def(self, device_def):
+        """Définit la télécommande active courante pour récupérer les configurations de canaux MIDI par bouton."""
+        self.active_device_def = device_def
 
     def register_listener(self, callback):
         if callback not in self.listeners:
@@ -281,6 +286,30 @@ class ActionHandler:
         return best_profile
 
     def _do_execute(self, cc, channel, profiles, force_profile=None, midi_mgr=None):
+        # --- Récupération du canal filtré depuis la Télécommande Active ---
+        target_btn_ch = None
+        if hasattr(self, 'active_device_def') and self.active_device_def:
+            for b in self.active_device_def.get("buttons", []):
+                # b["cc"] peut être négatif pour le virtuel, mais on cherche le CC physique correspondant
+                if b.get("cc") == cc:
+                    target_btn_ch = b.get("midi_channel")
+                    break
+
+        # Comparaison du canal : si un canal précis est configuré sur la télécommande et qu'il n'est pas omni (16),
+        # il doit correspondre exactement au canal du message MIDI physique reçu.
+        channel_matches = True
+        if target_btn_ch is not None:
+            try:
+                ch_val = int(target_btn_ch)
+                if ch_val != 16:
+                    channel_matches = (ch_val == int(channel))
+            except:
+                pass
+
+        if not channel_matches:
+            # self.log(f"IGNORÉ : Canal incorrect pour CC {cc} (attendu: {target_btn_ch}, reçu: {channel})")
+            return
+
         # --- CAS FORCE (GUI / Dashboard) ---
         if force_profile:
             self.log(f"ACTION MANUELLE (GUI): Force Profil '{force_profile.get('name')}'")
@@ -294,7 +323,7 @@ class ActionHandler:
             for m in force_profile.get('mappings', []):
                  try:
                     if int(m['midi_cc']) == cc:
-                        self.log(f"ACTION : Déclenchement '{m.get('name')}' (Profil: {force_profile['name']})")
+                        self.log(f"ACTION : Déclenchement '{m.get('name')}' (Profil: {force_profile['name']}) (CC={cc}, CH={channel})")
                         self._trigger_any_action(m, midi_mgr)
                         return
                  except: continue
@@ -317,7 +346,7 @@ class ActionHandler:
         for m in best_profile.get('mappings', []):
             try:
                 if int(m['midi_cc']) == cc:
-                    self.log(f"ACTION : Déclenchement '{m.get('name')}' (Profil: {best_profile['name']})")
+                    self.log(f"ACTION : Déclenchement '{m.get('name')}' (Profil: {best_profile['name']}) (CC={cc}, CH={channel})")
                     self._trigger_any_action(m, midi_mgr)
                     return
             except: continue

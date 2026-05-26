@@ -135,6 +135,8 @@
         "btn_duplicate": "Duplicate",
         "title_device_editor": "Device Editor",
         "lbl_btn_list": "Buttons List:",
+        "lbl_model_name": "Model Name:",
+        "lbl_buttons_list": "Control Keys Grid:",
         "title_memo": "Shortcut Memo",
         "lbl_conn_mode": "Connection Mode:",
         "mode_usb": "Windows (USB/Driver)",
@@ -164,7 +166,13 @@
         "wizard_lbl_presets": "Quick configuration presets:",
         "wizard_chk_reaper": "Standard Reaper shortcuts (Play/Pause, Record, Undo)",
         "wizard_chk_transport": "Generic transport shortcuts (Play/Pause, Stop, Next, Previous)",
-        "wizard_virtual_disabled_warn": "Enable virtual buttons in Step 2 before adding virtual keys."
+        "wizard_virtual_disabled_warn": "Enable virtual buttons in Step 2 before adding virtual keys.",
+        "col_h_type": "Type",
+        "col_h_cc": "CC Code",
+        "col_h_chan": "Channel",
+        "col_h_short": "Short Label",
+        "col_h_desc": "Full Button Description",
+        "btn_restart_direct": "⟳ Restart"
     },
     "web": {
         "search_placeholder": "Search YouTube video...",

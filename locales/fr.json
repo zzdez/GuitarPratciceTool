@@ -135,6 +135,8 @@
         "btn_duplicate": "Dupliquer",
         "title_device_editor": "Éditeur de Périphérique",
         "lbl_btn_list": "Liste des Boutons :",
+        "lbl_model_name": "Nom du modèle :",
+        "lbl_buttons_list": "Grille des touches de contrôle :",
         "title_memo": "Mémo Raccourcis",
         "lbl_conn_mode": "Mode de Connexion :",
         "mode_usb": "Windows (USB/Driver)",
@@ -164,7 +166,13 @@
         "wizard_lbl_presets": "Préconfigurations rapides (Presets) :",
         "wizard_chk_reaper": "Raccourcis standards Reaper (Play/Pause, Record, Undo)",
         "wizard_chk_transport": "Raccourcis transport générique (Play/Pause, Stop, Next, Previous)",
-        "wizard_virtual_disabled_warn": "Activez les boutons virtuels à l'étape 2 avant d'ajouter des touches virtuelles."
+        "wizard_virtual_disabled_warn": "Activez les boutons virtuels à l'étape 2 avant d'ajouter des touches virtuelles.",
+        "col_h_type": "Type",
+        "col_h_cc": "Code CC",
+        "col_h_chan": "Canal",
+        "col_h_short": "Label Court",
+        "col_h_desc": "Description complète du Bouton",
+        "btn_restart_direct": "⟳ Relancer"
     },
     "web": {
         "search_placeholder": "Rechercher une vidéo YouTube...",
