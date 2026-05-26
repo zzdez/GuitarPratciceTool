@@ -2632,6 +2632,7 @@ async def rename_physical_media(index: int, data: Dict):
 
             # Étape A : Traitement des stems (fichiers physiques et/ou étiquettes JSON)
             if (rename_stems or rename_stems_labels) and current_stems_abs and stems_mapping:
+                new_tracks = []
                 for mapping in stems_mapping:
                     m_old_path_abs = resolve_portable_path(mapping.get("old_path", ""))
                     m_new_filename = mapping.get("new_filename", "").strip()
@@ -2663,40 +2664,40 @@ async def rename_physical_media(index: int, data: Dict):
 
                         new_stems_portable.append(to_portable_path(final_stem_abs))
 
-                        # A.2 Mettre à jour l'airstep_meta.json pour cette piste
-                        if "tracks" not in mt_settings:
-                            mt_settings["tracks"] = []
+                        # A.2 Rechercher l'ancienne configuration pour conserver volume, pan, mute, solo
+                        old_vol = 1.0
+                        old_pan = 0.0
+                        old_mute = False
+                        old_solo = False
+                        fallback_name = os.path.basename(final_stem_abs).split('.')[0]
 
-                        found_track = False
-                        for track in mt_settings["tracks"]:
-                            if resolve_portable_path(track.get("path", "")) == m_old_path_abs:
-                                track["path"] = to_portable_path(final_stem_abs)
-                                if rename_stems_labels:
-                                    track["name"] = m_new_name
-                                found_track = True
+                        # Comparer par nom de fichier (basename) de façon insensible à la casse pour retrouver l'état
+                        old_stem_filename = os.path.basename(m_old_path_abs).lower()
+                        for track in mt_settings.get("tracks", []):
+                            t_path_abs = resolve_portable_path(track.get("path", ""))
+                            if os.path.basename(t_path_abs).lower() == old_stem_filename:
+                                old_vol = track.get("volume", 1.0)
+                                old_pan = track.get("pan", 0.0)
+                                old_mute = track.get("mute", False)
+                                old_solo = track.get("solo", False)
+                                if not rename_stems_labels:
+                                    fallback_name = track.get("name", fallback_name)
                                 break
-                        if not found_track:
-                            mt_settings["tracks"].append({
-                                "path": to_portable_path(final_stem_abs),
-                                "name": m_new_name if rename_stems_labels else os.path.basename(final_stem_abs).split('.')[0],
-                                "volume": 1.0,
-                                "pan": 0.0,
-                                "mute": False,
-                                "solo": False
-                            })
+
+                        new_tracks.append({
+                            "path": to_portable_path(final_stem_abs),
+                            "name": m_new_name if rename_stems_labels else fallback_name,
+                            "volume": old_vol,
+                            "pan": old_pan,
+                            "mute": old_mute,
+                            "solo": old_solo
+                        })
                     else:
                         if m_old_path_abs:
                             new_stems_portable.append(to_portable_path(m_old_path_abs))
 
-                # Mettre à jour les stems dans airstep_meta.json
-                if "tracks" in mt_settings:
-                    ordered_tracks = []
-                    for p_port in new_stems_portable:
-                        for track in mt_settings["tracks"]:
-                            if track.get("path") == p_port:
-                                ordered_tracks.append(track)
-                                break
-                    mt_settings["tracks"] = ordered_tracks
+                # Mettre à jour tracks
+                mt_settings["tracks"] = new_tracks
 
                 # Écrire airstep_meta.json mis à jour
                 try:
