@@ -12059,17 +12059,40 @@ async function openPhysicalRenameModal() {
         
         if (mainInputEl) mainInputEl.value = baseName;
         
-        // Réinitialiser le conteneur et l'input de base des stems avec le titre propre du morceau
-        const stemsBaseInput = document.getElementById("rename-stems-base-input");
-        if (stemsBaseInput) stemsBaseInput.value = item.title || baseName;
-        
-        // Ajuster l'affichage des sections
+        // Ajuster l'affichage des sections (avant chargement des stems, rendu initial vide)
         onRenameFolderChkChanged();
         onRenameStemsOrLabelsChanged();
         onRenameOptionChanged();
         
         // Charger les stems
         await loadPhysicalRenameStems(idx, item);
+
+        // Auto-détecter le nom de base commun depuis les noms de fichiers des stems
+        // (en retirant l'instrument trouvé via la liste d'instruments)
+        const stemsBaseInput = document.getElementById("rename-stems-base-input");
+        if (stemsBaseInput) {
+            let autoBase = item.title || baseName;
+            if (renameStemsData.length > 0) {
+                const instruments = getInstrumentsList();
+                let detectedBase = null;
+                let consistent = true;
+                for (const stem of renameStemsData) {
+                    const fn = stem.path.split(/[\\/]/).pop();
+                    const extI = fn.lastIndexOf('.');
+                    const fb = extI !== -1 ? fn.substring(0, extI) : fn;
+                    const { baseName: b, instrument: inst } = extractBaseAndInstrument(fb, instruments);
+                    if (inst) { // un instrument a été trouvé
+                        if (detectedBase === null) detectedBase = b;
+                        else if (b.toLowerCase() !== detectedBase.toLowerCase()) { consistent = false; break; }
+                    }
+                }
+                if (consistent && detectedBase) autoBase = detectedBase;
+            }
+            stemsBaseInput.value = autoBase;
+        }
+
+        // Rafraîchir la liste après chargement et détection
+        onRenameStemsOrLabelsChanged();
     } else {
         const filename = item.path.split(/[\\/]/).pop();
         const dotIdx = filename.lastIndexOf('.');
@@ -12217,7 +12240,7 @@ function renderRenameStemsList() {
         nameLabel.style.overflow = "hidden";
         nameLabel.style.textOverflow = "ellipsis";
         nameLabel.style.whiteSpace = "nowrap";
-        nameLabel.innerText = stem.name || originalBase;
+        nameLabel.innerText = originalBase; // Toujours afficher le nom de fichier réel (sans extension), pas le nom d'affichage qui peut contenir des métadonnées parasites
         nameLabel.title = originalFilename;
         row.appendChild(nameLabel);
 
@@ -12294,7 +12317,7 @@ function renderRenameStemsList() {
             indInput.id = `rename-stem-individual-input-${i}`;
             indInput.className = "custom-inst-input";
             indInput.style.flex = "1";
-            indInput.value = stem.name || originalBase; // Nom d'affichage ou base
+            indInput.value = originalBase; // Toujours pré-remplir avec le vrai nom de fichier
             indInput.oninput = () => updateStemsPreviews();
             row.appendChild(indInput);
         }
@@ -12332,86 +12355,38 @@ function capitalizeFirstLetter(string) {
     return string.charAt(0).toUpperCase() + string.slice(1);
 }
 
-function cleanStemInstrumentName(name, stemsBaseName, folderPart) {
-    const cleanLower = name.toLowerCase();
-    
-    // 1. Liste d'instruments par défaut statique (Français et Anglais)
-    const baseInstruments = [
-        "bass", "basse", "drums", "drum", "batterie", 
-        "vocals", "vocal", "chant", "voice", "voix", 
-        "guitar", "guitare", "lead", "rhythm", "rythme", 
-        "piano", "synth", "synthé", "keyboards", "keys", "clavier", 
-        "percussion", "percu", "acoustic", "acoustique", "electric", "electrique", 
-        "organ", "orgue", "violin", "violon", "brass", "cuivres", "sax", "saxophone",
-        "metronome", "métronome", "click", "other", "autre"
-    ];
-    
-    // 2. Récupérer la liste dynamique personnalisée de l'utilisateur (depuis le localStorage)
-    const userInstruments = [];
-    try {
-        const uList = getInstrumentsList();
-        if (Array.isArray(uList)) {
-            uList.forEach(inst => {
-                if (inst && typeof inst === "string") {
-                    const cleanInst = inst.trim().toLowerCase();
-                    if (cleanInst && !userInstruments.includes(cleanInst)) {
-                        userInstruments.push(cleanInst);
-                    }
-                }
-            });
-        }
-    } catch (e) {
-        console.error("[RENAME] Erreur lors de la récupération des instruments personnalisés:", e);
-    }
-    
-    // 3. Fusionner et dé-dupliquer les listes
-    const allInstruments = [...userInstruments];
-    baseInstruments.forEach(inst => {
-        if (!allInstruments.includes(inst)) {
-            allInstruments.push(inst);
-        }
-    });
-    
-    // 4. Recherche de l'instrument dans le nom (du plus long au plus court pour éviter les conflits de sous-chaînes)
-    allInstruments.sort((a, b) => b.length - a.length);
-    
-    for (const inst of allInstruments) {
-        const idx = cleanLower.indexOf(inst);
+/**
+ * Extrait le nom de base et l'instrument d'un nom de fichier stem.
+ * Utilise UNIQUEMENT la liste d'instruments configurée par l'utilisateur (localStorage).
+ * Recherche insensible à la casse. Aucun filtre heuristique supplémentaire.
+ * @param {string} filename - Nom de fichier sans extension
+ * @param {string[]} instruments - Liste des instruments (depuis getInstrumentsList())
+ * @returns {{ baseName: string, instrument: string|null }}
+ *   baseName  : tout ce qui précède l'instrument (séparateurs retirés)
+ *   instrument: la sous-chaîne trouvée telle qu'elle est dans le fichier (casse originale)
+ *               null si aucun instrument n'est reconnu → fallback = nom de fichier complet
+ */
+function extractBaseAndInstrument(filename, instruments) {
+    if (!filename) return { baseName: "", instrument: null };
+
+    // Trier du plus long au plus court pour éviter les conflits de sous-chaînes
+    const sorted = [...instruments].sort((a, b) => b.length - a.length);
+    const filenameLower = filename.toLowerCase();
+
+    for (const inst of sorted) {
+        const instLower = inst.toLowerCase();
+        const idx = filenameLower.indexOf(instLower);
         if (idx !== -1) {
-            // Extraire le mot exact avec sa casse d'origine du fichier
-            return name.substring(idx, idx + inst.length);
+            // Nom de base = tout ce qui précède l'instrument, séparateurs finaux retirés
+            const base = filename.substring(0, idx).replace(/[-_\s]+$/, "").trim();
+            // Instrument tel qu'il apparaît dans le fichier (casse originale)
+            const instrumentFound = filename.substring(idx, idx + inst.length);
+            return { baseName: base || filename, instrument: instrumentFound };
         }
     }
-    
-    // Fallback si aucun instrument n'est reconnu : on nettoie les préfixes communs
-    let clean = name;
-    if (stemsBaseName) {
-        const escapedBase = stemsBaseName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-        const rxBase = new RegExp('\\b' + escapedBase + '\\b', 'gi');
-        clean = clean.replace(rxBase, "");
-        if (clean.toLowerCase().includes(stemsBaseName.toLowerCase())) {
-            const idx = clean.toLowerCase().indexOf(stemsBaseName.toLowerCase());
-            clean = clean.substring(0, idx) + clean.substring(idx + stemsBaseName.length);
-        }
-    }
-    if (folderPart) {
-        const escapedFolder = folderPart.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-        const rxFolder = new RegExp('\\b' + escapedFolder + '\\b', 'gi');
-        clean = clean.replace(rxFolder, "");
-        
-        const folderBase = folderPart.split('-')[0].trim();
-        if (folderBase) {
-            const escapedFB = folderBase.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-            const rxFB = new RegExp('\\b' + escapedFB + '\\b', 'gi');
-            clean = clean.replace(rxFB, "");
-        }
-    }
-    
-    clean = clean.replace(/[\s\-_–—]+/g, " ");
-    clean = clean.trim();
-    clean = clean.replace(/^[\s\-_–—]+|[\s\-_–—]+$/g, "");
-    
-    return clean || name;
+
+    // Fallback : aucun instrument reconnu → renvoyer le nom complet tel quel
+    return { baseName: filename, instrument: null };
 }
 
 function updateStemsPreviews() {
@@ -12454,15 +12429,18 @@ function updateStemsPreviews() {
             finalFilename = originalBase;
         } else {
             if (option === "as_stems") {
-                stemName = cleanStemInstrumentName(stem.name || originalBase, stemsBaseName, folderPart);
-                if (!stemName) {
-                    stemName = stem.name || `Track ${i + 1}`;
-                }
+                // Extraire l'instrument depuis le nom de fichier en utilisant UNIQUEMENT la liste d'instruments
+                const { instrument } = extractBaseAndInstrument(originalBase, getInstrumentsList());
 
-                if (stemsBaseName) {
-                    finalFilename = prefixFirst ? `${stemName}-${stemsBaseName}` : `${stemsBaseName}-${stemName}`;
+                if (instrument && stemsBaseName) {
+                    finalFilename = prefixFirst
+                        ? `${capitalizeFirstLetter(instrument)}-${stemsBaseName}`
+                        : `${stemsBaseName}-${instrument}`;
+                } else if (instrument) {
+                    finalFilename = instrument;
                 } else {
-                    finalFilename = stemName;
+                    // Fallback : aucun instrument reconnu → nom de fichier original
+                    finalFilename = originalBase;
                 }
             } else if (option === "by_instrument") {
                 const select = document.getElementById(`rename-stem-select-${i}`);
@@ -12629,20 +12607,24 @@ async function submitPhysicalRename() {
                 let displayName = "";
 
                 if (renameStemsOption === "as_stems") {
-                    const originalFolder = item.path.split(/[\\/]/).pop();
-                    stemName = cleanStemInstrumentName(stem.name || originalBase, stemsBaseName, originalFolder);
-                    if (!stemName) {
-                        stemName = stem.name || `Track ${i + 1}`;
-                    }
+                    // Extraire l'instrument depuis le nom de fichier (liste d'instruments uniquement, sans filtres)
+                    const { instrument } = extractBaseAndInstrument(originalBase, getInstrumentsList());
 
-                    const stemNameCap = capitalizeFirstLetter(stemName);
-
-                    if (stemsBaseName) {
-                        newFilename = prefixFirst ? `${stemName}-${stemsBaseName}` : `${stemsBaseName}-${stemName}`;
-                        displayName = prefixFirst ? `${stemNameCap} ${stemsBaseName}` : `${stemsBaseName} ${stemNameCap}`;
+                    if (instrument && stemsBaseName) {
+                        const instCap = capitalizeFirstLetter(instrument);
+                        newFilename = prefixFirst
+                            ? `${instCap}-${stemsBaseName}`
+                            : `${stemsBaseName}-${instrument}`;
+                        displayName = prefixFirst
+                            ? `${instCap}-${stemsBaseName}`
+                            : `${stemsBaseName}-${instCap}`;
+                    } else if (instrument) {
+                        newFilename = instrument;
+                        displayName = capitalizeFirstLetter(instrument);
                     } else {
-                        newFilename = stemName;
-                        displayName = stemNameCap;
+                        // Fallback : aucun instrument reconnu → nom de fichier original
+                        newFilename = originalBase;
+                        displayName = originalBase;
                     }
 
                 } else if (renameStemsOption === "by_instrument") {
@@ -12661,10 +12643,12 @@ async function submitPhysicalRename() {
 
                     if (stemsBaseName) {
                         newFilename = prefixFirst ? `${stemName}-${stemsBaseName}` : `${stemsBaseName}-${stemName}`;
-                        displayName = prefixFirst ? `${stemNameCap} ${stemsBaseName}` : `${stemsBaseName} ${stemNameCap}`;
+                        // Utiliser le même séparateur tiret que le nom de fichier physique
+                        displayName = prefixFirst ? `${stemNameCap}-${stemsBaseName}` : `${stemsBaseName}-${stemNameCap}`;
                     } else if (newFolderName) {
                         newFilename = prefixFirst ? `${stemName}-${newFolderName}` : `${newFolderName}-${stemName}`;
-                        displayName = prefixFirst ? `${stemNameCap} ${newFolderName}` : `${newFolderName} ${stemNameCap}`;
+                        // Utiliser le même séparateur tiret que le nom de fichier physique
+                        displayName = prefixFirst ? `${stemNameCap}-${newFolderName}` : `${newFolderName}-${stemNameCap}`;
                     } else {
                         newFilename = stemName;
                         displayName = stemNameCap;
