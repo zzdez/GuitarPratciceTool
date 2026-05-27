@@ -1208,13 +1208,14 @@
 
 
 
-    <!-- MULTITRACK MODAL -->
     <dialog id="modal-multitrack">
         <div class="modal-header">
             <h3 data-i18n="web.modal_mt_title">Éditer Dossier Multipiste</h3>
             <button onclick="closeMultitrackModal()" class="btn-close">×</button>
         </div>
         <div class="modal-body">
+            <!-- Browser-style Tabs Bar (V60) -->
+            <div id="mt-linked-items-display" class="modal-tabs-bar"></div>
             <!-- ART PREVIEW WITH VERTICAL SLIDERS -->
             <div class="modal-media-stack">
                 <!-- Volume (Left) -->
@@ -1283,7 +1284,7 @@
                 <div style="display:flex; gap:10px;">
                     <input type="text" id="mt-title" style="flex:1;">
                     <button class="btn-secondary" onclick="openMediaLinker('library')"
-                        title="Lier un média" data-i18n-title="web.btn_link_media">
+                        title="Lier un média" data-i18n-title="web.btn_link_media" style="display:none;">
                         <i class="ph ph-link-simple"></i>
                     </button>
                     <button class="btn-secondary" onclick="autoTagMultitrack()"
@@ -1293,8 +1294,6 @@
                         <i class="ph ph-cloud-arrow-up"></i>
                     </button>
                 </div>
-                <!-- V61: Display linked items in Multitrack modal -->
-                <div id="mt-linked-items-display" style="display:flex; flex-wrap:wrap; gap:8px; margin-top: 5px;"></div>
 
                 <div class="row-inputs">
                     <div class="col">
@@ -1407,7 +1406,6 @@
 
     <!-- LOCAL MEDIA MODAL (AUDIO STANDARD) -->
 
-    <!-- MEDIA MODAL -->
     <dialog id="media-modal">
         <div class="modal-header">
             <h3 data-i18n="web.modal_youtube_title">Ajouter / Modifier un Média</h3>
@@ -1415,6 +1413,8 @@
         </div>
 
         <div class="modal-body edit-form">
+            <!-- Browser-style Tabs Bar (V60) -->
+            <div id="edit-linked-items-display" class="modal-tabs-bar"></div>
             <!-- Search Zone -->
             <div id="search-zone-container">
                 <div class="input-group">
@@ -1515,7 +1515,7 @@
                         <input type="text" id="edit-title" data-i18n-placeholder="web.placeholder_song_title"
                             placeholder="Titre de la chanson" style="flex:1;">
                         <button class="btn-secondary" onclick="openMediaLinkerFromEdit()"
-                            title="Lier un média" data-i18n-title="web.btn_link_media">
+                            title="Lier un média" data-i18n-title="web.btn_link_media" style="display:none;">
                             <i class="ph ph-link-simple"></i>
                         </button>
                         <button class="btn-secondary" onclick="openUniversalTagModal('edit')"
@@ -1533,9 +1533,6 @@
             <!-- Hidden legacy fields to prevent JS crash -->
             <textarea id="youtube-desc-input" style="display:none;"></textarea>
             <textarea id="user-notes-input" style="display:none;"></textarea>
-
-            <!-- Zone: Linked Items Display (Visual confirmation) -->
-            <div id="edit-linked-items-display" style="display:flex; flex-wrap:wrap; gap:8px; margin: 3px 0 8px 0; padding: 0 5px;"></div>
 
             <!-- Zone 3: Metadata Grid -->
             <div class="zone-metadata">
@@ -1756,6 +1753,8 @@
             <button onclick="closeWebLinkModal()" class="btn-close">×</button>
         </div>
         <div class="modal-body">
+            <!-- Browser-style Tabs Bar (V60) -->
+            <div id="web-link-linked-items-display" class="modal-tabs-bar"></div>
             <!-- Zone 1 : Media Stack (Pochette) -->
             <div class="modal-media-stack">
                 <!-- Volume (Left) -->
@@ -1803,15 +1802,13 @@
                         <div style="display:flex; gap:10px;">
                             <input type="text" id="web-link-title" placeholder="Ex: Tablature Solo" style="flex:1;">
                             <button class="btn-secondary" onclick="openMediaLinkerFromEdit()"
-                                title="Lier un média" data-i18n-title="web.btn_link_media">
+                                title="Lier un média" data-i18n-title="web.btn_link_media" style="display:none;">
                                 <i class="ph ph-link-simple"></i>
                             </button>
                             <button class="btn-secondary" onclick="openUniversalTagModal('web-link')"
                                 title="Rechercher des métadonnées" data-i18n-title="web.hint_autotag">🔍
                                 Auto-Tag</button>
                         </div>
-                        <!-- V58: Display linked items in Web Link modal -->
-                        <div id="web-link-linked-items-display" style="display:flex; flex-wrap:wrap; gap:8px; margin-top: 5px;"></div>
                     </div>
                     <div class="col">
                         <label data-i18n="web.lbl_artist">Artiste</label>

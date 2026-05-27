@@ -13543,6 +13543,7 @@ function renderExistingLinks() {
 
 /**
  * V58: Unified rendering of linked items across all edit modals (Main, Multitrack, WebLink)
+ * Modified to support browser-style tabs and stable sorting (V60)
  */
 function renderModalLinkedItems() {
     // We try to fill all potential display areas
@@ -13572,36 +13573,57 @@ function renderModalLinkedItems() {
         if (!container) return;
         container.innerHTML = "";
 
+        console.log("[DEBUG TABS] container:", container.id, "activeUid:", activeUid, "currentEditingLinkedIds:", currentEditingLinkedIds);
+
         const uidsToRender = [];
         const seenItems = new Set();
         
-        if (activeUid) {
-            const activeItem = getLinkedItem(activeUid);
-            if (activeItem) {
-                const identifier = activeItem.url || activeItem.path || activeUid;
-                seenItems.add(identifier);
-                uidsToRender.push(activeUid);
-            } else {
-                uidsToRender.push(activeUid);
-            }
-        }
-
+        // Collect active + linked UIDs to form the full interconnect family
+        const allFamilyUids = [];
+        if (activeUid) allFamilyUids.push(activeUid);
         if (currentEditingLinkedIds) {
             currentEditingLinkedIds.forEach(id => {
-                if (id !== activeUid && !uidsToRender.includes(id)) {
-                    const item = getLinkedItem(id);
-                    if (item) {
-                        const identifier = item.url || item.path || id;
-                        if (!seenItems.has(identifier)) {
-                            seenItems.add(identifier);
-                            uidsToRender.push(id);
-                        }
-                    } else {
-                        uidsToRender.push(id);
-                    }
+                if (!allFamilyUids.includes(id)) {
+                    allFamilyUids.push(id);
                 }
             });
         }
+        
+        // Resolve items and details
+        const familyItems = [];
+        allFamilyUids.forEach(uid => {
+            const item = getLinkedItem(uid);
+            if (item) {
+                familyItems.push({ uid, item });
+            }
+        });
+        
+        // V60: Sort the family in an ABSOLUTELY STABLE order:
+        // YouTube videos first, then Local files, then Web links, sorted alphabetically by title
+        familyItems.sort((a, b) => {
+            const typeA = a.uid.split('_')[0].split(':')[0];
+            const typeB = b.uid.split('_')[0].split(':')[0];
+            if (typeA !== typeB) {
+                const order = { 'set': 1, 'lib': 2, 'web': 3 };
+                const valA = order[typeA] || 9;
+                const valB = order[typeB] || 9;
+                return valA - valB;
+            }
+            const titleA = (a.item.title || "").toLowerCase();
+            const titleB = (b.item.title || "").toLowerCase();
+            return titleA.localeCompare(titleB);
+        });
+
+        // Unique filtration in stable order to populate uidsToRender
+        familyItems.forEach(entry => {
+            const identifier = entry.item.url || entry.item.path || entry.uid;
+            if (!seenItems.has(identifier)) {
+                seenItems.add(identifier);
+                uidsToRender.push(entry.uid);
+            }
+        });
+
+        console.log("[DEBUG TABS] Final uidsToRender for", container.id, ":", uidsToRender);
 
         if (uidsToRender.length === 0) {
             container.style.display = "none";
@@ -13616,16 +13638,7 @@ function renderModalLinkedItems() {
 
             const isActive = (uid === activeUid);
             const badge = document.createElement("div");
-            badge.className = "link-pill" + (isActive ? " active" : ""); 
-            
-            // Premium styling with active selection indicators
-            if (isActive) {
-                badge.style = "background:rgba(3,218,198,0.12); border:1px solid rgba(3,218,198,0.5); padding:4px 12px; border-radius:15px; font-size:0.75em; color:#03dac6; display:flex; align-items:center; gap:8px; cursor:default; font-weight:bold;";
-            } else {
-                badge.style = "background:rgba(187,134,252,0.06); border:1px solid rgba(187,134,252,0.25); padding:4px 12px; border-radius:15px; font-size:0.75em; color:#bb86fc; display:flex; align-items:center; gap:8px; cursor:default; transition:all 0.2s ease;";
-                badge.onmouseover = () => { badge.style.borderColor = "rgba(187,134,252,0.6)"; badge.style.background = "rgba(187,134,252,0.15)"; };
-                badge.onmouseout = () => { badge.style.borderColor = "rgba(187,134,252,0.25)"; badge.style.background = "rgba(187,134,252,0.06)"; };
-            }
+            badge.className = "modal-tab" + (isActive ? " active" : ""); 
             
             badge.title = isActive ? (currentLang === 'fr' ? "Média actuellement en cours d'édition" : "Media currently being edited") : (item.artist ? `${item.artist} - ${item.title}` : item.title);
             
@@ -13647,29 +13660,27 @@ function renderModalLinkedItems() {
                 else iconClass = "ph ph-globe";
             }
 
-            // Sync Status (Cloud Icon)
-            const isShared = item.shared_with_group === true || item.shared_with_group === "true";
-            const cloudIconClass = isShared ? "ph-fill ph-cloud-arrow-up" : "ph ph-cloud-slash";
-            const cloudColor = isShared ? "#03DAC6" : "#666";
-            const cloudTitle = isShared ? (currentLang === 'fr' ? 'Partagé avec le groupe' : 'Shared with group') : (currentLang === 'fr' ? 'Non partagé' : 'Not shared');
-
             if (isActive) {
                 badge.innerHTML = `
                     <i class="${iconClass}"></i> 
-                    <span class="badge-title" style="max-width:120px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.title}</span>
-                    <i class="ph ph-circle-dashed" style="color:#03dac6; font-size:1.1em; margin-left:3px;" title="Actif"></i>
+                    <span class="badge-title" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.title}</span>
                 `;
             } else {
+                // Determine label type based on context
+                let typeLabel = "library";
+                if (uid.startsWith('web')) {
+                    const canonical = resolveCanonicalType(item.type, item.url);
+                    typeLabel = (canonical === 'youtube') ? "youtube" : "web_links";
+                }
+                const actualIndex = item.originalIndex;
+
                 badge.innerHTML = `
-                    <i class="${iconClass}"></i> 
-                    <span class="badge-title" style="max-width:110px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer;" title="(Cliquez pour ouvrir)">${item.title}</span>
-                    <i class="ph ${cloudIconClass}" 
-                       style="color:${cloudColor}; cursor:pointer; font-size:1.2em; margin-left:5px;" 
-                       title="${cloudTitle}"
-                       onclick="toggleSharedForUID('${uid}', event)"></i>
+                    <i class="${iconClass}" style="cursor:pointer;"></i> 
+                    <span class="badge-title" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer;" title="(Cliquer pour ouvrir)">${item.title}</span>
+                    <span class="modal-tab-close" title="${currentLang === 'fr' ? 'Délier ce média' : 'Unlink this media'}">×</span>
                 `;
                 
-                // Navigation click on badge text
+                // Navigation click on badge text/icon
                 const textSpan = badge.querySelector(".badge-title");
                 if (textSpan) {
                     textSpan.onclick = (e) => {
@@ -13677,10 +13688,43 @@ function renderModalLinkedItems() {
                         openLinkedMedia(uid);
                     };
                 }
+                const iconElem = badge.querySelector("i");
+                if (iconElem) {
+                    iconElem.onclick = (e) => {
+                        e.stopPropagation();
+                        openLinkedMedia(uid);
+                    };
+                }
+
+                // Delete click
+                const closeBtn = badge.querySelector(".modal-tab-close");
+                if (closeBtn) {
+                    closeBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        toggleMediaLink(typeLabel, actualIndex);
+                    };
+                }
             }
             
             container.appendChild(badge);
         });
+
+        // V60: Add the "+" Browser-style Add Tab Button
+        const addBtn = document.createElement("div");
+        addBtn.className = "modal-tab-add";
+        addBtn.innerHTML = '<i class="ph ph-plus"></i>';
+        addBtn.title = currentLang === 'fr' ? "Lier un autre média à cette famille..." : "Link another media to this family...";
+        
+        addBtn.onclick = (e) => {
+            e.stopPropagation();
+            if (lastEditContext === 'library') {
+                openMediaLinker('library');
+            } else {
+                openMediaLinkerFromEdit();
+            }
+        };
+        
+        container.appendChild(addBtn);
     });
 }
 
