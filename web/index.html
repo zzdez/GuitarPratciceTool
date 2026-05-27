@@ -1768,7 +1768,7 @@
 
                 <!-- Poster (Center) -->
                 <div id="web-link-art-container" class="art-container wide-art"
-                    onclick="document.getElementById('web-link-cover-upload').click()">
+                    onclick="onWebLinkCoverClick()">
                     <img id="web-link-art-img" src="" style="display:none;">
                     <div id="web-link-art-placeholder"
                         style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:#888; background:#222; border: 1px dashed #444; border-radius:8px;">
@@ -1793,6 +1793,8 @@
                 <input type="file" id="web-link-cover-upload" accept="image/*" style="display:none"
                     onchange="handleWebLinkCover(this)">
             </div>
+
+
 
             <div class="edit-form">
                 <!-- Row 1: Titre / Artiste -->
@@ -3164,6 +3166,26 @@
             <p id="interconnection-choice-desc" style="font-size: 0.9em; color: #888; margin-bottom: 15px;">Plusieurs médias de ce type sont disponibles :</p>
             <div id="interconnection-choice-list" style="display:flex; flex-direction:column; gap:10px; max-height: 400px; overflow-y: auto;">
                 <!-- Buttons will be injected here -->
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Modal: Cover Selection Choice -->
+    <dialog id="modal-cover-choice" class="modal-modern" style="width: 420px; max-width: 90vw;">
+        <div class="modal-header">
+            <h2 data-i18n="web.modal_cover_choice_title">Source de l'image</h2>
+            <button class="btn-close-modal" onclick="document.getElementById('modal-cover-choice').close()">×</button>
+        </div>
+        <div class="modal-body" style="padding: 20px; display:flex; flex-direction:column; gap:15px;">
+            <button class="btn-primary" onclick="triggerManualCoverUpload()" style="width:100%; height:45px; display:flex; align-items:center; justify-content:center; gap:8px;">
+                <i class="ph ph-upload-simple" style="font-size:1.2em;"></i> <span data-i18n="web.btn_upload_local_image">Importer depuis mon ordinateur...</span>
+            </button>
+            
+            <div id="cover-choice-suggestions-section" style="display:flex; flex-direction:column; gap:8px; border-top:1px solid #333; padding-top:12px; margin-top:5px;">
+                <span style="font-size:0.85em; color:#888; text-transform:uppercase; font-weight:bold;"><i class="ph ph-sparkle" style="color:var(--accent);"></i> <span data-i18n="web.lbl_select_existing_cover">Ou choisir une image existante :</span></span>
+                <div id="cover-choice-suggestions-list" style="display:flex; gap:12px; flex-wrap:wrap; margin-top:5px;">
+                    <!-- Suggested covers here -->
+                </div>
             </div>
         </div>
     </dialog>

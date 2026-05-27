@@ -1987,11 +1987,12 @@ function openWebLinkModal(index = -1) {
         document.getElementById("web-link-scale").value = link.scale || "";
         document.getElementById("web-link-tuning").value = link.tuning || "standard";
 
-        // Cover
-        if (link.cover) {
-            window.currentWebLinkCover = link.cover;
+        // Cover (YouTube local cover supported recursively and fallback resolution)
+        const coverToUse = resolveThumbnail(link.cover || (link.url && (link.url.includes("youtube.com") || link.url.includes("youtu.be")) ? link.url : null));
+        if (coverToUse) {
+            window.currentWebLinkCover = link.cover || coverToUse;
             const img = document.getElementById("web-link-art-img");
-            img.src = link.cover.startsWith('http') ? link.cover : `/api/cover?path=${encodeURIComponent(link.cover)}&t=${Date.now()}`;
+            img.src = coverToUse.startsWith('http') || coverToUse.startsWith('/api/') ? coverToUse : `/api/cover?path=${encodeURIComponent(coverToUse)}&t=${Date.now()}`;
             img.style.display = "block";
             document.getElementById("web-link-art-placeholder").style.display = "none";
             document.getElementById("btn-web-link-delete-cover").style.display = "flex";
@@ -2003,6 +2004,119 @@ function openWebLinkModal(index = -1) {
 
 function closeWebLinkModal() {
     document.getElementById("modal-web-link").close();
+}
+
+function triggerManualCoverUpload() {
+    const choiceModal = document.getElementById("modal-cover-choice");
+    if (choiceModal) choiceModal.close();
+    document.getElementById('web-link-cover-upload').click();
+}
+
+function onWebLinkCoverClick() {
+    const title = document.getElementById("web-link-title").value;
+    const artist = document.getElementById("web-link-artist").value;
+    const url = document.getElementById("web-link-url").value;
+    const type = document.getElementById("web-link-type").value;
+    
+    const isYoutube = type === 'youtube' || (url && (url.includes("youtube.com") || url.includes("youtu.be")));
+    
+    // Si c'est du YouTube, pas besoin de proposer d'autres images selon le souhait de l'utilisateur
+    if (isYoutube) {
+        document.getElementById('web-link-cover-upload').click();
+        return;
+    }
+    
+    // Trouver les suggestions d'images pour les autres types de liens (Songsterr, etc.)
+    const cleanTitle = title ? title.trim().toLowerCase() : "";
+    const cleanArtist = artist ? artist.trim().toLowerCase() : "";
+    const suggestedCovers = [];
+    
+    if (cleanTitle) {
+        // 1. Chercher dans les fichiers locaux
+        if (typeof localFiles !== 'undefined') {
+            localFiles.forEach((f, idx) => {
+                const titleMatch = f.title && f.title.trim().toLowerCase() === cleanTitle;
+                const artistMatch = !cleanArtist || (f.artist && f.artist.trim().toLowerCase() === cleanArtist);
+                if (titleMatch && artistMatch) {
+                    const coverUrl = `/api/local/art/${idx}`;
+                    if (!suggestedCovers.some(c => c.url === coverUrl)) {
+                        suggestedCovers.push({
+                            url: coverUrl,
+                            rawPath: `lib:${idx}`,
+                            source: f.artist ? `${f.title} (${f.artist}) [Local]` : `${f.title} [Local]`
+                        });
+                    }
+                }
+            });
+        }
+        
+        // 2. Chercher dans les autres liens web
+        if (typeof webLinks !== 'undefined') {
+            webLinks.forEach((w, idx) => {
+                if (idx === currentWebLinkIndex) return; // Ignorer le lien lui-même
+                const titleMatch = w.title && w.title.trim().toLowerCase() === cleanTitle;
+                const artistMatch = !cleanArtist || (w.artist && w.artist.trim().toLowerCase() === cleanArtist);
+                if (titleMatch && artistMatch) {
+                    let coverUrl = null;
+                    if (w.cover) {
+                        coverUrl = w.cover.startsWith('http') || w.cover.startsWith('/api/') ? w.cover : `/api/cover?path=${encodeURIComponent(w.cover)}`;
+                    } else {
+                        const ytId = getYouTubeId(w.url);
+                        if (ytId) {
+                            coverUrl = `/api/youtube/cover/${ytId}`;
+                        }
+                    }
+                    if (coverUrl && !suggestedCovers.some(c => c.url === coverUrl)) {
+                        suggestedCovers.push({
+                            url: coverUrl,
+                            rawPath: w.cover || coverUrl,
+                            source: w.artist ? `${w.title} (${w.artist}) [Web]` : `${w.title} [Web]`
+                        });
+                    }
+                }
+            });
+        }
+    }
+    
+    // Si aucune suggestion n'est trouvée, ouvrir directement l'explorateur d'images d'origine
+    if (suggestedCovers.length === 0) {
+        document.getElementById('web-link-cover-upload').click();
+        return;
+    }
+    
+    // Sinon, afficher la modale de choix premium
+    const choiceModal = document.getElementById("modal-cover-choice");
+    const suggestionsList = document.getElementById("cover-choice-suggestions-list");
+    
+    if (choiceModal && suggestionsList) {
+        suggestionsList.innerHTML = "";
+        
+        suggestedCovers.forEach(cov => {
+            const wrap = document.createElement("div");
+            wrap.style = "position:relative; width:65px; height:65px; cursor:pointer; border-radius:8px; overflow:hidden; border:2px solid rgba(255,255,255,0.1); transition:all 0.2s ease; background:#222;";
+            wrap.title = `Utiliser l'image de : ${cov.source}`;
+            
+            wrap.onmouseover = () => { wrap.style.borderColor = "var(--accent)"; wrap.style.transform = "scale(1.08)"; };
+            wrap.onmouseout = () => { wrap.style.borderColor = "rgba(255,255,255,0.1)"; wrap.style.transform = "scale(1)"; };
+            
+            wrap.innerHTML = `<img src="${cov.url}" style="width:100%; height:100%; object-fit:cover;">`;
+            
+            wrap.onclick = () => {
+                window.currentWebLinkCover = cov.rawPath;
+                const img = document.getElementById("web-link-art-img");
+                img.src = cov.url;
+                img.style.display = "block";
+                document.getElementById("web-link-art-placeholder").style.display = "none";
+                document.getElementById("btn-web-link-delete-cover").style.display = "flex";
+                choiceModal.close();
+                showToast(t("web.msg_cover_applied") || "Image associée appliquée avec succès !", "success");
+            };
+            
+            suggestionsList.appendChild(wrap);
+        });
+        
+        choiceModal.showModal();
+    }
 }
 
 async function handleWebLinkCover(input) {
