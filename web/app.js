@@ -36,6 +36,20 @@ function resolveThumbnail(urlOrThumbnail) {
     }
     return urlOrThumbnail;
 }
+
+// Helper global pour normaliser les types de médias interconnectés de façon robuste
+function resolveCanonicalType(type, url) {
+    const tLower = (type || "").toLowerCase();
+    const urlLower = (url || "").toLowerCase();
+    
+    if (tLower === 'youtube' || tLower.includes('youtube') || urlLower.includes('youtube.com') || urlLower.includes('youtu.be')) return 'youtube';
+    if (tLower === 'spotify' || tLower.includes('spotify') || urlLower.includes('spotify.com')) return 'spotify';
+    if (tLower === 'songsterr' || tLower.includes('songsterr') || urlLower.includes('songsterr.com')) return 'songsterr';
+    if (tLower === 'moises' || tLower.includes('moises')) return 'moises';
+    if (tLower === 'lesson' || tLower.includes('lessons') || tLower.includes('cours') || tLower.includes('tuto')) return 'lesson';
+    
+    return 'other';
+}
 let websocket;
 let currentProfile = null;
 let currentActivePlayer = null;
@@ -1782,12 +1796,14 @@ async function loadWebLinks() {
             // 2. Filter for the "YouTube/Setlist" View (Iframes)
             currentTrackList = webLinks.filter(it => 
                 it.open_mode === 'iframe' || 
+                (it.type && it.type.toLowerCase().includes('youtube')) ||
                 (it.url && (it.url.includes('youtube.com') || it.url.includes('youtu.be')))
             );
 
             // 3. Filter for the "Web Links" View (Songsterr, etc.)
             currentWebLinkTrackList = webLinks.filter(it => 
                 it.open_mode !== 'iframe' && 
+                (!it.type || !it.type.toLowerCase().includes('youtube')) &&
                 (!it.url || (!it.url.includes('youtube.com') && !it.url.includes('youtu.be')))
             );
 
@@ -2252,6 +2268,16 @@ function playWebLink(index) {
     const link = webLinks[index];
     if (!link) return;
     
+    // V60: If it is a YouTube link, play it internally in our premium player!
+    const isYoutube = link.open_mode === 'iframe' || 
+                      (link.type && link.type.toLowerCase().includes('youtube')) ||
+                      (link.url && (link.url.includes("youtube.com") || link.url.includes("youtu.be")));
+                      
+    if (isYoutube) {
+        playTrack(link);
+        return;
+    }
+    
     // Open in browser
     fetch(`/api/open_external?url=${encodeURIComponent(link.url)}`);
     
@@ -2326,8 +2352,8 @@ function updateInterconnectionUI(activeItem) {
                 else matches.audio_local.push(item);
             }
             else if (uid.startsWith('web')) {
-                const type = item.type || 'other';
-                if (matches[type]) matches[type].push(item);
+                const canonical = resolveCanonicalType(item.type, item.url);
+                if (matches[canonical]) matches[canonical].push(item);
                 else matches.other.push(item);
             }
         });
@@ -2374,14 +2400,29 @@ function updateInterconnectionUI(activeItem) {
                 if (activeItem.linked_ids && (activeItem.linked_ids.includes(legacyUid) || activeItem.linked_ids.includes(stableUid))) return; // Already added
                 
                 if (isMatch(w, artist, title) && idx !== (window.currentSource === 'web_links' ? window.currentPlayingIndex : -1)) {
-                    const type = w.type || 'other';
+                    const canonical = resolveCanonicalType(w.type, w.url);
                     const itemToAdd = { ...w, originalIndex: idx };
-                    if (matches[type]) matches[type].push(itemToAdd);
+                    if (matches[canonical]) matches[canonical].push(itemToAdd);
                     else matches.other.push(itemToAdd);
                 }
             });
         }
     }
+
+    // V60: Deduplicate matches to prevent duplicates caused by set/web prefix alignment
+    Object.keys(matches).forEach(key => {
+        const unique = [];
+        const seen = new Set();
+        
+        matches[key].forEach(item => {
+            const identifier = item.url || item.path || item.uid;
+            if (identifier && !seen.has(identifier)) {
+                seen.add(identifier);
+                unique.push(item);
+            }
+        });
+        matches[key] = unique;
+    });
 
     // Render Icons
     const renderIcon = (type, list, iconClass, color, titlePrefix) => {
@@ -2463,7 +2504,17 @@ function openInterconnectionChoice(type, list) {
         lesson: 'ph ph-graduation-cap',
         other: 'ph ph-globe'
     };
-    const iconClass = icons[type] || 'ph ph-link';
+    let iconClass = icons[type];
+    if (!iconClass) {
+        const tLower = (type || "").toLowerCase();
+        if (tLower.includes('youtube')) iconClass = 'ph ph-youtube-logo';
+        else if (tLower.includes('songsterr')) iconClass = 'ph ph-guitar';
+        else if (tLower.includes('moises')) iconClass = 'ph ph-scissors';
+        else if (tLower.includes('spotify')) iconClass = 'ph ph-spotify-logo';
+        else if (tLower.includes('lesson') || tLower.includes('cours') || tLower.includes('tuto')) iconClass = 'ph ph-graduation-cap';
+        else if (tLower.includes('other') || tLower.includes('autre') || tLower.includes('globe')) iconClass = 'ph ph-globe';
+        else iconClass = 'ph ph-link';
+    }
 
 
 
@@ -2558,7 +2609,7 @@ function getLinkedItem(uid) {
     let found = null;
     if (uid.includes('_')) {
         const prefix = uid.split('_')[0];
-        const list = (prefix === 'lib' ? localFiles : (prefix === 'set' ? currentTrackList : webLinks));
+        const list = (prefix === 'lib' ? localFiles : webLinks);
         if (list) {
             found = list.find(it => it.uid === uid) || null;
         }
@@ -2582,7 +2633,7 @@ function getLinkedItem(uid) {
             if (!list || list.length === 0) return null;
             return list.find(t => t.originalIndex === i) || (i >= 0 && i < list.length ? list[i] : null);
         };
-        if (type === 'set') return findIn(currentTrackList, idx);
+        if (type === 'set') return findIn(webLinks, idx);
         if (type === 'lib') return findIn(localFiles, idx);
         if (type === 'web') return findIn(webLinks, idx);
     }
@@ -2741,7 +2792,7 @@ function renderSetlist(list) {
 
 
 // --- CUSTOM AUTOCOMPLETE ---
-let blockedTags = { category: [], genre: [] };
+let blockedTags = { category: [], genre: [], type: [] };
 
 async function loadBlockedTags() {
     try {
@@ -2788,6 +2839,19 @@ function setupCustomAutocomplete(inputId, boxId, field) {
             ...currentTrackList.map(t => t[field] || ""),
             ...(typeof webLinks !== 'undefined' ? webLinks.map(t => t[field] || "") : [])
         ].filter(v => v));
+
+        // Inject dynamic default categories/types if they are empty or for field 'type'
+        if (field === 'type') {
+            const defaultTypes = [
+                t("web.opt_youtube") || "YouTube (Vidéo)",
+                t("web.opt_songsterr") || "Songsterr (Tablature)",
+                t("web.opt_moises") || "Moises (Stems AI)",
+                t("web.opt_spotify") || "Spotify (Streaming)",
+                t("web.opt_lessons") || "Cours de Guitare",
+                t("web.opt_useful_links") || "Liens Utiles"
+            ];
+            defaultTypes.forEach(d => allValues.add(d));
+        }
 
         // 2. Filter: Match input AND Not Blocked
         const matches = Array.from(allValues).filter(v => {
@@ -3522,7 +3586,10 @@ function openEditModal(index) {
     editingIndex = index;
     lastEditContext = 'setlist';
     // Find track by original index in the current (possibly sorted) list
-    const track = currentTrackList.find(t => t.originalIndex === index);
+    let track = currentTrackList.find(t => t.originalIndex === index);
+    if (!track && typeof webLinks !== 'undefined') {
+        track = webLinks[index];
+    }
     if (!track) return;
 
     currentEditingLinkedIds = track.linked_ids || []; // V58: Initialize links
@@ -3588,10 +3655,17 @@ function openEditModal(index) {
     const btnDel = document.getElementById("btn-edit-delete-cover");
     if (btnDel) btnDel.style.display = "none";
 
-    if (track.thumbnail) {
+    const isYoutube = track.url && (track.url.includes("youtube.com") || track.url.includes("youtu.be"));
+    let ytId = isYoutube ? (track.id || getYouTubeId(track.url)) : null;
+    let thumbToUse = track.thumbnail;
+    if (!thumbToUse && ytId) {
+        thumbToUse = `/api/youtube/cover/${ytId}`;
+    }
+
+    if (thumbToUse) {
         thumbContainer.classList.add("wide-art");
         // Update only the image/content part, preserving the button if possible, or just re-inject
-        thumbContainer.innerHTML = `<img src="${resolveThumbnail(track.thumbnail)}" style="width:100%; height:100%; object-fit:contain;">
+        thumbContainer.innerHTML = `<img src="${resolveThumbnail(thumbToUse)}" style="width:100%; height:100%; object-fit:contain;">
                                     <div id="btn-edit-delete-cover" class="btn-delete-cover" style="display:flex;"
                                          onclick="event.stopPropagation(); removeEditCover();">×</div>`;
     } else {
@@ -4491,7 +4565,10 @@ async function deleteTrack(index) {
 }
 
 function playTrackAt(index) {
-    const track = currentTrackList.find(t => t.originalIndex === index);
+    let track = currentTrackList.find(t => t.originalIndex === index);
+    if (!track && typeof webLinks !== 'undefined') {
+        track = webLinks[index];
+    }
     if (track) playTrack(track);
 }
 
@@ -4509,6 +4586,7 @@ function playMediaByUid(uid, isOrchestrated = false) {
         clearSetlistOrchestrator();
     }
 
+    console.log("[DEBUG PLAY] playMediaByUid UID:", uid, "item:", item);
     // Determine source and call appropriate player
     if (uid.startsWith('set')) {
         playTrack(item);
@@ -4517,10 +4595,10 @@ function playMediaByUid(uid, isOrchestrated = false) {
         if (realIdx !== -1) playLocal(realIdx);
     } else if (uid.startsWith('web')) {
         // V60: Unified YouTube/Web links logic
-        // If it's configured as embedded (iframe) or auto (resolved to iframe for YouTube), play internally
         const openMode = item.open_mode || "auto";
         const isYoutube = item.url && (item.url.includes("youtube.com") || item.url.includes("youtu.be"));
         const shouldPlayInternal = openMode === "iframe" || (openMode === "auto" && isYoutube);
+        console.log("[DEBUG PLAY] Web item - openMode:", openMode, "isYoutube:", isYoutube, "shouldPlayInternal:", shouldPlayInternal);
         
         if (shouldPlayInternal) {
             playTrack(item);
@@ -4648,7 +4726,14 @@ function playTrack(track) {
     }
 
     const isYoutube = track.url && (track.url.includes("youtube.com") || track.url.includes("youtu.be"));
-    const shouldPlayYTInternal = track.open_mode === "iframe" || (track.open_mode === "auto" && isYoutube);
+    if (isYoutube && !track.id) {
+        track.id = getYouTubeId(track.url);
+    }
+    const shouldPlayYTInternal = track.open_mode === "iframe" || 
+                                 (!track.open_mode && isYoutube) || 
+                                 (track.open_mode === "auto" && isYoutube);
+
+    console.log("[DEBUG PLAY] playTrack check - isYoutube:", isYoutube, "track.id:", track.id, "open_mode:", track.open_mode, "shouldPlayYTInternal:", shouldPlayYTInternal);
 
     if (track.open_mode === "external") {
         fetch(`/api/open_external?url=${encodeURIComponent(track.url)}`);
@@ -5158,6 +5243,7 @@ window.onload = () => {
 
 function setMode(mode, targetProfile) {
     console.log(`[DEBUG JS] setMode called with Mode=${mode}, Target=${targetProfile}`);
+    console.trace("[DEBUG JS] setMode Trace");
     currentMode = mode;
 
     // STRICTLY UPDATE WEB MODE STATE
@@ -5307,6 +5393,7 @@ async function loadLocalFiles() {
     // Initialize Custom Autocompletes
     setupCustomAutocomplete("edit-category", "suggestions-category", "category");
     setupCustomAutocomplete("edit-genre", "suggestions-genre", "genre");
+    setupCustomAutocomplete("web-link-type", "suggestions-type", "type");
 
     renderLocalFiles();
     refreshInterconnections(); // V55: Wake up header UI after loading
@@ -13465,27 +13552,84 @@ function renderModalLinkedItems() {
         document.getElementById("web-link-linked-items-display") // Future-proofing web modal if needed
     ];
 
+    // Determine the UID of the item currently being edited
+    let activeUid = null;
+    if (document.getElementById("media-modal")?.hasAttribute("open")) {
+        // Can be either library or setlist
+        if (lastEditContext === 'library' && typeof editingLocalIndex !== 'undefined' && editingLocalIndex !== null) {
+            activeUid = localFiles[editingLocalIndex]?.uid;
+        } else if (typeof editingIndex !== 'undefined' && editingIndex !== null) {
+            const track = currentTrackList.find(t => t.originalIndex === editingIndex);
+            if (track) activeUid = track.uid;
+        }
+    } else if (document.getElementById("modal-multitrack")?.hasAttribute("open") && typeof editingLocalIndex !== 'undefined' && editingLocalIndex !== null) {
+        activeUid = localFiles[editingLocalIndex]?.uid;
+    } else if (document.getElementById("modal-web-link")?.hasAttribute("open") && typeof currentWebLinkIndex !== 'undefined' && currentWebLinkIndex !== -1) {
+        activeUid = webLinks[currentWebLinkIndex]?.uid;
+    }
+
     containers.forEach(container => {
         if (!container) return;
         container.innerHTML = "";
 
-        if (!currentEditingLinkedIds || currentEditingLinkedIds.length === 0) {
+        const uidsToRender = [];
+        const seenItems = new Set();
+        
+        if (activeUid) {
+            const activeItem = getLinkedItem(activeUid);
+            if (activeItem) {
+                const identifier = activeItem.url || activeItem.path || activeUid;
+                seenItems.add(identifier);
+                uidsToRender.push(activeUid);
+            } else {
+                uidsToRender.push(activeUid);
+            }
+        }
+
+        if (currentEditingLinkedIds) {
+            currentEditingLinkedIds.forEach(id => {
+                if (id !== activeUid && !uidsToRender.includes(id)) {
+                    const item = getLinkedItem(id);
+                    if (item) {
+                        const identifier = item.url || item.path || id;
+                        if (!seenItems.has(identifier)) {
+                            seenItems.add(identifier);
+                            uidsToRender.push(id);
+                        }
+                    } else {
+                        uidsToRender.push(id);
+                    }
+                }
+            });
+        }
+
+        if (uidsToRender.length === 0) {
             container.style.display = "none";
             return;
         }
 
         container.style.display = "flex";
         
-        currentEditingLinkedIds.forEach(uid => {
+        uidsToRender.forEach(uid => {
             const item = getLinkedItem(uid);
             if (!item) return;
 
+            const isActive = (uid === activeUid);
             const badge = document.createElement("div");
-            badge.className = "link-pill"; 
-            badge.style = "background:rgba(187,134,252,0.1); border:1px solid rgba(187,134,252,0.3); padding:3px 10px; border-radius:15px; font-size:0.75em; color:#bb86fc; display:flex; align-items:center; gap:8px; cursor:default; position:relative;";
-            badge.title = item.artist ? `${item.artist} - ${item.title}` : item.title;
+            badge.className = "link-pill" + (isActive ? " active" : ""); 
             
-            // Icon logic (YouTube vs others)
+            // Premium styling with active selection indicators
+            if (isActive) {
+                badge.style = "background:rgba(3,218,198,0.12); border:1px solid rgba(3,218,198,0.5); padding:4px 12px; border-radius:15px; font-size:0.75em; color:#03dac6; display:flex; align-items:center; gap:8px; cursor:default; font-weight:bold;";
+            } else {
+                badge.style = "background:rgba(187,134,252,0.06); border:1px solid rgba(187,134,252,0.25); padding:4px 12px; border-radius:15px; font-size:0.75em; color:#bb86fc; display:flex; align-items:center; gap:8px; cursor:default; transition:all 0.2s ease;";
+                badge.onmouseover = () => { badge.style.borderColor = "rgba(187,134,252,0.6)"; badge.style.background = "rgba(187,134,252,0.15)"; };
+                badge.onmouseout = () => { badge.style.borderColor = "rgba(187,134,252,0.25)"; badge.style.background = "rgba(187,134,252,0.06)"; };
+            }
+            
+            badge.title = isActive ? (currentLang === 'fr' ? "Média actuellement en cours d'édition" : "Media currently being edited") : (item.artist ? `${item.artist} - ${item.title}` : item.title);
+            
+            // Icon logic using our canonical helper or local type checks
             let iconClass = "ph ph-link";
             if (uid.startsWith('set')) iconClass = "ph ph-youtube-logo";
             else if (uid.startsWith('lib')) {
@@ -13494,7 +13638,13 @@ function renderModalLinkedItems() {
                 else if (type === 'multitrack') iconClass = "ph ph-stack-simple";
                 else iconClass = "ph ph-music-notes";
             } else if (uid.startsWith('web')) {
-                iconClass = "ph ph-globe";
+                const canonical = resolveCanonicalType(item.type, item.url);
+                if (canonical === 'youtube') iconClass = "ph ph-youtube-logo";
+                else if (canonical === 'spotify') iconClass = "ph ph-spotify-logo";
+                else if (canonical === 'songsterr') iconClass = "ph ph-guitar";
+                else if (canonical === 'moises') iconClass = "ph ph-scissors";
+                else if (canonical === 'lesson') iconClass = "ph ph-graduation-cap";
+                else iconClass = "ph ph-globe";
             }
 
             // Sync Status (Cloud Icon)
@@ -13503,22 +13653,30 @@ function renderModalLinkedItems() {
             const cloudColor = isShared ? "#03DAC6" : "#666";
             const cloudTitle = isShared ? (currentLang === 'fr' ? 'Partagé avec le groupe' : 'Shared with group') : (currentLang === 'fr' ? 'Non partagé' : 'Not shared');
 
-            badge.innerHTML = `
-                <i class="${iconClass}"></i> 
-                <span class="badge-title" style="max-width:110px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer;" title="(Cliquez pour ouvrir)">${item.title}</span>
-                <i class="ph ${cloudIconClass}" 
-                   style="color:${cloudColor}; cursor:pointer; font-size:1.2em; margin-left:5px;" 
-                   title="${cloudTitle}"
-                   onclick="toggleSharedForUID('${uid}', event)"></i>
-            `;
-            
-            // Navigation click on badge text
-            const textSpan = badge.querySelector(".badge-title");
-            if (textSpan) {
-                textSpan.onclick = (e) => {
-                    e.stopPropagation();
-                    openLinkedMedia(uid);
-                };
+            if (isActive) {
+                badge.innerHTML = `
+                    <i class="${iconClass}"></i> 
+                    <span class="badge-title" style="max-width:120px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.title}</span>
+                    <i class="ph ph-circle-dashed" style="color:#03dac6; font-size:1.1em; margin-left:3px;" title="Actif"></i>
+                `;
+            } else {
+                badge.innerHTML = `
+                    <i class="${iconClass}"></i> 
+                    <span class="badge-title" style="max-width:110px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer;" title="(Cliquez pour ouvrir)">${item.title}</span>
+                    <i class="ph ${cloudIconClass}" 
+                       style="color:${cloudColor}; cursor:pointer; font-size:1.2em; margin-left:5px;" 
+                       title="${cloudTitle}"
+                       onclick="toggleSharedForUID('${uid}', event)"></i>
+                `;
+                
+                // Navigation click on badge text
+                const textSpan = badge.querySelector(".badge-title");
+                if (textSpan) {
+                    textSpan.onclick = (e) => {
+                        e.stopPropagation();
+                        openLinkedMedia(uid);
+                    };
+                }
             }
             
             container.appendChild(badge);
@@ -13541,11 +13699,25 @@ function openLinkedMedia(uid) {
 
     // Delay the opening to let the browser resolve the DOM close state
     setTimeout(() => {
-        // Find item by UUID
-        if (uid.startsWith('set:') || uid.startsWith('set_')) {
-            const track = currentTrackList.find(t => t.uid === uid);
-            if (track) openEditModal(track.originalIndex);
-            else console.error("Track not found for UID:", uid);
+        // Find item by UUID robustly in unified databases
+        if (uid.startsWith('set:') || uid.startsWith('set_') || uid.startsWith('web:') || uid.startsWith('web_')) {
+            const index = webLinks.findIndex(t => t.uid === uid);
+            if (index !== -1) {
+                const item = webLinks[index];
+                const isYoutube = item.open_mode === 'iframe' || 
+                                  (item.type && item.type.toLowerCase().includes('youtube')) ||
+                                  (item.url && (item.url.includes("youtube.com") || item.url.includes("youtu.be")));
+                
+                if (isYoutube) {
+                    // Open in main YouTube edit modal using originalIndex
+                    openEditModal(item.originalIndex);
+                } else {
+                    // Open in web link modal
+                    openWebLinkModal(index);
+                }
+            } else {
+                console.error("Web/Set link not found in unified database for UID:", uid);
+            }
         } else if (uid.startsWith('lib:') || uid.startsWith('lib_')) {
             const index = localFiles.findIndex(t => t.uid === uid);
             if (index !== -1) {
@@ -13557,10 +13729,6 @@ function openLinkedMedia(uid) {
             } else {
                 console.error("Local file not found for UID:", uid);
             }
-        } else if (uid.startsWith('web:') || uid.startsWith('web_')) {
-            const index = webLinks.findIndex(t => t.uid === uid);
-            if (index !== -1) openWebLinkModal(index);
-            else console.error("Web link not found for UID:", uid);
         }
     }, 50);
 }

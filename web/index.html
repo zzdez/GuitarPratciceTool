@@ -1825,14 +1825,10 @@
                         <label data-i18n="web.lbl_url">Lien Web</label>
                         <input type="text" id="web-link-url" placeholder="https://...">
                     </div>
-                    <div class="col">
+                    <div class="col" style="position: relative;">
                         <label data-i18n="web.lbl_link_type">Type de lien</label>
-                        <select id="web-link-type">
-                            <option value="songsterr" data-i18n="web.opt_songsterr">Songsterr</option>
-                            <option value="moises" data-i18n="web.opt_moises">Moises</option>
-                            <option value="lesson" data-i18n="web.opt_lessons">Cours / Tuto</option>
-                            <option value="other" data-i18n="web.opt_useful_links">Autre</option>
-                        </select>
+                        <input type="text" id="web-link-type" placeholder="Ex: Songsterr, Moises..." autocomplete="off" style="width: 100%; box-sizing: border-box;">
+                        <div id="suggestions-type" class="suggestions-box"></div>
                     </div>
                 </div>
 

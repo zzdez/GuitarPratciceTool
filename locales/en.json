@@ -620,6 +620,8 @@
         "opt_moises": "Moises (Stems AI)",
         "opt_lessons": "Guitar Lessons",
         "opt_useful_links": "Useful Links",
+        "opt_youtube": "YouTube (Video)",
+        "opt_spotify": "Spotify (Streaming)",
         "lbl_interconnection": "Connected Media",
         "modal_web_link_title_add": "Add Web Link",
         "modal_web_link_title_edit": "Edit Web Link",
