@@ -3333,15 +3333,23 @@ input[type="color"].stem-color-input::-moz-color-swatch {
 }
 
 /* ==========================================
-   MEDIA MODAL HEIGHT & COMPACTNESS (V27.1)
+   MEDIA MODAL HEIGHT & COMPACTNESS (V27.1 / V60+ Unified)
    ========================================== */
-#media-modal[open] {
-    max-height: 90vh !important; /* Plus de hauteur relative à l'écran */
+#media-modal[open], #modal-multitrack[open], #modal-web-link[open] {
+    display: flex !important;
+    flex-direction: column;
+    height: 90vh !important;
+    max-height: 90vh !important; 
+    width: 95% !important;
+    max-width: 950px !important;
+    overflow: hidden; /* Let modal-body scroll */
 }
 
-#media-modal .modal-body {
-    max-height: 80vh !important; /* Capacité de contenu augmentée de 77vh à 80vh */
-    padding-top: 5px !important; /* Réduction du padding supérieur */
+#media-modal .modal-body, #modal-multitrack .modal-body, #modal-web-link .modal-body {
+    flex: 1;
+    overflow-y: auto;
+    max-height: none !important; 
+    padding-top: 5px !important;
 }
 
 #media-modal .separator {

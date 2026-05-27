@@ -1947,7 +1947,9 @@ function renderWebLinks() {
 function openWebLinkModal(index = -1) {
     currentWebLinkIndex = index;
     // V55: Initialize linked IDs for session
-    currentEditingLinkedIds = (index === -1) ? [] : (webLinks[index].linked_ids || []);
+    if (!window.isNavigatingLinkedMedia) {
+        currentEditingLinkedIds = (index === -1) ? [] : (webLinks[index].linked_ids || []);
+    }
     lastEditContext = 'web_links';
     
     const modal = document.getElementById("modal-web-link");
@@ -1981,7 +1983,9 @@ function openWebLinkModal(index = -1) {
         currentEditingLinkedIds = []; // V58: Initialize for new link
     } else {
         const link = webLinks[index];
-        currentEditingLinkedIds = link.linked_ids || []; // V58: Initialize for edit
+        if (!window.isNavigatingLinkedMedia) {
+            currentEditingLinkedIds = link.linked_ids || []; // V58: Initialize for edit
+        }
         titleEl.innerText = t("web.modal_web_link_title_edit", "Modifier le Lien Web");
         document.getElementById("web-link-title").value = link.title || "";
         document.getElementById("web-link-artist").value = link.artist || "";
@@ -2014,8 +2018,8 @@ function openWebLinkModal(index = -1) {
             document.getElementById("btn-web-link-delete-cover").style.display = "flex";
         }
     }
-    renderModalLinkedItems(); // V58: Display linked items in web link modal
     modal.showModal();
+    renderModalLinkedItems(); // V58: Display linked items in web link modal
 }
 
 function closeWebLinkModal() {
@@ -3485,6 +3489,9 @@ function resetMediaModalUI() {
     const localPathContainer = document.getElementById("yt-local-path-container");
     if (localPathContainer) localPathContainer.style.display = "none";
 
+    const actionSel = document.querySelector(".actions-selector");
+    if (actionSel) actionSel.style.display = "";
+
     // 4. Reset Linked Items display (V58)
     const linkedDisplay = document.getElementById("edit-linked-items-display");
     if (linkedDisplay) linkedDisplay.innerHTML = "";
@@ -3585,14 +3592,18 @@ function openEditModal(index) {
     resetMediaModalUI();
     editingIndex = index;
     lastEditContext = 'setlist';
-    // Find track by original index in the current (possibly sorted) list
-    let track = currentTrackList.find(t => t.originalIndex === index);
-    if (!track && typeof webLinks !== 'undefined') {
+    // Find track securely in the unified webLinks database using the real index
+    let track = null;
+    if (typeof webLinks !== 'undefined' && webLinks[index]) {
         track = webLinks[index];
+    } else {
+        track = currentTrackList.find(t => t.originalIndex === index);
     }
     if (!track) return;
 
-    currentEditingLinkedIds = track.linked_ids || []; // V58: Initialize links
+    if (!window.isNavigatingLinkedMedia) {
+        currentEditingLinkedIds = track.linked_ids || []; // V58: Initialize links
+    }
     
     // Reveal sidebar if in theater mode to give context to editing
     if (isTheaterMode && typeof toggleTheaterMode === 'function') {
@@ -3732,9 +3743,12 @@ function closeModal() {
     editingIndex = null;
 }
 
-function openNotesDescModal() {
-    const mainDesc = document.getElementById("youtube-desc-input");
-    const mainNotes = document.getElementById("user-notes-input");
+let currentNoteTargetId = 'user-notes-input';
+
+function openNotesDescModal(noteTargetId = 'user-notes-input', descTargetId = 'youtube-desc-input') {
+    currentNoteTargetId = noteTargetId;
+    const mainDesc = document.getElementById(descTargetId);
+    const mainNotes = document.getElementById(noteTargetId);
     const popCombined = document.getElementById("pop-combined-notes");
 
     let combined = "";
@@ -3751,7 +3765,7 @@ function openNotesDescModal() {
 }
 
 function closeNotesDescModal() {
-    const mainNotes = document.getElementById("user-notes-input");
+    const mainNotes = document.getElementById(currentNoteTargetId);
     const popCombined = document.getElementById("pop-combined-notes");
 
     if (mainNotes && popCombined) {
@@ -7814,7 +7828,9 @@ function openEditLocalModal(index) {
     editingLocalIndex = index;
     lastEditContext = 'library';
     const item = localFiles[index];
-    currentEditingLinkedIds = item.linked_ids || []; // V58: Initialize links for local edit
+    if (!window.isNavigatingLinkedMedia) {
+        currentEditingLinkedIds = item.linked_ids || []; // V58: Initialize links for local edit
+    }
     
     // Reveal sidebar if in theater mode to give context to editing
     if (isTheaterMode && typeof toggleTheaterMode === 'function') {
@@ -7991,7 +8007,9 @@ function openMultitrackModal(index) {
     document.getElementById("mt-target-profile").value = item.target_profile || "Auto";
 
     // V57: Initialize linked IDs
-    currentEditingLinkedIds = item.linked_ids || [];
+    if (!window.isNavigatingLinkedMedia) {
+        currentEditingLinkedIds = item.linked_ids || [];
+    }
     renderModalLinkedItems(); // V58: Display linked items in multitrack modal
 
     let volVal = (item.volume !== undefined) ? item.volume : 100;
@@ -13579,14 +13597,38 @@ function renderModalLinkedItems() {
         const seenItems = new Set();
         
         // Collect active + linked UIDs to form the full interconnect family
-        const allFamilyUids = [];
-        if (activeUid) allFamilyUids.push(activeUid);
-        if (currentEditingLinkedIds) {
-            currentEditingLinkedIds.forEach(id => {
-                if (!allFamilyUids.includes(id)) {
-                    allFamilyUids.push(id);
+        let allFamilyUids = [];
+        
+        if (!window.isNavigatingLinkedMedia) {
+            if (activeUid) allFamilyUids.push(activeUid);
+            if (currentEditingLinkedIds) {
+                currentEditingLinkedIds.forEach(id => {
+                    if (!allFamilyUids.includes(id)) {
+                        allFamilyUids.push(id);
+                    }
+                });
+            }
+            window.currentFamilySession = [...allFamilyUids];
+        } else {
+            // We are navigating between tabs. Enforce the session family to prevent disappearing tabs!
+            if (window.currentFamilySession) {
+                allFamilyUids = [...window.currentFamilySession];
+                if (activeUid && !allFamilyUids.includes(activeUid)) {
+                    allFamilyUids.push(activeUid);
+                    window.currentFamilySession.push(activeUid);
                 }
-            });
+                
+                // Override the current item's linked_ids to maintain bidirectionality in JS memory
+                if (activeUid) {
+                    currentEditingLinkedIds = allFamilyUids.filter(id => id !== activeUid);
+                    const activeItem = getLinkedItem(activeUid);
+                    if (activeItem) {
+                        activeItem.linked_ids = [...currentEditingLinkedIds];
+                    }
+                }
+            } else {
+                if (activeUid) allFamilyUids.push(activeUid);
+            }
         }
         
         // Resolve items and details
@@ -13599,14 +13641,28 @@ function renderModalLinkedItems() {
         });
         
         // V60: Sort the family in an ABSOLUTELY STABLE order:
-        // YouTube videos first, then Local files, then Web links, sorted alphabetically by title
+        // 1- Multipistes, 2- Audios local, 3- Vidéos Locales, 4- YouTube Web, 5- Web Links
         familyItems.sort((a, b) => {
-            const typeA = a.uid.split('_')[0].split(':')[0];
-            const typeB = b.uid.split('_')[0].split(':')[0];
-            if (typeA !== typeB) {
-                const order = { 'set': 1, 'lib': 2, 'web': 3 };
-                const valA = order[typeA] || 9;
-                const valB = order[typeB] || 9;
+            const getSortOrder = (entry) => {
+                const uid = entry.uid;
+                const item = entry.item;
+                if (uid.startsWith('lib')) {
+                    const type = (typeof getLocalType === 'function') ? getLocalType(item) : 'audio';
+                    if (type === 'multitrack') return 1;
+                    if (type === 'audio') return 2;
+                    if (type === 'video') return 3;
+                    return 3;
+                } else if (uid.startsWith('set') || uid.startsWith('web')) {
+                    const canonical = resolveCanonicalType(item.type, item.url);
+                    if (canonical === 'youtube') return 4;
+                    return 5;
+                }
+                return 9;
+            };
+            
+            const valA = getSortOrder(a);
+            const valB = getSortOrder(b);
+            if (valA !== valB) {
                 return valA - valB;
             }
             const titleA = (a.item.title || "").toLowerCase();
@@ -13730,6 +13786,10 @@ function renderModalLinkedItems() {
 
 function openLinkedMedia(uid) {
     console.log("[LINK_NAV] Navigation vers UID:", uid);
+    
+    // V60: Preserve current session links during tabbed navigation
+    window.isNavigatingLinkedMedia = true;
+    
     // Close current modals first to avoid stacking issues or confusion
     if (document.getElementById("media-modal")?.hasAttribute("open")) {
         document.getElementById("media-modal").close();
@@ -13774,6 +13834,9 @@ function openLinkedMedia(uid) {
                 console.error("Local file not found for UID:", uid);
             }
         }
+        
+        // Reset flag after UI loads
+        window.isNavigatingLinkedMedia = false;
     }, 50);
 }
 
