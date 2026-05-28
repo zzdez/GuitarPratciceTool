@@ -24,10 +24,13 @@ def _xor_decrypt(encrypted_base64: str, key: str = "GuitarPracticeToolSecretKey_
     except Exception:
         return ""
 
+import logging
+
 class ConfigManager:
     def __init__(self, config_file="config.json", secrets_file="secrets.bin"):
-        self.config_file = os.path.join(get_app_dir(), config_file)
-        self.secrets_file = os.path.join(get_app_dir(), secrets_file)
+        self.config_file = os.path.abspath(os.path.join(get_app_dir(), config_file))
+        self.secrets_file = os.path.abspath(os.path.join(get_app_dir(), secrets_file))
+        logging.info(f"[CONFIG] Initialized with config_file={self.config_file}, secrets_file={self.secrets_file}")
         self.config_data = {}
         self.secrets_data = {}
         self._load_config()
@@ -43,8 +46,9 @@ class ConfigManager:
             try:
                 with open(self.config_file, "r", encoding="utf-8") as f:
                     self.config_data = json.load(f)
+                logging.info(f"[CONFIG] Config loaded from config.json: {list(self.config_data.get('settings', {}).keys())}")
             except Exception as e:
-                print(f"Error loading {self.config_file}: {e}")
+                logging.error(f"[CONFIG] Error loading {self.config_file}: {e}", exc_info=True)
                 self.config_data = {"settings": {}}
         else:
             self.config_data = {"settings": {}}
@@ -53,7 +57,10 @@ class ConfigManager:
     def _load_secrets(self):
         """Loads and decrypts secrets.bin. If missing, attempts to migrate from .env."""
         # 1. If secrets.bin exists, load and decrypt
+        logging.info(f"[SECRETS] Checking for secrets file at {self.secrets_file}")
         if os.path.exists(self.secrets_file):
+            size = os.path.getsize(self.secrets_file)
+            logging.info(f"[SECRETS] File secrets.bin exists. Size: {size} bytes.")
             try:
                 with open(self.secrets_file, "r", encoding="utf-8") as f:
                     encrypted_content = f.read().strip()
@@ -61,17 +68,69 @@ class ConfigManager:
                     decrypted_content = _xor_decrypt(encrypted_content)
                     if decrypted_content:
                         self.secrets_data = json.loads(decrypted_content)
+                        logging.info(f"[SECRETS] Loaded secrets from secrets.bin: {list(self.secrets_data.keys())}")
                     else:
+                        logging.warning("[SECRETS] Decryption returned an empty string!")
                         self.secrets_data = {}
+                else:
+                    logging.warning("[SECRETS] secrets.bin is empty.")
+                    self.secrets_data = {}
             except Exception as e:
-                print(f"Error loading decrypted secrets: {e}")
+                logging.error(f"[SECRETS] Error loading decrypted secrets: {e}", exc_info=True)
                 self.secrets_data = {}
         else:
+            logging.warning(f"[SECRETS] secrets.bin not found at {self.secrets_file}")
             self.secrets_data = {}
+
+        # 1b. NETTOYAGE & MIGRATION DE CONFIG.JSON
+        # Si config.json contient des clés d'API (YouTube, GetSong, Spotify), on les migre/nettoie !
+        migrated = False
+        config_cleaned = False
+        
+        # Nettoyage de Spotify obsolète dans secrets
+        spotify_keys = ["SPOTIFY_CLIENT_SECRET", "spotify_client_secret", "SPOTIFY_CLIENT_ID", "spotify_client_id"]
+        for sk in spotify_keys:
+            if sk in self.secrets_data:
+                del self.secrets_data[sk]
+                migrated = True
+
+        # Parcours et migration de config.json
+        keys_to_clean = []
+        settings_dict = self.config_data.get("settings", {})
+        
+        # Analyser à la fois à la racine de config et dans "settings"
+        for d_name, d_obj in [("root", self.config_data), ("settings", settings_dict)]:
+            if not isinstance(d_obj, dict): continue
+            for k in list(d_obj.keys()):
+                k_upper = k.upper()
+                # Détection d'un secret/clé API ou de Spotify obsolète
+                is_spotify = any(x in k_upper for x in ["SPOTIFY", "SPOTIPY"])
+                is_secret = is_spotify or "API_KEY" in k_upper or "SECRET" in k_upper or "KEY" in k_upper or k_upper in ["YOUTUBE_API_KEY", "GETSONGBPM_API_KEY", "GETSONG_API_KEY"]
+                if is_secret:
+                    val = str(d_obj[k]).strip()
+                    # Si Spotify, on supprime tout simplement
+                    if is_spotify:
+                        del d_obj[k]
+                        config_cleaned = True
+                        logging.info(f"[SECRETS] Supprimé clé Spotify obsolète {k} de config.json")
+                        continue
+                        
+                    # Si la valeur n'est pas vide
+                    if val and val != "None" and val != "null":
+                        # Standardiser la clé en majuscule
+                        std_key = "GETSONGBPM_API_KEY" if k_upper in ["GETSONG_API_KEY", "GETSONG_KEY"] else k_upper
+                        if std_key not in self.secrets_data:
+                            self.secrets_data[std_key] = val
+                            migrated = True
+                            logging.info(f"[SECRETS] Migré {k} vers secrets.bin")
+                    
+                    # Supprimer définitivement de config.json
+                    del d_obj[k]
+                    config_cleaned = True
+                    logging.info(f"[SECRETS] Supprimé clé API obsolète {k} de config.json")
 
         # 2. Check for migration from .env (Only if secrets.bin was missing or empty)
         env_path = os.path.join(get_app_dir(), ".env")
-        migrated = False
         if os.path.exists(env_path):
             try:
                 # Load temporary to migrate
@@ -90,6 +149,9 @@ class ConfigManager:
             self._save_secrets()
             # Clean sensitive API keys from .env to prevent double storage and plain text
             self._clean_env_keys(env_path)
+
+        if config_cleaned:
+            self._save_config()
             
         # 4. Expose active secrets in memory (os.environ) so that other sub-modules
         # can still access them transparently via environment variables
@@ -189,12 +251,26 @@ class ConfigManager:
         Sets a value in config.json (persisted) or secrets.bin (if it's an API Key or secret).
         """
         env_key = key.upper()
-        if "API_KEY" in env_key or "SECRET" in env_key or "KEY" in env_key:
+        
+        # 1. Ignore Spotify completely
+        if any(x in env_key for x in ["SPOTIFY", "SPOTIPY"]):
+            logging.info(f"[SECRETS] Ignored obsolete Spotify key: {key}")
+            return
+            
+        # 2. Check if it's an API key or secret
+        is_secret = "API_KEY" in env_key or "SECRET" in env_key or "KEY" in env_key or env_key in ["YOUTUBE_API_KEY", "GETSONGBPM_API_KEY", "GETSONG_API_KEY"]
+        
+        if is_secret:
+            # Standardize GetSongBPM keys
+            std_key = "GETSONGBPM_API_KEY" if env_key in ["GETSONG_API_KEY", "GETSONG_KEY", "GETSONGBPM_KEY", "GETSONGBPM_API_KEY"] else env_key
+            
             # Save into encrypted secrets
-            self.secrets_data[env_key] = str(value)
+            self.secrets_data[std_key] = str(value).strip()
             self._save_secrets()
+            
             # Update OS environ so it's immediately available without restart
-            os.environ[env_key] = str(value)
+            os.environ[std_key] = str(value).strip()
+            logging.info(f"[SECRETS] Saved encrypted secret {std_key} successfully (length: {len(str(value))})")
             return
             
         # Normal configuration save

@@ -1404,6 +1404,7 @@
             </div>
         </div>
         <div class="modal-footer">
+            <button class="btn-text" onclick="closeMultitrackModal()" data-i18n="web.btn_cancel">Annuler</button>
             <button class="btn-primary" onclick="saveMultitrackItem()" data-i18n="web.btn_save">Sauvegarder</button>
         </div>
     </dialog>
@@ -1664,7 +1665,7 @@
                 <div class="row-inputs" style="align-items: center; gap: 20px;">
                     <!-- Action A: Link -->
                     <div class="col" style="flex: none;">
-                        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:#eee; font-size: 0.85em; margin:0;">
+                        <label id="lbl-action-link" style="display:flex; align-items:center; gap:8px; cursor:pointer; color:#eee; font-size: 0.85em; margin:0;">
                             <input type="checkbox" id="chk-action-link" checked
                                 style="width:16px; height:16px; accent-color:var(--accent);">
                             <i class="ph ph-youtube-logo" style="font-size:18px; color:#ff0000;"></i>
@@ -1710,7 +1711,10 @@
                     </div>
                     <div class="col" style="flex: 1;">
                         <label style="font-size:0.85em; color:#888;" data-i18n="web.lbl_dest_folder">Dossier de Destination</label>
-                        <select id="dl-folder" style="font-size:0.9em; padding:4px 8px; min-height:32px;"></select>
+                        <div style="display:flex; gap:5px;">
+                            <select id="dl-folder" style="font-size:0.9em; padding:4px 8px; min-height:32px; flex:1;"></select>
+                            <button id="btn-browse-dl-folder" class="btn-secondary" style="padding:0 10px; height:32px; border-color:#444;" onclick="browseCustomDownloadFolder()" title="Choisir un dossier libre..."><i class="ph ph-folder-open" style="font-size:1.1em;"></i></button>
+                        </div>
                     </div>
                 </div>
 
@@ -1718,6 +1722,10 @@
                     <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.85em; color:#ccc; margin:0;">
                         <input type="checkbox" id="dl-subs" checked style="width:16px; height:16px; accent-color:var(--accent);">
                         <span data-i18n="web.lbl_download_subs">Sous-titres (SRT)</span>
+                    </label>
+                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.85em; color:#ccc; margin:0;">
+                        <input type="checkbox" id="dl-add-to-lib" checked style="width:16px; height:16px; accent-color:var(--accent);">
+                        <span data-i18n="web.lbl_add_to_lib">Ajouter à la bibliothèque locale</span>
                     </label>
                     <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.85em; color:#ccc; margin:0;">
                         <input type="checkbox" id="dl-autoclose" style="width:16px; height:16px; accent-color:var(--accent);">
@@ -1746,7 +1754,7 @@
 
             <div style="flex:1"></div>
             <button class="btn-text" onclick="closeModal()" data-i18n="web.btn_cancel">Annuler</button>
-            <button id="btn-save-item" class="btn-primary" onclick="saveItem()" data-i18n="web.btn_save_web_lib">Ajouter à la Bibliothèque Web</button>
+            <button id="btn-save-item" class="btn-primary" onclick="saveItem()" data-i18n="web.btn_save">Enregistrer</button>
         </div>
     </dialog>
 
@@ -2107,8 +2115,13 @@
 
                     <h4 data-i18n="web.lbl_youtube_api">Clé API YouTube</h4>
                     <div class="settings-control-group" style="padding:4px 8px; margin-bottom:8px;">
-                        <input type="password" id="setting-youtube-key" data-i18n-placeholder="web.placeholder_youtube_api" style="height:22px;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:2px;">
+                        <div class="input-password-wrapper" style="position: relative; display: flex; align-items: center;">
+                            <input type="password" id="setting-youtube-key" data-i18n-placeholder="web.placeholder_youtube_api" style="height:22px; width: 100%; padding-right: 30px; box-sizing: border-box;">
+                            <button type="button" onclick="togglePasswordVisibility('setting-youtube-key', this)" style="position: absolute; right: 5px; background: none; border: none; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center; height: 100%; padding: 0 5px;">
+                                <i class="ph ph-eye" style="font-size: 1.1em;"></i>
+                            </button>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
                             <p class="hint" data-i18n="web.msg_api_info" style="margin:0; font-size:0.7em;">Raccourci titres/images.</p>
                             <a href="https://console.cloud.google.com/" target="_blank" style="color:var(--accent); text-decoration:none; font-size:0.7em;" data-i18n="web.link_get_api_key">Clé API ↗</a>
                         </div>
@@ -2118,7 +2131,12 @@
                     <div class="settings-control-group" style="padding:4px 8px; margin-bottom:8px;">
                         <div>
                             <label data-i18n="web.lbl_getsong_api_key" style="font-size:0.7em;">GetSongBPM Key</label>
-                            <input type="password" id="setting-getsong-api-key" placeholder="..." style="height:22px; width: 100%;">
+                            <div class="input-password-wrapper" style="position: relative; display: flex; align-items: center; margin-top: 4px;">
+                                <input type="password" id="setting-getsong-api-key" placeholder="..." style="height:22px; width: 100%; padding-right: 30px; box-sizing: border-box;">
+                                <button type="button" onclick="togglePasswordVisibility('setting-getsong-api-key', this)" style="position: absolute; right: 5px; background: none; border: none; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center; height: 100%; padding: 0 5px;">
+                                    <i class="ph ph-eye" style="font-size: 1.1em;"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

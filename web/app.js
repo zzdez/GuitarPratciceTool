@@ -3010,6 +3010,23 @@ async function loadSettings() {
     }
 }
 
+function togglePasswordVisibility(inputId, btn) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const icon = btn.querySelector('i');
+    if (input.type === 'password') {
+        input.type = 'text';
+        if (icon) {
+            icon.className = 'ph ph-eye-closed';
+        }
+    } else {
+        input.type = 'password';
+        if (icon) {
+            icon.className = 'ph ph-eye';
+        }
+    }
+}
+
 async function openSettings() {
     // Deprecated Name, redirected to Modal
     openSettingsModal();
@@ -3019,19 +3036,30 @@ async function openSettingsModal() {
     if (!currentSettings) await loadSettings();
 
     if (currentSettings) {
+        // Reset password fields to masked type and populate
+        const ytInput = document.getElementById("setting-youtube-key");
+        if (ytInput) {
+            ytInput.type = "password";
+            ytInput.value = currentSettings.YOUTUBE_API_KEY || "";
+        }
+        
+        const gsInput = document.getElementById("setting-getsong-api-key");
+        if (gsInput) {
+            gsInput.type = "password";
+            gsInput.value = currentSettings.getsong_api_key || currentSettings.GETSONGBPM_API_KEY || "";
+        }
+        
+        // Reset eye icons
+        document.querySelectorAll(".input-password-wrapper button i").forEach(icon => {
+            icon.className = "ph ph-eye";
+        });
+
         // Populate Fields
         const langDropdown = document.getElementById("setting-language");
         if (langDropdown) langDropdown.value = currentSettings.language || "fr";
 
         const themeDropdown = document.getElementById("setting-theme");
         if (themeDropdown) themeDropdown.value = currentSettings.theme || "steel_blue";
-
-        document.getElementById("setting-youtube-key").value = currentSettings.YOUTUBE_API_KEY || "";
-
-        // Music APIs
-
-        const getsongKey = document.getElementById("setting-getsong-api-key");
-        if (getsongKey) getsongKey.value = currentSettings.getsong_api_key || "";
 
         const apCb = document.getElementById("setting-autoplay");
         if (apCb) apCb.checked = currentSettings.autoplay !== false; // Default to true
@@ -3497,6 +3525,13 @@ function resetMediaModalUI() {
     if (linkedDisplay) linkedDisplay.innerHTML = "";
     const linkedDisplayWeb = document.getElementById("web-link-linked-items-display");
     if (linkedDisplayWeb) linkedDisplayWeb.innerHTML = "";
+
+    // Reset Title to Default YouTube Title
+    const modalTitleEl = document.querySelector("#media-modal .modal-header h3");
+    if (modalTitleEl) {
+        modalTitleEl.innerText = t("web.modal_youtube_title", "Éditer Lien YouTube");
+        modalTitleEl.setAttribute("data-i18n", "web.modal_youtube_title");
+    }
 }
 
 // --- MODAL & EDIT LOGIC ---
@@ -3562,30 +3597,40 @@ function openAddModal() {
 
     const hasApiKey = currentSettings && currentSettings.YOUTUBE_API_KEY;
 
+    editingIndex = null; // S'assurer que nous sommes bien en mode création
+
     if (!hasApiKey) {
         // Pas de clé API : masquer la barre de recherche supérieure et afficher le formulaire et le footer immédiatement
         if (inputGroup) inputGroup.style.display = "none";
         if (noKeyMsg) noKeyMsg.style.display = "block";
-        if (editContainer) editContainer.classList.remove("hidden");
-        if (saveBtnElem) saveBtnElem.style.display = "inline-block";
-        if (previewBtnElem) previewBtnElem.style.display = "inline-block";
-
-        if (editTitle) {
-            editTitle.focus();
-        }
     } else {
-        // Avec clé API : afficher la recherche supérieure et masquer le formulaire d'édition au début
+        // Avec clé API : afficher la recherche supérieure
         if (inputGroup) inputGroup.style.display = "flex";
         if (noKeyMsg) noKeyMsg.style.display = "none";
-        if (editContainer) editContainer.classList.add("hidden");
-        if (saveBtnElem) saveBtnElem.style.display = "none";
-        if (previewBtnElem) previewBtnElem.style.display = "none";
 
         if (searchInput) {
             searchInput.placeholder = typeof t === "function" ? t("web.search_placeholder", "Recherche YouTube ou URL...") : "Recherche YouTube ou URL...";
             searchInput.focus();
         }
     }
+
+    // Réinitialiser la sélection d'actions par défaut
+    const chkLink = document.getElementById("chk-action-link");
+    if (chkLink) chkLink.checked = false; // Par défaut décoché
+    const chkOffline = document.getElementById("chk-action-offline");
+    if (chkOffline) chkOffline.checked = false;
+
+    // Toujours afficher le formulaire d'édition et les boutons de sauvegarde et prévisualisation
+    if (editContainer) editContainer.classList.remove("hidden");
+    if (saveBtnElem) saveBtnElem.style.display = "inline-block";
+    if (previewBtnElem) previewBtnElem.style.display = "inline-block";
+
+    if (editTitle && !hasApiKey) {
+        editTitle.focus();
+    }
+
+    // Forcer la mise à jour immédiate du texte du bouton principal
+    updateYouTubeSaveButton();
 }
 
 function openEditModal(index) {
@@ -3646,7 +3691,7 @@ function openEditModal(index) {
 
     // V58: Dynamic button text
     const saveBtn = document.querySelector(".btn-primary[onclick='saveItem()']");
-    if (saveBtn) saveBtn.innerText = t("web.btn_save_web_lib");
+    if (saveBtn) saveBtn.innerText = t("web.btn_save");
 
     syncPlaybackSettingsToModals(track);
 
@@ -3944,16 +3989,15 @@ function resetSearchMode() {
     if (!hasApiKey) {
         if (inputGroup) inputGroup.style.display = "none";
         if (noKeyMsg) noKeyMsg.style.display = "block";
-        if (editContainer) editContainer.classList.remove("hidden");
-        if (saveBtnElem) saveBtnElem.style.display = "inline-block";
-        if (previewBtnElem) previewBtnElem.style.display = "inline-block";
     } else {
         if (inputGroup) inputGroup.style.display = "flex";
         if (noKeyMsg) noKeyMsg.style.display = "none";
-        if (editContainer) editContainer.classList.add("hidden");
-        if (saveBtnElem) saveBtnElem.style.display = "none";
-        if (previewBtnElem) previewBtnElem.style.display = "none";
     }
+
+    // Toujours afficher le formulaire d'édition et les boutons
+    if (editContainer) editContainer.classList.remove("hidden");
+    if (saveBtnElem) saveBtnElem.style.display = "inline-block";
+    if (previewBtnElem) previewBtnElem.style.display = "inline-block";
 }
 
 function connectVideoWebSocket() {
@@ -4059,6 +4103,9 @@ function checkDownloadAvailability(url) {
     const actionContainer = document.getElementById("action-offline-container");
     const lblOffline = document.getElementById("lbl-action-offline");
     const btnHelp = document.getElementById("btn-offline-help-new");
+    const lblLink = document.getElementById("lbl-action-link");
+    const chkLink = document.getElementById("chk-action-link");
+    
     if (!actionContainer) return;
 
     const isYoutube = url && (url.includes("youtube.com") || url.includes("youtu.be"));
@@ -4072,12 +4119,16 @@ function checkDownloadAvailability(url) {
         if (canDownload) {
             if (lblOffline) lblOffline.style.display = "flex";
             if (btnHelp) btnHelp.style.display = "none";
+            if (lblLink) lblLink.style.display = "flex";
         } else {
             if (lblOffline) {
                 lblOffline.style.display = "none";
                 document.getElementById("chk-action-offline").checked = false;
             }
             if (btnHelp) btnHelp.style.display = "flex";
+            // Si le mode Offline n'est pas disponible, masquer la case à cocher 'Add Web Link'
+            if (lblLink) lblLink.style.display = "none";
+            if (chkLink) chkLink.checked = true; // S'assurer qu'il reste coché en arrière-plan
         }
     } else {
         actionContainer.style.display = "none";
@@ -4092,15 +4143,34 @@ function updateYouTubeSaveButton() {
     const offlineChecked = document.getElementById("chk-action-offline").checked;
     const isEdit = (editingIndex !== null);
 
-    if (isEdit && !offlineChecked) {
-        btn.innerText = t("web.btn_update_info");
+    // Si aucune action n'est cochée, griser le bouton
+    if (!linkChecked && !offlineChecked) {
+        btn.disabled = true;
+        btn.classList.add("disabled");
+        btn.innerText = t("web.btn_save_link"); // Texte par défaut
+        return;
+    } else {
+        btn.disabled = false;
+        btn.classList.remove("disabled");
+    }
+
+    if (isEdit) {
+        if (linkChecked && offlineChecked) {
+            btn.innerText = t("web.btn_save_both");
+        } else if (linkChecked) {
+            btn.innerText = t("web.btn_update_link");
+        } else if (offlineChecked) {
+            btn.innerText = t("web.btn_download_only");
+        } else {
+            btn.innerText = t("web.btn_save");
+        }
         return;
     }
 
     if (linkChecked && offlineChecked) {
         btn.innerText = t("web.btn_save_both");
     } else if (offlineChecked) {
-        btn.innerText = t("web.btn_save_offline");
+        btn.innerText = t("web.btn_download_only");
     } else {
         btn.innerText = t("web.btn_save_link");
     }
@@ -4149,8 +4219,19 @@ async function showDownloadOptions(forceState = null) {
 
     let folders = [];
     if (currentSettings && currentSettings.media_folders) {
-        folders = currentSettings.media_folders;
+        folders = [...currentSettings.media_folders];
     }
+
+    // Load custom folders from localStorage
+    let customFolders = [];
+    try {
+        customFolders = JSON.parse(localStorage.getItem("custom_download_folders")) || [];
+    } catch(e) {}
+    customFolders.forEach(cf => {
+        if (cf && !folders.includes(cf)) {
+            folders.push(cf);
+        }
+    });
 
     if (folders.length === 0) {
         const opt = document.createElement("option");
@@ -4165,6 +4246,9 @@ async function showDownloadOptions(forceState = null) {
             if (f.startsWith("${APP_DIR}")) {
                 displayPath = f.replace("${APP_DIR}", "[App]");
             }
+            if (customFolders.includes(f)) {
+                displayPath = "📁 [Libre] " + displayPath;
+            }
             opt.innerText = displayPath;
             folderSelect.appendChild(opt);
         });
@@ -4174,17 +4258,24 @@ async function showDownloadOptions(forceState = null) {
     const formatSelect = document.getElementById("dl-format");
     formatSelect.innerHTML = "";
 
-    // V58: Auto-select folder when format changes
+    // V58: Auto-select folder when format changes & handle subs
     formatSelect.onchange = () => {
         const fmt = formatSelect.value;
-        const folders = Array.from(folderSelect.options);
+        const foldersList = Array.from(folderSelect.options);
         let targetSub = "";
         
-        if (fmt.startsWith("audio_")) targetSub = "Audios";
-        else if (fmt.startsWith("video_")) targetSub = "Videos";
+        if (fmt.startsWith("audio_")) {
+            targetSub = "Audios";
+            const chkSubs = document.getElementById("dl-subs");
+            if (chkSubs) chkSubs.checked = false;
+        } else if (fmt.startsWith("video_")) {
+            targetSub = "Videos";
+            const chkSubs = document.getElementById("dl-subs");
+            if (chkSubs) chkSubs.checked = true;
+        }
 
         if (targetSub) {
-            const bestMatch = folders.find(opt => opt.value.includes(targetSub));
+            const bestMatch = foldersList.find(opt => opt.value.includes(targetSub));
             if (bestMatch) folderSelect.value = bestMatch.value;
         }
     };
@@ -4222,11 +4313,44 @@ async function showDownloadOptions(forceState = null) {
     if (formatSelect.onchange) formatSelect.onchange();
 }
 
+async function browseCustomDownloadFolder() {
+    try {
+        const res = await fetch("/api/utils/select_folder");
+        const data = await res.json();
+        if (data && data.status === "ok" && data.path) {
+            const folderSelect = document.getElementById("dl-folder");
+            
+            let exists = Array.from(folderSelect.options).some(opt => opt.value === data.path);
+            if (!exists) {
+                const opt = document.createElement("option");
+                opt.value = data.path;
+                opt.innerText = "📁 [Libre] " + data.path;
+                folderSelect.appendChild(opt);
+            }
+            folderSelect.value = data.path;
+
+            // Save in localStorage
+            let customFolders = [];
+            try {
+                customFolders = JSON.parse(localStorage.getItem("custom_download_folders")) || [];
+            } catch(e) {}
+            if (!customFolders.includes(data.path)) {
+                customFolders.push(data.path);
+                localStorage.setItem("custom_download_folders", JSON.stringify(customFolders));
+            }
+        }
+    } catch(e) {
+        console.error("Browse custom download folder error:", e);
+        alert("Erreur lors de la sélection du dossier.");
+    }
+}
+
 async function startDownload() {
     const url = document.getElementById("edit-url").value;
     const format = document.getElementById("dl-format").value;
     const folder = document.getElementById("dl-folder").value;
     const subs = document.getElementById("dl-subs").checked;
+    const addToLib = document.getElementById("dl-add-to-lib") ? document.getElementById("dl-add-to-lib").checked : true;
 
     if (!url) return alert(t("web.msg_url_required"));
     if (!folder || folder.innerText === t("web.msg_no_folder_config")) return alert(t("web.msg_no_folder_config"));
@@ -4252,7 +4376,8 @@ async function startDownload() {
             format_id: format,
             target_folder: folder,
             subs: subs,
-            metadata: metadata
+            metadata: metadata,
+            add_to_library: addToLib
         };
 
         const res = await fetch("/api/dl/start", {
@@ -7839,6 +7964,18 @@ function openEditLocalModal(index) {
 
     document.getElementById("media-modal").showModal();
 
+    // Dynamically update Modal Title based on type (Video or Audio)
+    const modalTitleEl = document.querySelector("#media-modal .modal-header h3");
+    if (modalTitleEl) {
+        if (item.path.match(/\.(mp4|mkv|mov|avi|webm|m4v)$/i)) {
+            modalTitleEl.innerText = t("web.modal_local_video_title", "Éditer Vidéo Locale");
+            modalTitleEl.setAttribute("data-i18n", "web.modal_local_video_title");
+        } else {
+            modalTitleEl.innerText = t("web.modal_local_audio_title", "Éditer Audio Local");
+            modalTitleEl.setAttribute("data-i18n", "web.modal_local_audio_title");
+        }
+    }
+
     // Auto-scroll in background
     setTimeout(scrollToActiveTrack, 200);
 
@@ -7878,7 +8015,7 @@ function openEditLocalModal(index) {
     if (saveBtnElem) saveBtnElem.style.display = "inline-block";
 
     const previewBtnElem = document.getElementById("btn-preview-item");
-    if (previewBtnElem) previewBtnElem.style.display = "inline-block";
+    if (previewBtnElem) previewBtnElem.style.display = "none";
 
     // V58: Hide Action Selector for local files
     const actionSel = document.querySelector(".actions-selector");

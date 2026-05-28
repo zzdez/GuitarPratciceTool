@@ -234,6 +234,8 @@
         "modal_app_name": "Nom",
         "modal_app_path": "Chemin Exécutable",
         "modal_local_title": "Éditer Fichier Local",
+        "modal_local_video_title": "Éditer Vidéo Locale",
+        "modal_local_audio_title": "Éditer Audio Local",
         "modal_mt_title": "Éditer Dossier Multipiste",
         "modal_youtube_title": "Éditer Lien YouTube",
         "btn_cancel": "Annuler",
@@ -667,6 +669,9 @@
         "lbl_setlist": "Setlist",
         "lbl_position": "Position",
         "lbl_next_part_in": "Prochain repère dans",
+        "lbl_add_to_lib": "Ajouter à la bibliothèque locale",
+        "btn_update_link": "Mettre à jour le Lien",
+        "btn_download_only": "Télécharger uniquement",
         "mde": {
             "title": "Éditeur d'Appareil MIDI",
             "lbl_name": "Nom de l'appareil",

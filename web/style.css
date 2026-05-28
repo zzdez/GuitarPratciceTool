@@ -3338,8 +3338,8 @@ input[type="color"].stem-color-input::-moz-color-swatch {
 #media-modal[open], #modal-multitrack[open], #modal-web-link[open] {
     display: flex !important;
     flex-direction: column;
-    height: 90vh !important;
-    max-height: 90vh !important; 
+    height: 76vh !important;
+    max-height: 76vh !important; 
     width: 95% !important;
     max-width: 950px !important;
     overflow: hidden; /* Let modal-body scroll */
@@ -3350,6 +3350,12 @@ input[type="color"].stem-color-input::-moz-color-swatch {
     overflow-y: auto;
     max-height: none !important; 
     padding-top: 5px !important;
+}
+
+#media-modal .modal-footer button, #modal-multitrack .modal-footer button, #modal-web-link .modal-footer button {
+    height: 22px !important;
+    font-size: 11px !important;
+    padding: 0 10px !important;
 }
 
 #media-modal .separator {

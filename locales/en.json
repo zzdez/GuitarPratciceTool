@@ -234,6 +234,8 @@
         "modal_app_name": "Name",
         "modal_app_path": "Executable Path",
         "modal_local_title": "Edit Local File",
+        "modal_local_video_title": "Edit Local Video",
+        "modal_local_audio_title": "Edit Local Audio",
         "modal_mt_title": "Edit Multitrack Folder",
         "modal_youtube_title": "Edit YouTube Link",
         "btn_cancel": "Cancel",
@@ -666,6 +668,9 @@
         "lbl_setlist": "Setlist",
         "lbl_position": "Position",
         "lbl_next_part_in": "Next part in",
+        "lbl_add_to_lib": "Add to local library",
+        "btn_update_link": "Update Link",
+        "btn_download_only": "Download only",
         "mde": {
             "title": "MIDI Target Device Editor",
             "lbl_name": "Device Name",

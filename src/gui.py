@@ -2995,6 +2995,11 @@ class GuitarPracticeApp(ctk.CTk):
             from config_manager import ConfigManager
             cm = ConfigManager()
             for k, v in self.settings.items():
+                k_upper = k.upper()
+                # PROTECTION : Ne jamais sauvegarder ou écraser des clés API ou secrètes depuis la GUI native
+                is_secret = "API_KEY" in k_upper or "SECRET" in k_upper or "KEY" in k_upper or k_upper in ["YOUTUBE_API_KEY", "GETSONGBPM_API_KEY", "GETSONG_API_KEY"]
+                if is_secret:
+                    continue
                 cm.set(k, v)
         except Exception as e:
             if not silent: CTkMessageBox.show_error(_("gui.msg_error"), f"{_('gui.msg_config_error')}: {e}")

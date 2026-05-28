@@ -30,7 +30,7 @@ log_path = os.path.join(get_app_dir(), 'guitarpracticetool_debug.log')
 print(f"DIAGNOSTIC: Logging to {log_path}")
 logging.basicConfig(
     filename=log_path,
-    level=logging.WARNING,
+    level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logging.warning(f"=== SERVER STARTING AT {os.getcwd()} ===")
@@ -1174,6 +1174,12 @@ async def get_locale(lang: str):
 async def update_settings(settings: Dict):
     """Updates configuration."""
     for key, value in settings.items():
+        # PROTECTION : Do not overwrite existing API keys with an empty value
+        if key in ["YOUTUBE_API_KEY", "getsong_api_key"] and not value:
+            existing = config_manager.get(key)
+            if existing:
+                continue # Keep existing, do not overwrite with empty value
+                
         config_manager.set(key, value)
         
     # Apply MIDI settings immediately if present
@@ -3279,54 +3285,58 @@ async def dl_start(data: Dict):
     def completion_cb(success, result):
         if success:
             path = result["path"]
-            # Add to Local Library
-            try:
-                # Refresh Metadata from file to be sure
-                file_data = metadata_service.scan_file_metadata(path)
-                # V57: Always convert to portable path for DB storage
-                file_data["path"] = to_portable_path(path)
-                file_data["added_at"] = time.time()
+            add_to_lib = data.get("add_to_library", True)
+            if add_to_lib:
+                # Add to Local Library
+                try:
+                    # Refresh Metadata from file to be sure
+                    file_data = metadata_service.scan_file_metadata(path)
+                    # V57: Always convert to portable path for DB storage
+                    file_data["path"] = to_portable_path(path)
+                    file_data["added_at"] = time.time()
 
-                # Inject Chapters from Download Service
-                if "chapters" in result:
-                    file_data["chapters"] = result["chapters"]
+                    # Inject Chapters from Download Service
+                    if "chapters" in result:
+                        file_data["chapters"] = result["chapters"]
 
-                # Check for cover art passed in metadata to force cached refresh if needed?
-                # Actually scan_file_metadata is enough usually.
+                    # Check for cover art passed in metadata to force cached refresh if needed?
+                    # Actually scan_file_metadata is enough usually.
 
-                # MERGE LOGICAL METADATA (Category, Notes, Profile)
-                # scan_file_metadata only gets physical tags. We want to keep what user entered.
-                original_meta = data.get("metadata", {})
-                if original_meta:
-                    if "url" in original_meta: file_data["url"] = original_meta["url"]
-                    if "category" in original_meta: file_data["category"] = original_meta["category"]
-                    if "user_notes" in original_meta: file_data["user_notes"] = original_meta["user_notes"]
-                    if "target_profile" in original_meta: file_data["target_profile"] = original_meta["target_profile"]
-                    # If physical title/artist empty, use input
-                    if not file_data.get("title") and "title" in original_meta: file_data["title"] = original_meta["title"]
-                    if not file_data.get("artist") and "artist" in original_meta: file_data["artist"] = original_meta["artist"]
+                    # MERGE LOGICAL METADATA (Category, Notes, Profile)
+                    # scan_file_metadata only gets physical tags. We want to keep what user entered.
+                    original_meta = data.get("metadata", {})
+                    if original_meta:
+                        if "url" in original_meta: file_data["url"] = original_meta["url"]
+                        if "category" in original_meta: file_data["category"] = original_meta["category"]
+                        if "user_notes" in original_meta: file_data["user_notes"] = original_meta["user_notes"]
+                        if "target_profile" in original_meta: file_data["target_profile"] = original_meta["target_profile"]
+                        # If physical title/artist empty, use input
+                        if not file_data.get("title") and "title" in original_meta: file_data["title"] = original_meta["title"]
+                        if not file_data.get("artist") and "artist" in original_meta: file_data["artist"] = original_meta["artist"]
 
-                items = []
-                if os.path.exists(LOCAL_LIB_FILE):
-                    with open(LOCAL_LIB_FILE, "r", encoding="utf-8") as f:
-                        items = json.load(f)
+                    items = []
+                    if os.path.exists(LOCAL_LIB_FILE):
+                        with open(LOCAL_LIB_FILE, "r", encoding="utf-8") as f:
+                            items = json.load(f)
 
-                # Update if exists
-                existing_idx = next((i for i, x in enumerate(items) if x["path"] == path), -1)
-                if existing_idx >= 0:
-                    items[existing_idx] = file_data
-                else:
-                    items.append(file_data)
+                    # Update if exists
+                    existing_idx = next((i for i, x in enumerate(items) if x["path"] == path), -1)
+                    if existing_idx >= 0:
+                        items[existing_idx] = file_data
+                    else:
+                        items.append(file_data)
 
-                with open(LOCAL_LIB_FILE, "w", encoding="utf-8") as f:
-                    json.dump(items, f, indent=4)
+                    with open(LOCAL_LIB_FILE, "w", encoding="utf-8") as f:
+                        json.dump(items, f, indent=4)
 
-                broadcast_sync(json.dumps({"type": "dl_complete", "path": to_portable_path(path)}))
-            except Exception as e:
-                logging.error(f"Post-DL Library Error: {e}")
-                broadcast_sync(json.dumps({"type": "dl_error", "error": "Library Update Failed"}))
+                except Exception as e:
+                    logging.error(f"Post-DL Library Error: {e}")
+                    broadcast_sync(json.dumps({"type": "dl_error", "error": "Library Update Failed"}))
+                    return
+
+            broadcast_sync(json.dumps({"type": "dl_complete", "path": to_portable_path(path)}))
         else:
-             broadcast_sync(json.dumps({"type": "dl_error", "error": result}))
+            broadcast_sync(json.dumps({"type": "dl_error", "error": result}))
 
     # V57: Ensure target_folder is resolved if it was a portable path from UI
     if "target_folder" in data:
