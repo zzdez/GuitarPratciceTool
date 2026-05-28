@@ -50,6 +50,32 @@ function resolveCanonicalType(type, url) {
     
     return 'other';
 }
+
+/**
+ * Retourne la classe d'icône Phosphor appropriée pour un média,
+ * en fonction de son UID et de son objet item.
+ * Utilisée à la fois dans les onglets des applets ET dans la modale de partage.
+ */
+function getMediaIconClass(uid, item) {
+    if (!uid || !item) return "ph ph-link";
+    if (uid.startsWith('set')) {
+        return "ph ph-youtube-logo";
+    } else if (uid.startsWith('lib')) {
+        const type = (typeof getLocalType === 'function') ? getLocalType(item) : 'audio';
+        if (type === 'video')      return "ph ph-film-strip";
+        if (type === 'multitrack') return "ph ph-stack-simple";
+        return "ph ph-music-notes";
+    } else if (uid.startsWith('web')) {
+        const canonical = resolveCanonicalType(item.type, item.url);
+        if (canonical === 'youtube')   return "ph ph-youtube-logo";
+        if (canonical === 'spotify')   return "ph ph-spotify-logo";
+        if (canonical === 'songsterr') return "ph ph-guitar";
+        if (canonical === 'moises')    return "ph ph-scissors";
+        if (canonical === 'lesson')    return "ph ph-graduation-cap";
+        return "ph ph-globe";
+    }
+    return "ph ph-link";
+}
 let websocket;
 let currentProfile = null;
 let currentActivePlayer = null;
@@ -3379,9 +3405,37 @@ async function showSyncFamilyModal() {
     
     // 1. Get Main Item
     let mainTitle = "Média principal";
-    if (editingIndex !== null) mainTitle = currentTrackList[editingIndex].title;
-    else if (editingLocalIndex !== null) mainTitle = localFiles[editingLocalIndex].title;
-    else if (currentWebLinkIndex !== null) mainTitle = webLinks[currentWebLinkIndex].title;
+    let masterItem = null;
+    let masterUid = null;
+    
+    if (editingIndex !== null && editingIndex >= 0) {
+        masterItem = (typeof webLinks !== 'undefined' && webLinks[editingIndex]) ? webLinks[editingIndex] : (currentTrackList ? currentTrackList.find(t => t.originalIndex === editingIndex) : null);
+        if (masterItem) {
+            mainTitle = masterItem.title;
+            masterUid = masterItem.uid;
+        }
+    } else if (editingLocalIndex !== null && editingLocalIndex >= 0) {
+        masterItem = localFiles?.[editingLocalIndex];
+        if (masterItem) {
+            mainTitle = masterItem.title;
+            masterUid = masterItem.uid;
+        }
+    } else if (typeof currentWebLinkIndex !== 'undefined' && currentWebLinkIndex >= 0) {
+        masterItem = webLinks?.[currentWebLinkIndex];
+        if (masterItem) {
+            mainTitle = masterItem.title;
+            masterUid = masterItem.uid;
+        }
+    }
+    
+    // Fallback : si aucun index principal valide, tenter via l'uid actif dans les items liés
+    if ((!masterItem || mainTitle === "Média principal") && currentEditingLinkedIds && currentEditingLinkedIds.length > 0) {
+        masterItem = getLinkedItem ? getLinkedItem(currentEditingLinkedIds[0]) : null;
+        if (masterItem) {
+            mainTitle = masterItem.title;
+            masterUid = currentEditingLinkedIds[0];
+        }
+    }
 
     function createRow(title, isShared, toggleFn, iconClass = "ph ph-file") {
         const row = document.createElement("div");
@@ -3399,8 +3453,46 @@ async function showSyncFamilyModal() {
         return row;
     }
 
+    // Déterminer l'icône et le label de catégorie pour le Master
+    let masterIcon = "ph-fill ph-star"; // Default fallback icon
+    let masterTypeLabel = "";
+    if (masterUid && masterItem) {
+        masterIcon = getMediaIconClass(masterUid, masterItem);
+        
+        if (masterUid.startsWith('set')) {
+            masterTypeLabel = " (YouTube)";
+        } else if (masterUid.startsWith('lib')) {
+            const lType = (typeof getLocalType === 'function') ? getLocalType(masterItem) : 'audio';
+            if (lType === 'multitrack') {
+                const fallback = (currentLang === 'en') ? 'Multitrack' : 'Multipiste';
+                masterTypeLabel = ` (${t('web.lbl_interconnect_multitrack', fallback)})`;
+            } else if (lType === 'video') {
+                const fallback = (currentLang === 'en') ? 'Video' : 'Vidéo';
+                masterTypeLabel = ` (${t('web.lbl_interconnect_video', fallback)})`;
+            } else {
+                const fallback = (currentLang === 'en') ? 'Audio' : 'Audio';
+                masterTypeLabel = ` (${t('web.lbl_interconnect_audio', fallback)})`;
+            }
+        } else if (masterUid.startsWith('web')) {
+            const canonical = resolveCanonicalType(masterItem.type, masterItem.url);
+            if (canonical === 'youtube')   masterTypeLabel = " (YouTube)";
+            else if (canonical === 'spotify')   masterTypeLabel = " (Spotify)";
+            else if (canonical === 'songsterr') masterTypeLabel = " (Songsterr)";
+            else if (canonical === 'moises')    masterTypeLabel = " (Moises)";
+            else if (canonical === 'lesson') {
+                const fallback = (currentLang === 'en') ? 'Lesson' : 'Cours';
+                masterTypeLabel = ` (${t('web.lbl_interconnect_lesson', fallback)})`;
+            } else {
+                const fallback = (currentLang === 'en') ? 'Web Link' : 'Lien Web';
+                masterTypeLabel = ` (${t('web.lbl_interconnect_weblink', fallback)})`;
+            }
+        }
+    }
+
+    const displayMasterTitle = mainTitle + (mainTitle.includes(masterTypeLabel.trim()) ? "" : ` <small style="color:#777; font-size:0.8em;">${masterTypeLabel}</small>`);
+
     // Add Master
-    const masterRow = createRow(mainTitle, currentEditSharedStatus, "currentEditSharedStatus = this.checked; updateFamilySyncIcon();", "ph ph-star-fill");
+    const masterRow = createRow(displayMasterTitle, currentEditSharedStatus, "currentEditSharedStatus = this.checked; updateFamilySyncIcon();", masterIcon);
     container.appendChild(masterRow);
 
     // Add Links
@@ -3409,25 +3501,36 @@ async function showSyncFamilyModal() {
             const item = getLinkedItem(uid);
             if (!item) return;
             
-            let icon = "ph ph-link";
+            // Icon logic — centralisée dans getMediaIconClass() pour harmoniser avec les onglets des applets
+            const icon = getMediaIconClass(uid, item);
             let typeLabel = "";
-            
             if (uid.startsWith('set')) {
-                icon = "ph ph-youtube-logo";
                 typeLabel = " (YouTube)";
             } else if (uid.startsWith('lib')) {
-                if (item.is_multitrack || (item.path && item.path.includes('Multipistes'))) {
-                    icon = "ph ph-stack-simple";
-                    typeLabel = " (Multipiste)";
+                const lType = (typeof getLocalType === 'function') ? getLocalType(item) : 'audio';
+                if (lType === 'multitrack') {
+                    const fallback = (currentLang === 'en') ? 'Multitrack' : 'Multipiste';
+                    typeLabel = ` (${t('web.lbl_interconnect_multitrack', fallback)})`;
+                } else if (lType === 'video') {
+                    const fallback = (currentLang === 'en') ? 'Video' : 'Vidéo';
+                    typeLabel = ` (${t('web.lbl_interconnect_video', fallback)})`;
                 } else {
-                    // Detect if video by extension if is_video not set
-                    const isVid = item.is_video || (item.path && /\.(mp4|mkv|mov|avi|webm)$/i.test(item.path));
-                    icon = isVid ? "ph ph-film-strip" : "ph ph-music-note";
-                    typeLabel = isVid ? " (Vidéo)" : " (Audio)";
+                    const fallback = (currentLang === 'en') ? 'Audio' : 'Audio';
+                    typeLabel = ` (${t('web.lbl_interconnect_audio', fallback)})`;
                 }
             } else if (uid.startsWith('web')) {
-                icon = "ph ph-globe";
-                typeLabel = " (Lien Web)";
+                const canonical = resolveCanonicalType(item.type, item.url);
+                if (canonical === 'youtube')   typeLabel = " (YouTube)";
+                else if (canonical === 'spotify')   typeLabel = " (Spotify)";
+                else if (canonical === 'songsterr') typeLabel = " (Songsterr)";
+                else if (canonical === 'moises')    typeLabel = " (Moises)";
+                else if (canonical === 'lesson') {
+                    const fallback = (currentLang === 'en') ? 'Lesson' : 'Cours';
+                    typeLabel = ` (${t('web.lbl_interconnect_lesson', fallback)})`;
+                } else {
+                    const fallback = (currentLang === 'en') ? 'Web Link' : 'Lien Web';
+                    typeLabel = ` (${t('web.lbl_interconnect_weblink', fallback)})`;
+                }
             }
 
             const isShared = item.shared_with_group === true || item.shared_with_group === "true";
@@ -12255,6 +12358,7 @@ async function relocateFromEdit(action) {
      // UI Feedback in Confirmation Modal
     const modal = document.getElementById('modal-relocate-confirm');
     const titleEl = document.getElementById('relocate-confirm-title');
+    const iconEl = document.getElementById('relocate-confirm-icon');
     const headerEl = document.getElementById('relocate-confirm-header');
     const sourceEl = document.getElementById('relocate-confirm-source');
     const confirmSelect = document.getElementById('relocate-confirm-dest-select');
@@ -12266,6 +12370,7 @@ async function relocateFromEdit(action) {
     const artistMsg = document.getElementById('relocate-confirm-artist-msg');
 
     if (titleEl) titleEl.innerText = t(action === 'copy' ? 'web.modal_confirm_relocate_title' : 'web.modal_confirm_move_title');
+    if (iconEl) iconEl.className = (action === 'copy' ? 'ph ph-copy' : 'ph ph-arrows-out-cardinal');
     if (headerEl) headerEl.style.background = (action === 'copy' ? '#2980b9' : '#e67e22'); // Bleu pour copie, Orange pour déplacement
     if (sourceEl) sourceEl.innerText = item.path;
     
@@ -12297,11 +12402,11 @@ async function relocateFromEdit(action) {
     if (artistErr && artistMsg) {
         if (!item.artist || item.artist.trim() === "") {
             artistErr.style.display = "flex";
-            artistMsg.innerText = "Attention: Artiste manquant !";
+            artistMsg.innerText = t('web.msg_artist_missing', 'Attention : Artiste manquant !');
             artistInput.style.borderColor = "#ff9800";
         } else {
             artistErr.style.display = "none";
-            artistInput.style.borderColor = "#444";
+            artistInput.style.borderColor = "#333";
         }
     }
 
@@ -13857,23 +13962,8 @@ function renderModalLinkedItems() {
             
             badge.title = isActive ? (currentLang === 'fr' ? "Média actuellement en cours d'édition" : "Media currently being edited") : (item.artist ? `${item.artist} - ${item.title}` : item.title);
             
-            // Icon logic using our canonical helper or local type checks
-            let iconClass = "ph ph-link";
-            if (uid.startsWith('set')) iconClass = "ph ph-youtube-logo";
-            else if (uid.startsWith('lib')) {
-                const type = (typeof getLocalType === 'function') ? getLocalType(item) : 'audio';
-                if (type === 'video') iconClass = "ph ph-film-strip";
-                else if (type === 'multitrack') iconClass = "ph ph-stack-simple";
-                else iconClass = "ph ph-music-notes";
-            } else if (uid.startsWith('web')) {
-                const canonical = resolveCanonicalType(item.type, item.url);
-                if (canonical === 'youtube') iconClass = "ph ph-youtube-logo";
-                else if (canonical === 'spotify') iconClass = "ph ph-spotify-logo";
-                else if (canonical === 'songsterr') iconClass = "ph ph-guitar";
-                else if (canonical === 'moises') iconClass = "ph ph-scissors";
-                else if (canonical === 'lesson') iconClass = "ph ph-graduation-cap";
-                else iconClass = "ph ph-globe";
-            }
+            // Icon logic — centralisée dans getMediaIconClass() pour harmoniser avec showSyncFamilyModal
+            const iconClass = getMediaIconClass(uid, item);
 
             if (isActive) {
                 badge.innerHTML = `

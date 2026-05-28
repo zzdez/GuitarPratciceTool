@@ -3334,12 +3334,15 @@ input[type="color"].stem-color-input::-moz-color-swatch {
 
 /* ==========================================
    MEDIA MODAL HEIGHT & COMPACTNESS (V27.1 / V60+ Unified)
+   Hauteur augmentée de 155px pour absorber le dl-options-container (143px + marges)
+   afin que toutes les modales aient la même hauteur fixe et que les boutons
+   restent toujours visibles sur la même ligne (sans scroll inattendu).
    ========================================== */
 #media-modal[open], #modal-multitrack[open], #modal-web-link[open] {
     display: flex !important;
     flex-direction: column;
-    height: 76vh !important;
-    max-height: 76vh !important; 
+    height: min(calc(76vh + 155px), 93vh) !important;
+    max-height: min(calc(76vh + 155px), 93vh) !important;
     width: 95% !important;
     max-width: 950px !important;
     overflow: hidden; /* Let modal-body scroll */
