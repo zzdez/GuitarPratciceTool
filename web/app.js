@@ -12249,6 +12249,42 @@ async function applyBulkRelocation() {
  * Universal function to populate all relocation/destination selectors in the app.
  * Used by: Bulk Relocation, Library Manager, and Single Item Edit modals.
  */
+// Custom Premium Select dropdown control functions
+function toggleCustomSelect(event) {
+    if (event) event.stopPropagation();
+    const options = document.getElementById('relocate-confirm-dest-options');
+    if (options) {
+        const isHidden = options.style.display === 'none';
+        closeCustomSelect();
+        options.style.display = isHidden ? 'block' : 'none';
+    }
+}
+
+function closeCustomSelect() {
+    const options = document.getElementById('relocate-confirm-dest-options');
+    if (options) {
+        options.style.display = 'none';
+    }
+}
+
+function selectCustomOption(val, innerHTML) {
+    const select = document.getElementById('relocate-confirm-dest-select');
+    if (select) {
+        select.value = val;
+        select.dispatchEvent(new Event('change'));
+    }
+    const trigger = document.querySelector('#relocate-confirm-dest-custom .selected-text');
+    if (trigger) {
+        trigger.innerHTML = innerHTML;
+    }
+    closeCustomSelect();
+}
+
+// Close dropdown on outside click
+document.addEventListener('click', () => {
+    closeCustomSelect();
+});
+
 async function loadRelocationFolders() {
     const selects = [
         'bulk-source-select', 
@@ -12271,10 +12307,27 @@ async function loadRelocationFolders() {
 
     const formatPath = (p) => {
         if (!p) return p;
-        if (p.includes("${APP_DIR}")) {
-            return "📦 [App] \\ " + p.replace("${APP_DIR}", "").replace(/\//g, " \\ ").replace(/^ \\ /, "");
+        
+        let emoji = "📁";
+        const lowerP = p.toLowerCase();
+        if (lowerP.includes("multipistes") || lowerP.includes("stems")) {
+            emoji = "🎛️";
+        } else if (lowerP.includes("videos") || lowerP.includes("vidéos")) {
+            emoji = "🎬";
+        } else if (lowerP.includes("audios") || lowerP.includes("audio")) {
+            emoji = "🎵";
+        } else if (lowerP.includes("midi")) {
+            emoji = "🎹";
+        } else if (p.includes("${APP_DIR}")) {
+            emoji = "📦";
+        } else {
+            emoji = "⭐";
         }
-        return "⭐ " + p;
+        
+        if (p.includes("${APP_DIR}")) {
+            return emoji + " [App] \\ " + p.replace("${APP_DIR}", "").replace(/\//g, " \\ ").replace(/^ \\ /, "");
+        }
+        return emoji + " " + p;
     };
 
     selects.forEach(id => {
@@ -12312,6 +12365,88 @@ async function loadRelocationFolders() {
             const exists = Array.from(select.options).some(o => o.value === currentVal);
             if (exists) select.value = currentVal;
             else select.value = "AUTO";
+        }
+
+        // V70: Populates Custom Dropdown Menu with real Phosphor Icons for Relocate Confirmation Modal
+        if (id === 'relocate-confirm-dest-select') {
+            const customOptions = document.getElementById('relocate-confirm-dest-options');
+            if (customOptions) {
+                customOptions.innerHTML = '';
+                
+                const getPathIconClass = (val) => {
+                    if (!val) return "ph ph-folder-user";
+                    if (val === "AUTO") return "ph ph-magic-wand";
+                    if (val === "MANUAL") return "ph ph-folder-open";
+                    
+                    const lowerP = val.toLowerCase();
+                    if (lowerP.includes("multipistes") || lowerP.includes("stems")) {
+                        return "ph ph-stack-simple";
+                    } else if (lowerP.includes("videos") || lowerP.includes("vidéos")) {
+                        return "ph ph-film-strip";
+                    } else if (lowerP.includes("audios") || lowerP.includes("audio")) {
+                        return "ph ph-youtube-logo";
+                    } else if (lowerP.includes("midi")) {
+                        return "ph ph-piano-keys";
+                    } else if (val.includes("${APP_DIR}")) {
+                        return "ph ph-folder";
+                    }
+                    return "ph ph-folder-user";
+                };
+
+                // Add AUTO option
+                const divAuto = document.createElement('div');
+                divAuto.className = 'custom-select-option';
+                divAuto.setAttribute('data-value', 'AUTO');
+                divAuto.innerHTML = `<i class="${getPathIconClass('AUTO')}"></i> <span>${t('web.opt_auto_artist_dest', '-- Auto-routage par Artiste (Recommandé) --')}</span>`;
+                divAuto.onclick = () => selectCustomOption('AUTO', divAuto.innerHTML);
+                customOptions.appendChild(divAuto);
+
+                // Add Folders
+                folders.forEach(f => {
+                    if (f === "AUTO" || f === "MANUAL") return;
+                    const div = document.createElement('div');
+                    div.className = 'custom-select-option';
+                    div.setAttribute('data-value', f);
+                    
+                    let displayLabel = f;
+                    if (f && f.includes("${APP_DIR}")) {
+                        displayLabel = "[App] \\ " + f.replace("${APP_DIR}", "").replace(/\//g, " \\ ").replace(/^ \\ /, "");
+                    }
+                    
+                    div.innerHTML = `<i class="${getPathIconClass(f)}"></i> <span>${displayLabel}</span>`;
+                    div.onclick = () => selectCustomOption(f, div.innerHTML);
+                    customOptions.appendChild(div);
+                });
+
+                // Add MANUAL option
+                const divManual = document.createElement('div');
+                divManual.className = 'custom-select-option';
+                divManual.setAttribute('data-value', 'MANUAL');
+                divManual.innerHTML = `<i class="${getPathIconClass('MANUAL')}"></i> <span>${t('web.opt_manual_dest', 'Choisir un dossier spécifique...')}</span>`;
+                divManual.onclick = () => selectCustomOption('MANUAL', divManual.innerHTML);
+                customOptions.appendChild(divManual);
+                
+                // Add automatic sync listener on the hidden select to handle JS value updates (V70)
+                if (!select._changeListenerAttached) {
+                    select.addEventListener('change', () => {
+                        const val = select.value;
+                        const trigger = document.querySelector('#relocate-confirm-dest-custom .selected-text');
+                        if (trigger) {
+                            let label = val || "";
+                            if (val === 'AUTO') label = t('web.opt_auto_artist_dest', '-- Auto-routage par Artiste (Recommandé) --');
+                            else if (val === 'MANUAL') label = t('web.opt_manual_dest', 'Choisir un dossier spécifique...');
+                            else if (val && val.includes("${APP_DIR}")) {
+                                label = "[App] \\ " + val.replace("${APP_DIR}", "").replace(/\//g, " \\ ").replace(/^ \\ /, "");
+                            }
+                            trigger.innerHTML = `<i class="${getPathIconClass(val)}"></i> <span>${label}</span>`;
+                        }
+                    });
+                    select._changeListenerAttached = true;
+                }
+                
+                // Trigger visual update for initial currentVal
+                select.dispatchEvent(new Event('change'));
+            }
         }
     });
 }

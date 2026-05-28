@@ -2064,75 +2064,80 @@
             <!-- CONTENT -->
             <div class="settings-content">
                 <!-- TAB: GENERAL -->
-                <div id="tab-settings-general" class="settings-tab">
-                    <div class="settings-row" style="justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <h4 data-i18n="web.lbl_lang_choice" style="margin:0; border:none; padding:0; font-size:0.8em;">Langue / Language</h4>
-                        <select id="setting-language" onchange="changeLanguage()" style="height:20px; width:120px; padding:2px; font-size:0.8em; margin:0;">
-                            <option value="fr">Français</option>
-                            <option value="en">English</option>
-                        </select>
+                <div id="tab-settings-general" class="settings-tab edit-form" style="padding:15px; box-sizing:border-box; overflow-y:auto;">
+                    <div class="row-inputs">
+                        <div class="col">
+                            <label data-i18n="web.lbl_lang_choice">Langue / Language</label>
+                            <select id="setting-language" onchange="changeLanguage()">
+                                <option value="fr">Français</option>
+                                <option value="en">English</option>
+                            </select>
+                        </div>
+                        <div class="col">
+                            <label data-i18n="web.lbl_theme_choice">Thème Visuel</label>
+                            <select id="setting-theme" onchange="changeWebTheme()">
+                                <option value="steel_blue" data-i18n="web.theme_steel_blue">Steel Blue</option>
+                                <option value="amethyst" data-i18n="web.theme_amethyst">Amethyst</option>
+                                <option value="emerald" data-i18n="web.theme_emerald">Emerald</option>
+                                <option value="amber" data-i18n="web.theme_amber">Amber</option>
+                            </select>
+                        </div>
                     </div>
 
-                    <div class="settings-row" style="justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <h4 data-i18n="web.lbl_theme_choice" style="margin:0; border:none; padding:0; font-size:0.8em;">Thème Visuel</h4>
-                        <select id="setting-theme" onchange="changeWebTheme()" style="height:20px; width:120px; padding:2px; font-size:0.8em; margin:0;">
-                            <option value="steel_blue" data-i18n="web.theme_steel_blue">Steel Blue</option>
-                            <option value="amethyst" data-i18n="web.theme_amethyst">Amethyst</option>
-                            <option value="emerald" data-i18n="web.theme_emerald">Emerald</option>
-                            <option value="amber" data-i18n="web.theme_amber">Amber</option>
-                        </select>
-                    </div>
-
-                    <div style="display:flex; gap:10px; margin-bottom: 8px;">
-                        <div class="settings-row" style="flex:1; justify-content: space-between; align-items: center; margin-bottom: 0;">
-                            <h4 data-i18n="web.lbl_playback_options" style="margin:0; border:none; padding:0; font-size:0.8em;">Options de Lecture</h4>
-                            <div style="display:flex; gap:10px; align-items:center;">
-                                <label style="display:flex; align-items:center; gap:5px; margin:0;">
-                                    <input type="checkbox" id="setting-autoplay" style="width:13px; height:13px;">
-                                    <span data-i18n="web.lbl_autoplay" style="font-size:0.75em;">Auto</span>
+                    <div class="row-inputs">
+                        <div class="col">
+                            <label data-i18n="web.lbl_playback_options">Options de Lecture</label>
+                            <div style="display:flex; gap:15px; align-items:center; margin-top:8px;">
+                                <label class="modern-switch" style="font-size:0.8em;">
+                                    <input type="checkbox" id="setting-autoplay">
+                                    <span class="switch-slider"></span>
+                                    <span class="switch-label" data-i18n="web.lbl_autoplay">Auto</span>
                                 </label>
-                                <label style="display:flex; align-items:center; gap:5px; margin:0;">
-                                    <input type="checkbox" id="setting-autoreplay" style="width:13px; height:13px;">
-                                    <span data-i18n="web.lbl_autoreplay" style="font-size:0.75em;">Boucle</span>
+                                <label class="modern-switch" style="font-size:0.8em;">
+                                    <input type="checkbox" id="setting-autoreplay">
+                                    <span class="switch-slider"></span>
+                                    <span class="switch-label" data-i18n="web.lbl_autoreplay">Boucle</span>
                                 </label>
                             </div>
                         </div>
 
-                        <div class="settings-row" style="flex:1; justify-content: space-between; align-items: center; margin-bottom: 0;">
-                            <h4 data-i18n="web.lbl_fretboard_style" style="margin:0; border:none; padding:0; font-size:0.8em;">Style Fretboard</h4>
-                            <div style="display:flex; gap:6px; align-items:center;">
-                                <select id="setting-fretboard-skin" onchange="changeFretboardSkin()" style="height:20px; width:90px; padding:2px; font-size:0.75em;">
+                        <div class="col">
+                            <label data-i18n="web.lbl_fretboard_style">Style Fretboard</label>
+                            <div style="display:flex; gap:15px; align-items:center; margin-top:8px;">
+                                <select id="setting-fretboard-skin" onchange="changeFretboardSkin()" style="flex:1;">
                                     <option value="flat" data-i18n="web.fretboard_flat">Plat</option>
                                     <option value="wood" data-i18n="web.fretboard_wood">Bois</option>
                                 </select>
-                                <label style="display:flex; align-items:center; gap:5px; margin:0;">
-                                    <input type="checkbox" id="setting-fretboard-autoclose" style="width:13px; height:13px;">
-                                    <span data-i18n="web.lbl_fretboard_auto_close" style="font-size:0.75em;">Auto-Close</span>
+                                <label class="modern-switch" style="font-size:0.8em;">
+                                    <input type="checkbox" id="setting-fretboard-autoclose">
+                                    <span class="switch-slider"></span>
+                                    <span class="switch-label" data-i18n="web.lbl_fretboard_auto_close">Auto-Close</span>
                                 </label>
                             </div>
                         </div>
                     </div>
 
-                    <h4 data-i18n="web.lbl_youtube_api">Clé API YouTube</h4>
-                    <div class="settings-control-group" style="padding:4px 8px; margin-bottom:8px;">
-                        <div class="input-password-wrapper" style="position: relative; display: flex; align-items: center;">
-                            <input type="password" id="setting-youtube-key" data-i18n-placeholder="web.placeholder_youtube_api" style="height:22px; width: 100%; padding-right: 30px; box-sizing: border-box;">
-                            <button type="button" onclick="togglePasswordVisibility('setting-youtube-key', this)" style="position: absolute; right: 5px; background: none; border: none; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center; height: 100%; padding: 0 5px;">
-                                <i class="ph ph-eye" style="font-size: 1.1em;"></i>
-                            </button>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
-                            <p class="hint" data-i18n="web.msg_api_info" style="margin:0; font-size:0.7em;">Raccourci titres/images.</p>
-                            <a href="https://console.cloud.google.com/" target="_blank" style="color:var(--accent); text-decoration:none; font-size:0.7em;" data-i18n="web.link_get_api_key">Clé API ↗</a>
+                    <div class="row-inputs">
+                        <div class="col">
+                            <label data-i18n="web.lbl_youtube_api">Clé API YouTube</label>
+                            <div class="input-password-wrapper" style="position: relative; display: flex; align-items: center;">
+                                <input type="password" id="setting-youtube-key" data-i18n-placeholder="web.placeholder_youtube_api" style="width: 100%; padding-right: 30px; box-sizing: border-box;">
+                                <button type="button" onclick="togglePasswordVisibility('setting-youtube-key', this)" style="position: absolute; right: 5px; background: none; border: none; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center; height: 100%; padding: 0 5px;">
+                                    <i class="ph ph-eye" style="font-size: 1.1em;"></i>
+                                </button>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
+                                <span class="hint" data-i18n="web.msg_api_info" style="margin:0; font-size:0.75em;">Raccourci titres/images.</span>
+                                <a href="https://console.cloud.google.com/" target="_blank" style="color:var(--accent); text-decoration:none; font-size:0.75em;" data-i18n="web.link_get_api_key">Clé API ↗</a>
+                            </div>
                         </div>
                     </div>
 
-                    <h4 data-i18n="web.lbl_music_apis">APIs Musique (BPM & Ton.)</h4>
-                    <div class="settings-control-group" style="padding:4px 8px; margin-bottom:8px;">
-                        <div>
-                            <label data-i18n="web.lbl_getsong_api_key" style="font-size:0.7em;">GetSongBPM Key</label>
-                            <div class="input-password-wrapper" style="position: relative; display: flex; align-items: center; margin-top: 4px;">
-                                <input type="password" id="setting-getsong-api-key" placeholder="..." style="height:22px; width: 100%; padding-right: 30px; box-sizing: border-box;">
+                    <div class="row-inputs">
+                        <div class="col">
+                            <label data-i18n="web.lbl_getsong_api_key">GetSongBPM Key</label>
+                            <div class="input-password-wrapper" style="position: relative; display: flex; align-items: center;">
+                                <input type="password" id="setting-getsong-api-key" placeholder="..." style="width: 100%; padding-right: 30px; box-sizing: border-box;">
                                 <button type="button" onclick="togglePasswordVisibility('setting-getsong-api-key', this)" style="position: absolute; right: 5px; background: none; border: none; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center; height: 100%; padding: 0 5px;">
                                     <i class="ph ph-eye" style="font-size: 1.1em;"></i>
                                 </button>
@@ -2145,7 +2150,7 @@
                 <div id="tab-settings-library" class="settings-tab" style="display:none;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                         <h4 data-i18n="web.lbl_local_folders" style="margin:0; border:none;">Dossiers Locaux</h4>
-                        <button class="btn-secondary" onclick="addLibraryFolder()" style="padding:4px 8px; font-size:0.8em;">+ Ajouter</button>
+                        <button class="btn-secondary" onclick="addLibraryFolder()" style="padding:0 10px; height:22px; font-size:11px;">+ Ajouter</button>
                     </div>
                     <div id="settings-folder-list" class="folder-list" style="max-height:250px;"></div>
                     <p class="hint" data-i18n="web.hint_local_folders">Scan auto (MP3, WAV, etc.)</p>
@@ -2156,7 +2161,7 @@
                     <h4 data-i18n="web.lbl_controller_config">Contrôleur</h4>
                     <p class="hint" data-i18n="web.hint_controller_config" style="margin-bottom:15px;">Utilisez l'éditeur natif pour les boutons.</p>
                     <div style="text-align:center;">
-                        <button class="btn-primary" onclick="openNativeEditor()" style="padding:10px 20px;" data-i18n="gui.btn_open_editor">
+                        <button class="btn-primary" onclick="openNativeEditor()" style="padding:0 15px; height:24px; font-size:11px;" data-i18n="gui.btn_open_editor">
                             Éditeur Avancé ⚙️
                         </button>
                     </div>
@@ -2171,7 +2176,7 @@
                                 <strong style="font-size:0.85em;" data-i18n="web.lbl_consolidate">Consolider</strong>
                                 <p class="hint" data-i18n="web.hint_consolidate" style="margin:0;">Copie tout en local.</p>
                             </div>
-                            <button class="btn-primary" onclick="consolidateLibrary()" data-i18n="web.btn_consolidate_run" style="padding:6px 12px; font-size:0.8em;">Consolider</button>
+                            <button class="btn-primary" onclick="consolidateLibrary()" data-i18n="web.btn_consolidate_run" style="padding:0 10px; height:22px; font-size:11px;">Consolider</button>
                         </div>
                     </div>
                     
@@ -2180,7 +2185,7 @@
                 </div>
             </div>
         </div>
-        <div class="modal-footer" style="padding:10px 15px;">
+        <div class="modal-footer">
             <button class="btn-text" onclick="closeSettingsModal()" data-i18n="web.btn_cancel">Annuler</button>
             <button class="btn-primary" onclick="saveSettings()" data-i18n="web.btn_save">Enregistrer</button>
         </div>
@@ -3087,10 +3092,25 @@
                 </div>
                 <div style="border-top: 1px solid #222; padding-top: 10px;">
                     <span style="font-size: 0.72em; color: #777; text-transform: uppercase; font-weight: bold; letter-spacing: 0.5px;" data-i18n="web.lbl_target_folder">Destination</span>
-                    <div style="display: flex; gap: 8px; align-items: center; margin-top: 5px;">
-                        <select id="relocate-confirm-dest-select" style="flex: 1; background: #1a1a1a; color: var(--accent); border: 1px solid #333; padding: 6px 10px; border-radius: 6px; font-size: 0.88em; font-weight: bold; height: 32px; box-sizing: border-box;">
+                    <div style="display: flex; gap: 8px; align-items: center; margin-top: 5px; position: relative;">
+                        <!-- Hidden native select for backend compatibility -->
+                        <select id="relocate-confirm-dest-select" style="display: none;">
                             <!-- Populated dynamically -->
                         </select>
+                        
+                        <!-- Premium Custom Select Dropdown -->
+                        <div class="custom-select-wrapper" style="flex: 1; position: relative; min-width: 0;">
+                            <div id="relocate-confirm-dest-custom" class="custom-select-trigger" onclick="toggleCustomSelect(event)" style="background: #1a1a1a; color: var(--accent); border: 1px solid #333; padding: 6px 10px; border-radius: 6px; font-size: 0.88em; font-weight: bold; height: 32px; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none;">
+                                <span class="selected-text" style="display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.95em;">
+                                    <i class="ph ph-magic-wand"></i> <span>-- Auto-routage par Artiste (Recommandé) --</span>
+                                </span>
+                                <i class="ph ph-caret-down" style="font-size: 0.8em; color: #666; flex-shrink: 0; margin-left: 5px;"></i>
+                            </div>
+                            <div id="relocate-confirm-dest-options" class="custom-select-options" style="display: none; position: absolute; top: 36px; left: 0; right: 0; background: #1e1e1e; border: 1px solid #333; border-radius: 6px; box-shadow: 0 10px 25px rgba(0,0,0,0.6); z-index: 1000; max-height: 200px; overflow-y: auto; padding: 4px 0; box-sizing: border-box;">
+                                <!-- Dynamic Options Injected here -->
+                            </div>
+                        </div>
+
                         <button class="btn-secondary" onclick="openNativeFolderPicker('confirm-dest')" style="padding: 0 10px; height: 32px; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;" title="Parcourir...">
                             <i class="ph ph-folder-open" style="font-size: 1.15em;"></i>
                         </button>
