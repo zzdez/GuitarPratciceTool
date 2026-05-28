@@ -3892,11 +3892,11 @@ async def get_youtube_cover(video_id: str):
     return FileResponse(dest_path, media_type="image/jpeg")
 
 @app.get("/api/local/find_artist_folder")
-async def find_artist_folder(name: str, preferred_root: str = None):
+async def find_artist_folder(name: str, preferred_root: str = None, media_type: str = None):
     """
     Scans managed folders to see if a subfolder with this artist name already exists.
     Useful to suggest destination to the user (V50).
-    V61: Supports 'preferred_root' to prioritize matches in the selected destination.
+    V61: Supports 'preferred_root' and 'media_type' to prioritize matches in the selected destination.
     """
     if not name or not name.strip() or name.strip() == "Divers":
         return {"status": "ok", "matches": []}
@@ -3909,6 +3909,18 @@ async def find_artist_folder(name: str, preferred_root: str = None):
     config = ConfigManager()
     base_folders = config.get("media_folders", [])
     
+    # Identify default directory for this media type
+    target_default_dir = None
+    if media_type:
+        from utils import get_internal_media_dirs
+        internal_dirs = get_internal_media_dirs()
+        if media_type == 'multitrack':
+            target_default_dir = internal_dirs[3]
+        elif media_type == 'video':
+            target_default_dir = internal_dirs[1]
+        elif media_type == 'audio':
+            target_default_dir = internal_dirs[0]
+            
     matches = []
     for base in base_folders:
         try:
@@ -3926,9 +3938,18 @@ async def find_artist_folder(name: str, preferred_root: str = None):
         except:
             continue
     
-    # Sort matches: place preferred_root at the top if it matches
-    if preferred_root and preferred_root != "AUTO":
-        matches.sort(key=lambda x: 0 if x["root"] == preferred_root else 1)
+    # Sort matches: place target_default_dir first, then preferred_root
+    if matches:
+        def sort_key(x):
+            resolved_root = resolve_portable_path(x["root"])
+            resolved_default = resolve_portable_path(target_default_dir) if target_default_dir else None
+            resolved_preferred = resolve_portable_path(preferred_root) if preferred_root else None
+            
+            is_default = (resolved_default and os.path.normpath(resolved_root).lower() == os.path.normpath(resolved_default).lower())
+            is_preferred = (resolved_preferred and preferred_root != "AUTO" and os.path.normpath(resolved_root).lower() == os.path.normpath(resolved_preferred).lower())
+            return (0 if is_default else 1, 0 if is_preferred else 1)
+            
+        matches.sort(key=sort_key)
             
     return {"status": "ok", "matches": matches}
 

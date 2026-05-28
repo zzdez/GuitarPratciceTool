@@ -12355,6 +12355,19 @@ async function relocateFromEdit(action) {
         index: idx
     };
 
+    // Determine media type and associated icon class
+    let mediaType = 'audio';
+    if (item.is_multitrack || isMT) mediaType = 'multitrack';
+    else if (item.open_mode === 'iframe' || (item.url && item.url.includes("youtube.com"))) mediaType = 'youtube';
+    else if (item.type === 'web' || (item.url && !item.path)) mediaType = 'web';
+    else if (item.path && item.path.toLowerCase().match(/\.(mp4|mkv|avi|mov)$/)) mediaType = 'video';
+
+    let iconClass = 'ph ph-music-notes';
+    if (mediaType === 'multitrack') iconClass = 'ph ph-stack-simple';
+    else if (mediaType === 'youtube') iconClass = 'ph ph-youtube-logo';
+    else if (mediaType === 'web') iconClass = 'ph ph-globe';
+    else if (mediaType === 'video') iconClass = 'ph ph-film-strip';
+
      // UI Feedback in Confirmation Modal
     const modal = document.getElementById('modal-relocate-confirm');
     const titleEl = document.getElementById('relocate-confirm-title');
@@ -12370,7 +12383,7 @@ async function relocateFromEdit(action) {
     const artistMsg = document.getElementById('relocate-confirm-artist-msg');
 
     if (titleEl) titleEl.innerText = t(action === 'copy' ? 'web.modal_confirm_relocate_title' : 'web.modal_confirm_move_title');
-    if (iconEl) iconEl.className = (action === 'copy' ? 'ph ph-copy' : 'ph ph-arrows-out-cardinal');
+    if (iconEl) iconEl.className = iconClass;
     if (headerEl) headerEl.style.background = (action === 'copy' ? '#2980b9' : '#e67e22'); // Bleu pour copie, Orange pour déplacement
     if (sourceEl) sourceEl.innerText = item.path;
     
@@ -12381,7 +12394,7 @@ async function relocateFromEdit(action) {
         // V61: Update artist folder suggestion when destination changes
         confirmSelect.onchange = () => {
             const artistInput = document.getElementById('relocate-confirm-artist-input');
-            if (artistInput) checkArtistFolderMatch(artistInput.value);
+            if (artistInput) checkArtistFolderMatch(artistInput.value, mediaType);
         };
     }
     
@@ -12392,13 +12405,13 @@ async function relocateFromEdit(action) {
         artistInput.value = item.artist || "";
         artistInput.oninput = (e) => {
             clearTimeout(artistCheckTimeout);
-            artistCheckTimeout = setTimeout(() => checkArtistFolderMatch(e.target.value), 400);
+            artistCheckTimeout = setTimeout(() => checkArtistFolderMatch(e.target.value, mediaType), 400);
         };
         // Initial check
-        checkArtistFolderMatch(item.artist || "");
+        checkArtistFolderMatch(item.artist || "", mediaType);
     }
 
-    if (artistChk) artistChk.checked = (item.artist && item.artist.trim() !== "");
+    if (artistChk) artistChk.checked = false;
     if (artistErr && artistMsg) {
         if (!item.artist || item.artist.trim() === "") {
             artistErr.style.display = "flex";
@@ -12419,7 +12432,7 @@ let artistCheckTimeout = null;
  * Searches for existing artist folders across all managed roots.
  * Suggests the best destination to avoid duplicates (V50).
  */
-async function checkArtistFolderMatch(name) {
+async function checkArtistFolderMatch(name, mediaType) {
     const zone = document.getElementById('relocate-confirm-artist-match-zone');
     const pathEl = document.getElementById('relocate-confirm-match-path');
     const btn = document.getElementById('btn-use-detected-folder');
@@ -12432,7 +12445,7 @@ async function checkArtistFolderMatch(name) {
     
     try {
         const preferred = select ? select.value : "AUTO";
-        const res = await fetch(`/api/local/find_artist_folder?name=${encodeURIComponent(name)}&preferred_root=${encodeURIComponent(preferred)}`);
+        const res = await fetch(`/api/local/find_artist_folder?name=${encodeURIComponent(name)}&preferred_root=${encodeURIComponent(preferred)}&media_type=${encodeURIComponent(mediaType || '')}`);
         const data = await res.json();
         
         if (data.status === 'ok' && data.matches && data.matches.length > 0) {
