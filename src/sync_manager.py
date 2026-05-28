@@ -1091,7 +1091,7 @@ class SyncManager:
         if ".git" in p: return True
         if "backup/" in p: return True
         if "peaks/" in p: return True
-        if p.endswith(".log") or "debug" in p or p == "midikbd_debug.log": return True
+        if p.endswith(".log") or "debug" in p or p == "midikbd_debug.log" or p == "guitarpracticetool_debug.log": return True
         
         # V9.6.49: Ignore partitioned sync states (machine-specific)
         if p.startswith("data/sync_state_") and p.endswith(".json"): return True
@@ -1514,10 +1514,10 @@ class SyncManager:
             json.dump(merged, f, sort_keys=True, separators=(',', ':'))
 
     def generate_bootstrapper_script(self):
-        """Creates updater.bat that kills AirstepStudio, moves buffer files to root, and restarts."""
+        """Creates updater.bat that kills GuitarPracticeTool, moves buffer files to root, and restarts."""
         bat_script = f"""@echo off
 timeout /t 2 /nobreak > nul
-echo Updating AirstepStudio...
+echo Updating GuitarPracticeTool...
 
 :: Move all files from .update_buffer to root directory
 xcopy "{self.update_buffer_dir}\\*" "{self.local_dir}\\" /S /Y /C /I
@@ -1525,9 +1525,9 @@ xcopy "{self.update_buffer_dir}\\*" "{self.local_dir}\\" /S /Y /C /I
 :: Delete the buffer
 rmdir /s /q "{self.update_buffer_dir}"
 
-:: Restart AirstepStudio
+:: Restart GuitarPracticeTool
 cd /d "{self.local_dir}"
-start "" MidiKbdControlStudio.exe
+start "" GuitarPracticeTool.exe
 
 :: Self-destruct
 del "%~f0"

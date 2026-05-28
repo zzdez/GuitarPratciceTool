@@ -1,7 +1,58 @@
 let currentMode = "WIN";
+
+// Helper global pour extraire l'ID YouTube
+function getYouTubeId(url) {
+    if (!url) return null;
+    let videoId = null;
+    try {
+        if (url.includes('youtu.be/')) {
+            videoId = url.split('youtu.be/')[1].split(/[?#]/)[0];
+        } else if (url.includes('youtube.com/embed/')) {
+            videoId = url.split('youtube.com/embed/')[1].split(/[?#]/)[0];
+        } else if (url.includes('youtube.com/v/')) {
+            videoId = url.split('youtube.com/v/')[1].split(/[?#]/)[0];
+        } else if (url.includes('watch?v=')) {
+            videoId = url.split('watch?v=')[1].split('&')[0].split(/[?#]/)[0];
+        } else if (url.includes('&v=')) {
+            videoId = url.split('&v=')[1].split('&')[0].split(/[?#]/)[0];
+        } else if (url.includes('/vi/')) {
+            videoId = url.split('/vi/')[1].split('/')[0];
+        }
+    } catch(e) {
+        console.error("Error parsing YouTube ID:", e);
+    }
+    return (videoId && videoId.length === 11) ? videoId : null;
+}
+
+// Helper global pour résoudre et forcer le cache local des vignettes YouTube
+function resolveThumbnail(urlOrThumbnail) {
+    if (!urlOrThumbnail) return urlOrThumbnail;
+    const isYoutube = urlOrThumbnail.includes("youtube.com") || urlOrThumbnail.includes("youtu.be") || urlOrThumbnail.includes("ytimg.com");
+    if (isYoutube) {
+        const ytId = getYouTubeId(urlOrThumbnail);
+        if (ytId) {
+            return `/api/youtube/cover/${ytId}`;
+        }
+    }
+    return urlOrThumbnail;
+}
+
+// Helper global pour normaliser les types de médias interconnectés de façon robuste
+function resolveCanonicalType(type, url) {
+    const tLower = (type || "").toLowerCase();
+    const urlLower = (url || "").toLowerCase();
+    
+    if (tLower === 'youtube' || tLower.includes('youtube') || urlLower.includes('youtube.com') || urlLower.includes('youtu.be')) return 'youtube';
+    if (tLower === 'spotify' || tLower.includes('spotify') || urlLower.includes('spotify.com')) return 'spotify';
+    if (tLower === 'songsterr' || tLower.includes('songsterr') || urlLower.includes('songsterr.com')) return 'songsterr';
+    if (tLower === 'moises' || tLower.includes('moises')) return 'moises';
+    if (tLower === 'lesson' || tLower.includes('lessons') || tLower.includes('cours') || tLower.includes('tuto')) return 'lesson';
+    
+    return 'other';
+}
 let websocket;
 let currentProfile = null;
-let currentActivePlayer = 'youtube';
+let currentActivePlayer = null;
 let isInitialSettingsLoad = true;
 let sidebarUserOverride = false;
 let isDraggingLayout = false; // Global lock to prevent sorting during resize
@@ -138,34 +189,93 @@ function startDeviceStatusPolling() {
                     profileLabel.innerText = t("web.profile_prefix") + activeProfileName;
                 }
 
-                // Update Header Device Status
-                const headerStatus = document.getElementById("header-device-status");
-                if (headerStatus) {
-                    let displayMode = currentConnectionMode === "BLE" ? t("web.bt") : t("web.usb");
-                    if (currentDeviceName === t("web.none") || !currentDeviceName) {
-                        headerStatus.innerHTML = `○ ` + t("web.status_waiting");
-                        headerStatus.style.color = "#888";
-                    } else if (!currentIsConnected) {
-                        headerStatus.innerHTML = `🔴 ${currentDeviceName} (${displayMode}) - ` + t("web.status_disconnected");
-                        headerStatus.style.color = "#cf6679";
-                    } else {
-                        headerStatus.innerHTML = `🟢 ${currentDeviceName} (${displayMode})`;
-                        headerStatus.style.color = "#03dac6";
+                // Mettre à jour le sélecteur de télécommande active
+                const selectDevice = document.getElementById("select-active-device");
+                if (selectDevice && data.available_devices) {
+                    const currentOptions = Array.from(selectDevice.options).map(o => o.value);
+                    const newOptions = data.available_devices;
+                    const needsRebuild = currentOptions.length !== newOptions.length || !currentOptions.every((val, index) => val === newOptions[index]);
+
+                    if (needsRebuild) {
+                        selectDevice.innerHTML = "";
+                        newOptions.forEach(dev => {
+                            const opt = document.createElement("option");
+                            opt.value = dev;
+                            opt.textContent = dev;
+                            opt.style.background = "#1e1e1e";
+                            opt.style.color = "white";
+                            selectDevice.appendChild(opt);
+                        });
+                    }
+
+                    if (data.active_device_name) {
+                        selectDevice.value = data.active_device_name;
                     }
                 }
 
-                // If on empty state, force refresh to show new name immediately
+                // Update Header Device Status
+                const headerStatus = document.getElementById("header-device-status");
+                if (headerStatus) {
+                    if (currentConnectionMode === "Virtuel") {
+                        headerStatus.innerHTML = `🟢 ` + t("web.virtual_device", "Télécommande virtuelle");
+                        headerStatus.style.color = "#03dac6";
+                    } else if (data.ports_status && data.ports_status.length > 0) {
+                        let statusParts = [];
+                        let numConnected = 0;
+                        data.ports_status.forEach(p => {
+                            const pName = p.name || "Appareil";
+                            const pConnected = p.connected || false;
+                            if (pConnected) numConnected++;
+                            statusParts.push(`${pName} ${pConnected ? '🟢' : '🔴'}`);
+                        });
+                        headerStatus.innerHTML = statusParts.join(" | ");
+                        if (numConnected === data.ports_status.length) {
+                            headerStatus.style.color = "#03dac6";
+                        } else if (numConnected > 0) {
+                            headerStatus.style.color = "#ffa500";
+                        } else {
+                            headerStatus.style.color = "#cf6679";
+                        }
+                    } else {
+                        let displayMode = currentConnectionMode === "BLE" ? t("web.bt") : t("web.usb");
+                        if (currentDeviceName === t("web.none") || !currentDeviceName) {
+                            headerStatus.innerHTML = `○ ` + t("web.status_waiting");
+                            headerStatus.style.color = "#888";
+                        } else if (!currentIsConnected) {
+                            headerStatus.innerHTML = `🔴 ${currentDeviceName} (${displayMode}) - ` + t("web.status_disconnected");
+                            headerStatus.style.color = "#cf6679";
+                        } else {
+                            headerStatus.innerHTML = `🟢 ${currentDeviceName} (${displayMode})`;
+                            headerStatus.style.color = "#03dac6";
+                        }
+                    }
+                }
+
                 if (!currentProfile || !currentProfile.mappings) {
                     renderPedalboard(currentProfile);
                 }
             }
         } catch (e) {
-            // Silently ignore connection errors here to not spam console when server restarts
             currentIsConnected = false;
         }
     }, 2000);
 }
 startDeviceStatusPolling();
+
+async function changeActiveDevice(deviceName) {
+    try {
+        const res = await fetch("/api/active_device", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ device_name: deviceName })
+        });
+        if (res.ok) {
+            console.log("Active device changed to:", deviceName);
+        }
+    } catch (e) {
+        console.error("Error changing active device:", e);
+    }
+}
 
 // --- PITCH SHIFT VARIABLES ---
 let audioCtx = null;
@@ -439,6 +549,10 @@ function changePitch(delta) {
 
 // --- INIT ---
 function onYouTubeIframeAPIReady() {
+    if (player) {
+        console.log("YouTube Player already initialized, skipping duplicate call.");
+        return;
+    }
     player = new YT.Player('player', {
         height: '100%',
         width: '100%',
@@ -450,6 +564,88 @@ function onYouTubeIframeAPIReady() {
     });
 }
 window.onYouTubeIframeAPIReady = onYouTubeIframeAPIReady;
+
+function initTabsDragAndDrop() {
+    const navTabs = document.querySelector(".nav-tabs");
+    if (!navTabs) return;
+
+    // 1. Charger et appliquer l'ordre sauvegardé
+    const savedOrder = localStorage.getItem("tabs_order");
+    if (savedOrder) {
+        const orderArr = savedOrder.split(",");
+        const buttons = Array.from(navTabs.children);
+        orderArr.forEach(id => {
+            const btn = buttons.find(b => b.id === id);
+            if (btn) {
+                navTabs.appendChild(btn);
+            }
+        });
+    }
+
+    // 2. Événements Drag & Drop
+    let dragSrcEl = null;
+
+    const buttons = navTabs.querySelectorAll("button");
+    buttons.forEach(btn => {
+        btn.addEventListener("dragstart", (e) => {
+            dragSrcEl = btn;
+            btn.classList.add("dragging");
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData("text/plain", btn.id);
+        });
+
+        btn.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+            
+            if (btn !== dragSrcEl) {
+                const rect = btn.getBoundingClientRect();
+                const next = (e.clientX - rect.left) > (rect.width / 2);
+                navTabs.insertBefore(dragSrcEl, next ? btn.nextSibling : btn);
+            }
+        });
+
+        btn.addEventListener("dragend", () => {
+            btn.classList.remove("dragging");
+            
+            // Sauvegarder le nouvel ordre
+            const newOrder = Array.from(navTabs.children).map(b => b.id).join(",");
+            localStorage.setItem("tabs_order", newOrder);
+        });
+    });
+
+    // 3. Activer automatiquement le premier onglet à gauche par défaut au démarrage
+    const firstTab = navTabs.firstElementChild;
+    if (firstTab) {
+        let viewName = "library";
+        if (firstTab.id === "tab-library") viewName = "library";
+        else if (firstTab.id === "tab-local") viewName = "local";
+        else if (firstTab.id === "tab-setlists") viewName = "setlists";
+        else if (firstTab.id === "tab-web-links") viewName = "web-links";
+        else if (firstTab.id === "tab-apps") viewName = "apps";
+        
+        switchView(viewName, false);
+    }
+}
+
+function showActivePlayerContainer(playerType) {
+    const placeholder = document.getElementById("media-placeholder");
+    const videoContainer = document.getElementById("video-container");
+    const audioContainer = document.getElementById("audio-player-container");
+    const multitrackContainer = document.getElementById("multitrack-container");
+    
+    if (placeholder) placeholder.style.display = playerType ? "none" : "flex";
+    
+    if (videoContainer) {
+        videoContainer.style.display = (playerType === 'youtube' || playerType === 'local_video' || playerType === 'generic') ? "flex" : "none";
+    }
+    if (audioContainer) {
+        audioContainer.style.display = (playerType === 'waveform') ? "flex" : "none";
+    }
+    if (multitrackContainer) {
+        multitrackContainer.style.display = (playerType === 'multitrack') ? "flex" : "none";
+    }
+}
 
 
 let queuedVideoId = null;
@@ -474,7 +670,7 @@ function onPlayerReady() {
 function onPlayerStateChange(event) {
     if (currentWebMode === 'GENERIC' || currentActivePlayer === 'youtube') {
         if (event.data === YT.PlayerState.ENDED) {
-            if (window.currentAutoreplay === true) {
+            if (window.currentAutoreplay === true && !(window.isLiveMode && isSetlistMode)) {
                 player.playVideo();
                 // TRAINING HOOK: Autoreplay YouTube
                 if (window.MediaTrainingManager && window.MediaTrainingManager.video && window.MediaTrainingManager.video.active) {
@@ -714,15 +910,15 @@ function setMode(mode, forcedProfileName = null) {
     currentMode = mode;
 
     // --- CRITICAL: Update Window Title for ContextMonitor Auto-Detect ---
-    // Universal Logic: "Midi-Kbd Control Studio - [Profile Name]"
+    // Universal Logic: "GuitarPracticeTool - [Profile Name]"
     if (forcedProfileName) {
-        document.title = `Midi-Kbd Control Studio - ${forcedProfileName}`;
+        document.title = `GuitarPracticeTool - ${forcedProfileName}`;
     } else {
         // Fallback for hardcoded modes if no profile name provided
-        if (mode === "YOUTUBE") document.title = "Midi-Kbd Control Studio - YouTube";
-        else if (mode === "AUDIO") document.title = "Midi-Kbd Control Studio - Audio";
-        else if (mode === "VIDEO") document.title = "Midi-Kbd Control Studio - Video";
-        else document.title = "Midi-Kbd Control Studio";
+        if (mode === "YOUTUBE") document.title = "GuitarPracticeTool - YouTube";
+        else if (mode === "AUDIO") document.title = "GuitarPracticeTool - Audio";
+        else if (mode === "VIDEO") document.title = "GuitarPracticeTool - Video";
+        else document.title = "GuitarPracticeTool";
     }
 
     // Notify Backend
@@ -734,7 +930,7 @@ function setMode(mode, forcedProfileName = null) {
 }
 
 // --- VIEW NAVIGATION ---
-function switchView(viewName) {
+function switchView(viewName, forceReload = true) {
     // Buttons
     document.getElementById("tab-library").classList.toggle("active", viewName === "library");
     document.getElementById("tab-apps").classList.toggle("active", viewName === "apps");
@@ -749,13 +945,15 @@ function switchView(viewName) {
     document.getElementById("view-web-links").style.display = viewName === "web-links" ? "block" : "none";
     document.getElementById("view-setlists").style.display = viewName === "setlists" ? "block" : "none";
 
-    if (viewName === "local") {
-        loadLocalFiles();
-        checkMissingItems();
-    } else if (viewName === "web-links") {
-        loadWebLinks();
-    } else if (viewName === "setlists") {
-        loadAllSetlists();
+    if (forceReload) {
+        if (viewName === "local") {
+            loadLocalFiles();
+            checkMissingItems();
+        } else if (viewName === "web-links") {
+            loadWebLinks();
+        } else if (viewName === "setlists") {
+            loadAllSetlists();
+        }
     }
 }
 
@@ -1598,12 +1796,14 @@ async function loadWebLinks() {
             // 2. Filter for the "YouTube/Setlist" View (Iframes)
             currentTrackList = webLinks.filter(it => 
                 it.open_mode === 'iframe' || 
+                (it.type && it.type.toLowerCase().includes('youtube')) ||
                 (it.url && (it.url.includes('youtube.com') || it.url.includes('youtu.be')))
             );
 
             // 3. Filter for the "Web Links" View (Songsterr, etc.)
             currentWebLinkTrackList = webLinks.filter(it => 
                 it.open_mode !== 'iframe' && 
+                (!it.type || !it.type.toLowerCase().includes('youtube')) &&
                 (!it.url || (!it.url.includes('youtube.com') && !it.url.includes('youtu.be')))
             );
 
@@ -1747,7 +1947,9 @@ function renderWebLinks() {
 function openWebLinkModal(index = -1) {
     currentWebLinkIndex = index;
     // V55: Initialize linked IDs for session
-    currentEditingLinkedIds = (index === -1) ? [] : (webLinks[index].linked_ids || []);
+    if (!window.isNavigatingLinkedMedia) {
+        currentEditingLinkedIds = (index === -1) ? [] : (webLinks[index].linked_ids || []);
+    }
     lastEditContext = 'web_links';
     
     const modal = document.getElementById("modal-web-link");
@@ -1781,7 +1983,9 @@ function openWebLinkModal(index = -1) {
         currentEditingLinkedIds = []; // V58: Initialize for new link
     } else {
         const link = webLinks[index];
-        currentEditingLinkedIds = link.linked_ids || []; // V58: Initialize for edit
+        if (!window.isNavigatingLinkedMedia) {
+            currentEditingLinkedIds = link.linked_ids || []; // V58: Initialize for edit
+        }
         titleEl.innerText = t("web.modal_web_link_title_edit", "Modifier le Lien Web");
         document.getElementById("web-link-title").value = link.title || "";
         document.getElementById("web-link-artist").value = link.artist || "";
@@ -1803,22 +2007,136 @@ function openWebLinkModal(index = -1) {
         document.getElementById("web-link-scale").value = link.scale || "";
         document.getElementById("web-link-tuning").value = link.tuning || "standard";
 
-        // Cover
-        if (link.cover) {
-            window.currentWebLinkCover = link.cover;
+        // Cover (YouTube local cover supported recursively and fallback resolution)
+        const coverToUse = resolveThumbnail(link.cover || (link.url && (link.url.includes("youtube.com") || link.url.includes("youtu.be")) ? link.url : null));
+        if (coverToUse) {
+            window.currentWebLinkCover = link.cover || coverToUse;
             const img = document.getElementById("web-link-art-img");
-            img.src = link.cover.startsWith('http') ? link.cover : `/api/cover?path=${encodeURIComponent(link.cover)}&t=${Date.now()}`;
+            img.src = coverToUse.startsWith('http') || coverToUse.startsWith('/api/') ? coverToUse : `/api/cover?path=${encodeURIComponent(coverToUse)}&t=${Date.now()}`;
             img.style.display = "block";
             document.getElementById("web-link-art-placeholder").style.display = "none";
             document.getElementById("btn-web-link-delete-cover").style.display = "flex";
         }
     }
-    renderModalLinkedItems(); // V58: Display linked items in web link modal
     modal.showModal();
+    renderModalLinkedItems(); // V58: Display linked items in web link modal
 }
 
 function closeWebLinkModal() {
     document.getElementById("modal-web-link").close();
+}
+
+function triggerManualCoverUpload() {
+    const choiceModal = document.getElementById("modal-cover-choice");
+    if (choiceModal) choiceModal.close();
+    document.getElementById('web-link-cover-upload').click();
+}
+
+function onWebLinkCoverClick() {
+    const title = document.getElementById("web-link-title").value;
+    const artist = document.getElementById("web-link-artist").value;
+    const url = document.getElementById("web-link-url").value;
+    const type = document.getElementById("web-link-type").value;
+    
+    const isYoutube = type === 'youtube' || (url && (url.includes("youtube.com") || url.includes("youtu.be")));
+    
+    // Si c'est du YouTube, pas besoin de proposer d'autres images selon le souhait de l'utilisateur
+    if (isYoutube) {
+        document.getElementById('web-link-cover-upload').click();
+        return;
+    }
+    
+    // Trouver les suggestions d'images pour les autres types de liens (Songsterr, etc.)
+    const cleanTitle = title ? title.trim().toLowerCase() : "";
+    const cleanArtist = artist ? artist.trim().toLowerCase() : "";
+    const suggestedCovers = [];
+    
+    if (cleanTitle) {
+        // 1. Chercher dans les fichiers locaux
+        if (typeof localFiles !== 'undefined') {
+            localFiles.forEach((f, idx) => {
+                const titleMatch = f.title && f.title.trim().toLowerCase() === cleanTitle;
+                const artistMatch = !cleanArtist || (f.artist && f.artist.trim().toLowerCase() === cleanArtist);
+                if (titleMatch && artistMatch) {
+                    const coverUrl = `/api/local/art/${idx}`;
+                    if (!suggestedCovers.some(c => c.url === coverUrl)) {
+                        suggestedCovers.push({
+                            url: coverUrl,
+                            rawPath: `lib:${idx}`,
+                            source: f.artist ? `${f.title} (${f.artist}) [Local]` : `${f.title} [Local]`
+                        });
+                    }
+                }
+            });
+        }
+        
+        // 2. Chercher dans les autres liens web
+        if (typeof webLinks !== 'undefined') {
+            webLinks.forEach((w, idx) => {
+                if (idx === currentWebLinkIndex) return; // Ignorer le lien lui-même
+                const titleMatch = w.title && w.title.trim().toLowerCase() === cleanTitle;
+                const artistMatch = !cleanArtist || (w.artist && w.artist.trim().toLowerCase() === cleanArtist);
+                if (titleMatch && artistMatch) {
+                    let coverUrl = null;
+                    if (w.cover) {
+                        coverUrl = w.cover.startsWith('http') || w.cover.startsWith('/api/') ? w.cover : `/api/cover?path=${encodeURIComponent(w.cover)}`;
+                    } else {
+                        const ytId = getYouTubeId(w.url);
+                        if (ytId) {
+                            coverUrl = `/api/youtube/cover/${ytId}`;
+                        }
+                    }
+                    if (coverUrl && !suggestedCovers.some(c => c.url === coverUrl)) {
+                        suggestedCovers.push({
+                            url: coverUrl,
+                            rawPath: w.cover || coverUrl,
+                            source: w.artist ? `${w.title} (${w.artist}) [Web]` : `${w.title} [Web]`
+                        });
+                    }
+                }
+            });
+        }
+    }
+    
+    // Si aucune suggestion n'est trouvée, ouvrir directement l'explorateur d'images d'origine
+    if (suggestedCovers.length === 0) {
+        document.getElementById('web-link-cover-upload').click();
+        return;
+    }
+    
+    // Sinon, afficher la modale de choix premium
+    const choiceModal = document.getElementById("modal-cover-choice");
+    const suggestionsList = document.getElementById("cover-choice-suggestions-list");
+    
+    if (choiceModal && suggestionsList) {
+        suggestionsList.innerHTML = "";
+        
+        suggestedCovers.forEach(cov => {
+            const wrap = document.createElement("div");
+            wrap.style = "position:relative; width:65px; height:65px; cursor:pointer; border-radius:8px; overflow:hidden; border:2px solid rgba(255,255,255,0.1); transition:all 0.2s ease; background:#222;";
+            wrap.title = `Utiliser l'image de : ${cov.source}`;
+            
+            wrap.onmouseover = () => { wrap.style.borderColor = "var(--accent)"; wrap.style.transform = "scale(1.08)"; };
+            wrap.onmouseout = () => { wrap.style.borderColor = "rgba(255,255,255,0.1)"; wrap.style.transform = "scale(1)"; };
+            
+            wrap.innerHTML = `<img src="${cov.url}" style="width:100%; height:100%; object-fit:cover;">`;
+            
+            wrap.onclick = () => {
+                window.currentWebLinkCover = cov.rawPath;
+                const img = document.getElementById("web-link-art-img");
+                img.src = cov.url;
+                img.style.display = "block";
+                document.getElementById("web-link-art-placeholder").style.display = "none";
+                document.getElementById("btn-web-link-delete-cover").style.display = "flex";
+                choiceModal.close();
+                showToast(t("web.msg_cover_applied") || "Image associée appliquée avec succès !", "success");
+            };
+            
+            suggestionsList.appendChild(wrap);
+        });
+        
+        choiceModal.showModal();
+    }
 }
 
 async function handleWebLinkCover(input) {
@@ -1954,6 +2272,16 @@ function playWebLink(index) {
     const link = webLinks[index];
     if (!link) return;
     
+    // V60: If it is a YouTube link, play it internally in our premium player!
+    const isYoutube = link.open_mode === 'iframe' || 
+                      (link.type && link.type.toLowerCase().includes('youtube')) ||
+                      (link.url && (link.url.includes("youtube.com") || link.url.includes("youtu.be")));
+                      
+    if (isYoutube) {
+        playTrack(link);
+        return;
+    }
+    
     // Open in browser
     fetch(`/api/open_external?url=${encodeURIComponent(link.url)}`);
     
@@ -2028,8 +2356,8 @@ function updateInterconnectionUI(activeItem) {
                 else matches.audio_local.push(item);
             }
             else if (uid.startsWith('web')) {
-                const type = item.type || 'other';
-                if (matches[type]) matches[type].push(item);
+                const canonical = resolveCanonicalType(item.type, item.url);
+                if (matches[canonical]) matches[canonical].push(item);
                 else matches.other.push(item);
             }
         });
@@ -2076,14 +2404,29 @@ function updateInterconnectionUI(activeItem) {
                 if (activeItem.linked_ids && (activeItem.linked_ids.includes(legacyUid) || activeItem.linked_ids.includes(stableUid))) return; // Already added
                 
                 if (isMatch(w, artist, title) && idx !== (window.currentSource === 'web_links' ? window.currentPlayingIndex : -1)) {
-                    const type = w.type || 'other';
+                    const canonical = resolveCanonicalType(w.type, w.url);
                     const itemToAdd = { ...w, originalIndex: idx };
-                    if (matches[type]) matches[type].push(itemToAdd);
+                    if (matches[canonical]) matches[canonical].push(itemToAdd);
                     else matches.other.push(itemToAdd);
                 }
             });
         }
     }
+
+    // V60: Deduplicate matches to prevent duplicates caused by set/web prefix alignment
+    Object.keys(matches).forEach(key => {
+        const unique = [];
+        const seen = new Set();
+        
+        matches[key].forEach(item => {
+            const identifier = item.url || item.path || item.uid;
+            if (identifier && !seen.has(identifier)) {
+                seen.add(identifier);
+                unique.push(item);
+            }
+        });
+        matches[key] = unique;
+    });
 
     // Render Icons
     const renderIcon = (type, list, iconClass, color, titlePrefix) => {
@@ -2165,34 +2508,83 @@ function openInterconnectionChoice(type, list) {
         lesson: 'ph ph-graduation-cap',
         other: 'ph ph-globe'
     };
-    const iconClass = icons[type] || 'ph ph-link';
+    let iconClass = icons[type];
+    if (!iconClass) {
+        const tLower = (type || "").toLowerCase();
+        if (tLower.includes('youtube')) iconClass = 'ph ph-youtube-logo';
+        else if (tLower.includes('songsterr')) iconClass = 'ph ph-guitar';
+        else if (tLower.includes('moises')) iconClass = 'ph ph-scissors';
+        else if (tLower.includes('spotify')) iconClass = 'ph ph-spotify-logo';
+        else if (tLower.includes('lesson') || tLower.includes('cours') || tLower.includes('tuto')) iconClass = 'ph ph-graduation-cap';
+        else if (tLower.includes('other') || tLower.includes('autre') || tLower.includes('globe')) iconClass = 'ph ph-globe';
+        else iconClass = 'ph ph-link';
+    }
+
+
 
     list.forEach(item => {
         const btn = document.createElement("button");
         btn.className = "btn-secondary";
-        btn.style = "width:100%; display:flex; align-items:center; gap:12px; padding:12px; text-align:left; border-radius:8px; background:rgba(255,255,255,0.03);";
+        btn.style = "width:100%; display:flex; align-items:center; gap:16px; padding:12px 16px; text-align:left; border-radius:8px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); margin-bottom:8px; transition:all 0.2s ease;";
         
+        btn.onmouseover = () => {
+            btn.style.background = "rgba(255,255,255,0.07)";
+            btn.style.borderColor = "var(--accent)";
+        };
+        btn.onmouseout = () => {
+            btn.style.background = "rgba(255,255,255,0.03)";
+            btn.style.borderColor = "rgba(255,255,255,0.05)";
+        };
+
         let coverHtml = "";
+        const isYoutubeUrl = item.url && (item.url.includes("youtube.com") || item.url.includes("youtu.be"));
+        const ytId = isYoutubeUrl ? getYouTubeId(item.url) : null;
+
         if (type.endsWith('_local')) {
-            coverHtml = `<img src="/api/local/art/${item.originalIndex}" style="width:40px; height:25px; object-fit:cover; border-radius:4px; background:#222;" onerror="this.style.display='none'">`;
-        } else if (type === 'youtube') {
-            coverHtml = `<img src="https://img.youtube.com/vi/${item.url.split('v=')[1]?.split('&')[0]}/default.jpg" style="width:40px; height:25px; object-fit:cover; border-radius:4px;" onerror="this.style.display='none'">`;
+            coverHtml = `<img src="/api/local/art/${item.originalIndex}" style="width:70px; height:45px; object-fit:cover; border-radius:6px; background:#222; border:1px solid #333;" onerror="this.style.display='none'">`;
+        } else if (ytId) {
+            // Lien YouTube détecté (qu'il soit typé 'youtube' ou non)
+            let thumbUrl = "";
+            if (item.cover) {
+                thumbUrl = item.cover.startsWith('http') ? item.cover : `/api/cover?path=${encodeURIComponent(item.cover)}`;
+            } else {
+                thumbUrl = `/api/youtube/cover/${ytId}`;
+            }
+            coverHtml = `<img src="${thumbUrl}" style="width:70px; height:45px; object-fit:cover; border-radius:6px; background:#222; border:1px solid #333;" onerror="this.style.display='none'">`;
+        } else {
+            let thumbUrl = "";
+            if (item.cover) {
+                thumbUrl = item.cover.startsWith('http') ? item.cover : `/api/cover?path=${encodeURIComponent(item.cover)}`;
+            }
+            coverHtml = thumbUrl ? `<img src="${thumbUrl}" style="width:70px; height:45px; object-fit:cover; border-radius:6px; background:#222; border:1px solid #333;">` : `<div style="width:70px; height:45px; border-radius:6px; background:#222; display:flex; align-items:center; justify-content:center; border:1px solid #333;"><i class="${iconClass}" style="font-size:1.8em; color:var(--accent);"></i></div>`;
+        }
+
+        let detailsHtml = [];
+        if (item.artist) {
+            detailsHtml.push(`<span style="color:#bbb; font-weight:500; display:inline-flex; align-items:center; gap:4px;"><i class="ph ph-user" style="font-size:1.1em;"></i> ${item.artist}</span>`);
+        }
+        if (item.channel) {
+            detailsHtml.push(`<span style="color:#888; display:inline-flex; align-items:center; gap:4px;"><i class="ph ph-television" style="font-size:1.1em;"></i> ${item.channel}</span>`);
+        }
+        if (item.category) {
+            detailsHtml.push(`<span class="tag-category" style="background:rgba(187,134,252,0.15); color:var(--accent); padding:2px 8px; border-radius:4px; font-size:0.85em; font-weight:bold; display:inline-flex; align-items:center; gap:4px;"><i class="ph ph-folder" style="font-size:1.1em;"></i> ${item.category}</span>`);
         }
 
         btn.innerHTML = `
             ${coverHtml}
-            <div style="flex:1; overflow:hidden;">
-                <div style="font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.title}</div>
-                <div style="font-size:0.8em; color:#888; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.artist || ""}</div>
+            <div style="flex:1; overflow:hidden; display:flex; flex-direction:column; gap:6px;">
+                <div style="font-weight:bold; color:#fff; font-size:1em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.title}</div>
+                <div style="font-size:0.85em; display:flex; flex-wrap:wrap; align-items:center; gap:12px;">
+                    ${detailsHtml.join("")}
+                </div>
             </div>
-            <i class="ph ph-caret-right" style="color:var(--accent);"></i>
+            <i class="ph ph-caret-right" style="color:var(--accent); font-size:1.3em; margin-left:8px;"></i>
         `;
 
         btn.onclick = () => {
             dialog.close();
-            if (type === 'youtube') playTrackAt(item.originalIndex);
-            else if (type.endsWith('_local')) playLocal(item.originalIndex);
-            else playWebLink(item.originalIndex);
+            const uid = item.uid || (type.endsWith('_local') ? `lib:${item.originalIndex}` : `web:${item.originalIndex}`);
+            playMediaByUid(uid);
         };
 
         listContainer.appendChild(btn);
@@ -2221,7 +2613,7 @@ function getLinkedItem(uid) {
     let found = null;
     if (uid.includes('_')) {
         const prefix = uid.split('_')[0];
-        const list = (prefix === 'lib' ? localFiles : (prefix === 'set' ? currentTrackList : webLinks));
+        const list = (prefix === 'lib' ? localFiles : webLinks);
         if (list) {
             found = list.find(it => it.uid === uid) || null;
         }
@@ -2245,12 +2637,13 @@ function getLinkedItem(uid) {
             if (!list || list.length === 0) return null;
             return list.find(t => t.originalIndex === i) || (i >= 0 && i < list.length ? list[i] : null);
         };
-        if (type === 'set') return findIn(currentTrackList, idx);
+        if (type === 'set') return findIn(webLinks, idx);
         if (type === 'lib') return findIn(localFiles, idx);
         if (type === 'web') return findIn(webLinks, idx);
     }
     
-    console.warn("[LINK] Résolution échouée pour UID:", uid);
+    // Silence console au démarrage ou pour les liens orphelins (simple log de debug de bas niveau)
+    console.debug("[LINK] Résolution transitoire ou orpheline pour UID:", uid);
     return null;
 }
 
@@ -2403,7 +2796,7 @@ function renderSetlist(list) {
 
 
 // --- CUSTOM AUTOCOMPLETE ---
-let blockedTags = { category: [], genre: [] };
+let blockedTags = { category: [], genre: [], type: [] };
 
 async function loadBlockedTags() {
     try {
@@ -2450,6 +2843,19 @@ function setupCustomAutocomplete(inputId, boxId, field) {
             ...currentTrackList.map(t => t[field] || ""),
             ...(typeof webLinks !== 'undefined' ? webLinks.map(t => t[field] || "") : [])
         ].filter(v => v));
+
+        // Inject dynamic default categories/types if they are empty or for field 'type'
+        if (field === 'type') {
+            const defaultTypes = [
+                t("web.opt_youtube") || "YouTube (Vidéo)",
+                t("web.opt_songsterr") || "Songsterr (Tablature)",
+                t("web.opt_moises") || "Moises (Stems AI)",
+                t("web.opt_spotify") || "Spotify (Streaming)",
+                t("web.opt_lessons") || "Cours de Guitare",
+                t("web.opt_useful_links") || "Liens Utiles"
+            ];
+            defaultTypes.forEach(d => allValues.add(d));
+        }
 
         // 2. Filter: Match input AND Not Blocked
         const matches = Array.from(allValues).filter(v => {
@@ -2579,6 +2985,9 @@ async function loadSettings() {
                 await loadTranslations(currentLang);
             }
 
+            // Apply Theme
+            applyWebTheme(currentSettings.theme || "steel_blue");
+
             // Sync Fretboard State if loaded
             if (typeof fretboardState !== 'undefined') {
                 fretboardState.skin = currentSettings.fretboard_skin || "flat";
@@ -2601,6 +3010,23 @@ async function loadSettings() {
     }
 }
 
+function togglePasswordVisibility(inputId, btn) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const icon = btn.querySelector('i');
+    if (input.type === 'password') {
+        input.type = 'text';
+        if (icon) {
+            icon.className = 'ph ph-eye-closed';
+        }
+    } else {
+        input.type = 'password';
+        if (icon) {
+            icon.className = 'ph ph-eye';
+        }
+    }
+}
+
 async function openSettings() {
     // Deprecated Name, redirected to Modal
     openSettingsModal();
@@ -2610,21 +3036,30 @@ async function openSettingsModal() {
     if (!currentSettings) await loadSettings();
 
     if (currentSettings) {
+        // Reset password fields to masked type and populate
+        const ytInput = document.getElementById("setting-youtube-key");
+        if (ytInput) {
+            ytInput.type = "password";
+            ytInput.value = currentSettings.YOUTUBE_API_KEY || "";
+        }
+        
+        const gsInput = document.getElementById("setting-getsong-api-key");
+        if (gsInput) {
+            gsInput.type = "password";
+            gsInput.value = currentSettings.getsong_api_key || currentSettings.GETSONGBPM_API_KEY || "";
+        }
+        
+        // Reset eye icons
+        document.querySelectorAll(".input-password-wrapper button i").forEach(icon => {
+            icon.className = "ph ph-eye";
+        });
+
         // Populate Fields
         const langDropdown = document.getElementById("setting-language");
         if (langDropdown) langDropdown.value = currentSettings.language || "fr";
 
-        document.getElementById("setting-youtube-key").value = currentSettings.YOUTUBE_API_KEY || "";
-
-        // Music APIs
-        const sClient = document.getElementById("setting-spotify-client-id");
-        if (sClient) sClient.value = currentSettings.spotify_client_id || "";
-
-        const sSecret = document.getElementById("setting-spotify-client-secret");
-        if (sSecret) sSecret.value = currentSettings.spotify_client_secret || "";
-
-        const getsongKey = document.getElementById("setting-getsong-api-key");
-        if (getsongKey) getsongKey.value = currentSettings.getsong_api_key || "";
+        const themeDropdown = document.getElementById("setting-theme");
+        if (themeDropdown) themeDropdown.value = currentSettings.theme || "steel_blue";
 
         const apCb = document.getElementById("setting-autoplay");
         if (apCb) apCb.checked = currentSettings.autoplay !== false; // Default to true
@@ -2682,6 +3117,26 @@ async function changeLanguage() {
 
     // Dynamically apply
     await loadTranslations(newLang);
+}
+
+function applyWebTheme(theme) {
+    document.body.classList.remove("theme-steel_blue", "theme-amethyst", "theme-emerald", "theme-amber");
+    document.body.classList.add(`theme-${theme}`);
+    const themeDropdown = document.getElementById("setting-theme");
+    if (themeDropdown) themeDropdown.value = theme;
+}
+
+async function changeWebTheme() {
+    const selector = document.getElementById("setting-theme");
+    if (!selector) return;
+    const newTheme = selector.value;
+    applyWebTheme(newTheme);
+    if (currentSettings) currentSettings.theme = newTheme;
+    await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ theme: newTheme })
+    });
 }
 
 function closeSettingsModal() {
@@ -2794,11 +3249,6 @@ async function saveSettings() {
     currentSettings.YOUTUBE_API_KEY = document.getElementById("setting-youtube-key").value;
 
     // Music APIs
-    const sClient = document.getElementById("setting-spotify-client-id");
-    if (sClient) currentSettings.spotify_client_id = sClient.value;
-
-    const sSecret = document.getElementById("setting-spotify-client-secret");
-    if (sSecret) currentSettings.spotify_client_secret = sSecret.value;
 
     const getsongKey = document.getElementById("setting-getsong-api-key");
     if (getsongKey) currentSettings.getsong_api_key = getsongKey.value;
@@ -2821,6 +3271,12 @@ async function saveSettings() {
     const fbAutoClose = document.getElementById("setting-fretboard-autoclose");
     if (fbAutoClose) {
         currentSettings.fretboard_autoclose = fbAutoClose.checked;
+    }
+
+    const themeDropdown = document.getElementById("setting-theme");
+    if (themeDropdown) {
+        currentSettings.theme = themeDropdown.value;
+        applyWebTheme(themeDropdown.value);
     }
 
     // Sidebar Settings (Now handled via toggleSidebarOption in header)
@@ -3061,11 +3517,29 @@ function resetMediaModalUI() {
     const localPathContainer = document.getElementById("yt-local-path-container");
     if (localPathContainer) localPathContainer.style.display = "none";
 
+    const actionSel = document.querySelector(".actions-selector");
+    if (actionSel) actionSel.style.display = "";
+
     // 4. Reset Linked Items display (V58)
     const linkedDisplay = document.getElementById("edit-linked-items-display");
     if (linkedDisplay) linkedDisplay.innerHTML = "";
     const linkedDisplayWeb = document.getElementById("web-link-linked-items-display");
     if (linkedDisplayWeb) linkedDisplayWeb.innerHTML = "";
+
+    // Reset Title to Default YouTube Title
+    const modalTitleEl = document.querySelector("#media-modal .modal-header h3");
+    if (modalTitleEl) {
+        modalTitleEl.innerText = t("web.modal_youtube_title", "Éditer Lien YouTube");
+        modalTitleEl.setAttribute("data-i18n", "web.modal_youtube_title");
+    }
+
+    // Reset Save button action and state
+    const saveBtn = document.getElementById("btn-save-item");
+    if (saveBtn) {
+        saveBtn.onclick = saveItem;
+        saveBtn.disabled = false;
+        saveBtn.classList.remove("disabled");
+    }
 }
 
 // --- MODAL & EDIT LOGIC ---
@@ -3111,6 +3585,9 @@ function openAddModal() {
 
     document.getElementById("dl-progress-bar").style.width = "0%";
     document.getElementById("dl-status").innerText = t("web.status_ready");
+    
+    const dlAddToLib = document.getElementById("dl-add-to-lib");
+    if (dlAddToLib) dlAddToLib.checked = false; // Par défaut décoché
 
     // Reset View: Show Search
     resetSearchMode();
@@ -3120,32 +3597,69 @@ function openAddModal() {
     currentEditingLinkedIds = [];
     renderModalLinkedItems();
 
-    // Check API Key
-    const searchInput = document.getElementById("yt-search-input");
-    const searchBtn = document.getElementById("yt-search-btn");
+    // Masquage/affichage intelligent du formulaire d'édition et des boutons d'action au démarrage selon la clé API
+    const editContainer = document.getElementById("media-edit-fields-container");
+    const saveBtnElem = document.getElementById("btn-save-item");
+    const previewBtnElem = document.getElementById("btn-preview-item");
+    const inputGroup = document.querySelector("#search-zone-container .input-group");
     const noKeyMsg = document.getElementById("no-api-key-msg");
+    const editTitle = document.getElementById("edit-title");
+    const searchInput = document.getElementById("yt-search-input");
 
-    if (!currentSettings || !currentSettings.YOUTUBE_API_KEY) {
-        if (searchInput) searchInput.style.display = "none";
-        if (searchBtn) searchBtn.style.display = "none";
+    const hasApiKey = currentSettings && currentSettings.YOUTUBE_API_KEY;
+
+    editingIndex = null; // S'assurer que nous sommes bien en mode création
+
+    if (!hasApiKey) {
+        // Pas de clé API : masquer la barre de recherche supérieure et afficher le formulaire et le footer immédiatement
+        if (inputGroup) inputGroup.style.display = "none";
         if (noKeyMsg) noKeyMsg.style.display = "block";
     } else {
-        if (searchInput) searchInput.style.display = "inline-block";
-        if (searchBtn) searchBtn.style.display = "inline-block";
+        // Avec clé API : afficher la recherche supérieure
+        if (inputGroup) inputGroup.style.display = "flex";
         if (noKeyMsg) noKeyMsg.style.display = "none";
-        if (searchInput) searchInput.focus();
+
+        if (searchInput) {
+            searchInput.placeholder = typeof t === "function" ? t("web.search_placeholder", "Recherche YouTube ou URL...") : "Recherche YouTube ou URL...";
+            searchInput.focus();
+        }
     }
+
+    // Réinitialiser la sélection d'actions par défaut
+    const chkLink = document.getElementById("chk-action-link");
+    if (chkLink) chkLink.checked = false; // Par défaut décoché
+    const chkOffline = document.getElementById("chk-action-offline");
+    if (chkOffline) chkOffline.checked = false;
+
+    // Toujours afficher le formulaire d'édition et les boutons de sauvegarde et prévisualisation
+    if (editContainer) editContainer.classList.remove("hidden");
+    if (saveBtnElem) saveBtnElem.style.display = "inline-block";
+    if (previewBtnElem) previewBtnElem.style.display = "inline-block";
+
+    if (editTitle && !hasApiKey) {
+        editTitle.focus();
+    }
+
+    // Forcer la mise à jour immédiate du texte du bouton principal
+    updateYouTubeSaveButton();
 }
 
 function openEditModal(index) {
     resetMediaModalUI();
     editingIndex = index;
     lastEditContext = 'setlist';
-    // Find track by original index in the current (possibly sorted) list
-    const track = currentTrackList.find(t => t.originalIndex === index);
+    // Find track securely in the unified webLinks database using the real index
+    let track = null;
+    if (typeof webLinks !== 'undefined' && webLinks[index]) {
+        track = webLinks[index];
+    } else {
+        track = currentTrackList.find(t => t.originalIndex === index);
+    }
     if (!track) return;
 
-    currentEditingLinkedIds = track.linked_ids || []; // V58: Initialize links
+    if (!window.isNavigatingLinkedMedia) {
+        currentEditingLinkedIds = track.linked_ids || []; // V58: Initialize links
+    }
     
     // Reveal sidebar if in theater mode to give context to editing
     if (isTheaterMode && typeof toggleTheaterMode === 'function') {
@@ -3188,7 +3702,7 @@ function openEditModal(index) {
 
     // V58: Dynamic button text
     const saveBtn = document.querySelector(".btn-primary[onclick='saveItem()']");
-    if (saveBtn) saveBtn.innerText = t("web.btn_save_web_lib");
+    if (saveBtn) saveBtn.innerText = t("web.btn_save");
 
     syncPlaybackSettingsToModals(track);
 
@@ -3208,10 +3722,17 @@ function openEditModal(index) {
     const btnDel = document.getElementById("btn-edit-delete-cover");
     if (btnDel) btnDel.style.display = "none";
 
-    if (track.thumbnail) {
+    const isYoutube = track.url && (track.url.includes("youtube.com") || track.url.includes("youtu.be"));
+    let ytId = isYoutube ? (track.id || getYouTubeId(track.url)) : null;
+    let thumbToUse = track.thumbnail;
+    if (!thumbToUse && ytId) {
+        thumbToUse = `/api/youtube/cover/${ytId}`;
+    }
+
+    if (thumbToUse) {
         thumbContainer.classList.add("wide-art");
         // Update only the image/content part, preserving the button if possible, or just re-inject
-        thumbContainer.innerHTML = `<img src="${track.thumbnail}" style="width:100%; height:100%; object-fit:contain;">
+        thumbContainer.innerHTML = `<img src="${resolveThumbnail(thumbToUse)}" style="width:100%; height:100%; object-fit:contain;">
                                     <div id="btn-edit-delete-cover" class="btn-delete-cover" style="display:flex;"
                                          onclick="event.stopPropagation(); removeEditCover();">×</div>`;
     } else {
@@ -3225,6 +3746,22 @@ function openEditModal(index) {
     document.getElementById("dl-options-container").style.display = "none";
     document.getElementById("dl-progress-bar").style.width = "0%";
     document.getElementById("dl-status").innerText = t("web.status_ready");
+
+    // Affichage explicite du formulaire d'édition et des boutons d'action
+    const editContainer = document.getElementById("media-edit-fields-container");
+    if (editContainer) editContainer.classList.remove("hidden");
+
+    const saveBtnElem = document.getElementById("btn-save-item");
+    if (saveBtnElem) saveBtnElem.style.display = "inline-block";
+
+    const previewBtnElem = document.getElementById("btn-preview-item");
+    if (previewBtnElem) previewBtnElem.style.display = "inline-block";
+
+    // Nettoyer la classe no-api-active
+    const searchInput = document.getElementById("yt-search-input");
+    const searchBtn = document.getElementById("yt-search-btn");
+    if (searchInput) searchInput.classList.remove("no-api-active");
+    if (searchBtn) searchBtn.classList.remove("no-api-active");
 
     // Hide Search Zone in Edit Mode (Save Space)
     document.getElementById("search-zone-container").classList.add("hidden");
@@ -3262,9 +3799,12 @@ function closeModal() {
     editingIndex = null;
 }
 
-function openNotesDescModal() {
-    const mainDesc = document.getElementById("youtube-desc-input");
-    const mainNotes = document.getElementById("user-notes-input");
+let currentNoteTargetId = 'user-notes-input';
+
+function openNotesDescModal(noteTargetId = 'user-notes-input', descTargetId = 'youtube-desc-input') {
+    currentNoteTargetId = noteTargetId;
+    const mainDesc = document.getElementById(descTargetId);
+    const mainNotes = document.getElementById(noteTargetId);
     const popCombined = document.getElementById("pop-combined-notes");
 
     let combined = "";
@@ -3281,7 +3821,7 @@ function openNotesDescModal() {
 }
 
 function closeNotesDescModal() {
-    const mainNotes = document.getElementById("user-notes-input");
+    const mainNotes = document.getElementById(currentNoteTargetId);
     const popCombined = document.getElementById("pop-combined-notes");
 
     if (mainNotes && popCombined) {
@@ -3297,6 +3837,71 @@ async function searchYouTube() {
     const container = document.getElementById("search-results");
     container.innerHTML = "Chargement...";
 
+    const hasApiKey = currentSettings && currentSettings.YOUTUBE_API_KEY;
+
+    if (!hasApiKey) {
+        const isUrl = q.startsWith("http://") || q.startsWith("https://") || q.includes("youtube.com") || q.includes("youtu.be");
+        if (!isUrl) {
+            container.innerHTML = `<div style="padding:10px; color:#f39c12; font-size:0.9em; text-align:center;">
+                Veuillez saisir une URL complète (ex: https://www.youtube.com/watch?v=...) car la recherche par mot-clé requiert une clé API.
+            </div>`;
+            return;
+        }
+
+        container.innerHTML = `<div style="padding:10px; color:#3498db; font-size:0.9em; text-align:center;">
+            🔄 Extraction des métadonnées de la vidéo via yt-dlp...
+        </div>`;
+
+        try {
+            const res = await fetch("/api/dl/info", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ url: q })
+            });
+
+            if (res.ok) {
+                const info = await res.json();
+                if (info && !info.error) {
+                    const video = {
+                        title: info.title || "Vidéo YouTube",
+                        thumbnail_url: info.thumbnail || "",
+                        channel: "YouTube",
+                        description: "",
+                        url: q
+                    };
+                    selectResult(video);
+                    container.innerHTML = "";
+                    return;
+                }
+            }
+
+            // Fallback: direct add with raw URL if info service failed or returned error
+            const video = {
+                title: "",
+                thumbnail_url: "",
+                channel: "",
+                description: "",
+                url: q
+            };
+            selectResult(video);
+            container.innerHTML = `<div style="padding:10px; color:#2ecc71; font-size:0.85em; text-align:center;">
+                Ajout direct de l'URL réussi. Complétez le titre manuellement.
+            </div>`;
+        } catch (e) {
+            console.error("Direct URL fetch info error:", e);
+            const video = {
+                title: "",
+                thumbnail_url: "",
+                channel: "",
+                description: "",
+                url: q
+            };
+            selectResult(video);
+            container.innerHTML = "";
+        }
+        return;
+    }
+
     try {
         const res = await fetch(`/api/youtube/search?q=${encodeURIComponent(q)}`);
         const results = await res.json();
@@ -3311,7 +3916,7 @@ async function searchYouTube() {
             // We pass the simplified object
             card.onclick = () => selectResult(video);
             card.innerHTML = `
-                <img src="${video.thumbnail_url}">
+                <img src="${resolveThumbnail(video.thumbnail_url)}">
                 <div class="info">
                     <div class="title" title="${video.title}">${video.title}</div>
                     <div style="color:#888; margin-top:2px; font-size:0.7em;">${video.channel}</div>
@@ -3337,10 +3942,20 @@ function selectResult(video) {
     document.getElementById("search-zone-container").classList.add("hidden");
     document.getElementById("btn-back-search").style.display = "block";
 
+    // Afficher le formulaire d'édition et les boutons d'action
+    const editContainer = document.getElementById("media-edit-fields-container");
+    if (editContainer) editContainer.classList.remove("hidden");
+
+    const saveBtnElem = document.getElementById("btn-save-item");
+    if (saveBtnElem) saveBtnElem.style.display = "inline-block";
+
+    const previewBtnElem = document.getElementById("btn-preview-item");
+    if (previewBtnElem) previewBtnElem.style.display = "inline-block";
+
     // 2. Title & URL
-    document.getElementById("edit-title").value = video.title;
+    document.getElementById("edit-title").value = video.title || "";
     setEditSharedStatus(false); // Reset for new video
-    const url = video.id ? `https://www.youtube.com/watch?v=${video.id}` : "";
+    const url = video.url || (video.id ? `https://www.youtube.com/watch?v=${video.id}` : "");
     if (url) document.getElementById("edit-url").value = url;
 
     // Show Download Button if URL
@@ -3352,7 +3967,7 @@ function selectResult(video) {
 
     // 4. Thumbnail Preview
     if (video.thumbnail_url) {
-        document.getElementById("preview-thumbnail").innerHTML = `<img src="${video.thumbnail_url}">`;
+        document.getElementById("preview-thumbnail").innerHTML = `<img src="${resolveThumbnail(video.thumbnail_url)}">`;
     } else {
         document.getElementById("preview-thumbnail").innerHTML = '<span style="font-size:40px;">🎵</span>';
     }
@@ -3374,7 +3989,26 @@ function resetSearchMode() {
     document.getElementById("search-zone-container").classList.remove("hidden");
     document.getElementById("btn-back-search").style.display = "none";
 
-    // Optional: Clear form if desired? For now we keep it so user doesn't lose data if they misclicked.
+    const hasApiKey = currentSettings && currentSettings.YOUTUBE_API_KEY;
+
+    const editContainer = document.getElementById("media-edit-fields-container");
+    const saveBtnElem = document.getElementById("btn-save-item");
+    const previewBtnElem = document.getElementById("btn-preview-item");
+    const inputGroup = document.querySelector("#search-zone-container .input-group");
+    const noKeyMsg = document.getElementById("no-api-key-msg");
+
+    if (!hasApiKey) {
+        if (inputGroup) inputGroup.style.display = "none";
+        if (noKeyMsg) noKeyMsg.style.display = "block";
+    } else {
+        if (inputGroup) inputGroup.style.display = "flex";
+        if (noKeyMsg) noKeyMsg.style.display = "none";
+    }
+
+    // Toujours afficher le formulaire d'édition et les boutons
+    if (editContainer) editContainer.classList.remove("hidden");
+    if (saveBtnElem) saveBtnElem.style.display = "inline-block";
+    if (previewBtnElem) previewBtnElem.style.display = "inline-block";
 }
 
 function connectVideoWebSocket() {
@@ -3392,7 +4026,7 @@ function connectVideoWebSocket() {
             websocket.send(JSON.stringify({
                 type: "set_mode",
                 mode: currentMode,
-                target_profile: document.title.replace("Midi-Kbd Control Studio - ", "")
+                target_profile: document.title.replace("GuitarPracticeTool - ", "")
             }));
         }
     };
@@ -3418,6 +4052,17 @@ function connectVideoWebSocket() {
                 if (bar) {
                     bar.style.width = "100%";
                     bar.style.background = "#4caf50"; // Green
+                }
+
+                // V62: Remplacer le bouton de sauvegarde par un bouton Close
+                const saveBtn = document.getElementById("btn-save-item");
+                if (saveBtn) {
+                    saveBtn.innerText = typeof t === "function" ? t("web.btn_close", "Fermer") : "Fermer";
+                    saveBtn.disabled = false;
+                    saveBtn.classList.remove("disabled");
+                    saveBtn.onclick = () => {
+                        closeModal();
+                    };
                 }
 
                 // Check Auto Close
@@ -3480,6 +4125,9 @@ function checkDownloadAvailability(url) {
     const actionContainer = document.getElementById("action-offline-container");
     const lblOffline = document.getElementById("lbl-action-offline");
     const btnHelp = document.getElementById("btn-offline-help-new");
+    const lblLink = document.getElementById("lbl-action-link");
+    const chkLink = document.getElementById("chk-action-link");
+    
     if (!actionContainer) return;
 
     const isYoutube = url && (url.includes("youtube.com") || url.includes("youtu.be"));
@@ -3493,12 +4141,16 @@ function checkDownloadAvailability(url) {
         if (canDownload) {
             if (lblOffline) lblOffline.style.display = "flex";
             if (btnHelp) btnHelp.style.display = "none";
+            if (lblLink) lblLink.style.display = "flex";
         } else {
             if (lblOffline) {
                 lblOffline.style.display = "none";
                 document.getElementById("chk-action-offline").checked = false;
             }
             if (btnHelp) btnHelp.style.display = "flex";
+            // Si le mode Offline n'est pas disponible, masquer la case à cocher 'Add Web Link'
+            if (lblLink) lblLink.style.display = "none";
+            if (chkLink) chkLink.checked = true; // S'assurer qu'il reste coché en arrière-plan
         }
     } else {
         actionContainer.style.display = "none";
@@ -3513,15 +4165,34 @@ function updateYouTubeSaveButton() {
     const offlineChecked = document.getElementById("chk-action-offline").checked;
     const isEdit = (editingIndex !== null);
 
-    if (isEdit && !offlineChecked) {
-        btn.innerText = t("web.btn_update_info");
+    // Si aucune action n'est cochée, griser le bouton
+    if (!linkChecked && !offlineChecked) {
+        btn.disabled = true;
+        btn.classList.add("disabled");
+        btn.innerText = t("web.btn_save_link"); // Texte par défaut
+        return;
+    } else {
+        btn.disabled = false;
+        btn.classList.remove("disabled");
+    }
+
+    if (isEdit) {
+        if (linkChecked && offlineChecked) {
+            btn.innerText = t("web.btn_save_both");
+        } else if (linkChecked) {
+            btn.innerText = t("web.btn_update_link");
+        } else if (offlineChecked) {
+            btn.innerText = t("web.btn_download_only");
+        } else {
+            btn.innerText = t("web.btn_save");
+        }
         return;
     }
 
     if (linkChecked && offlineChecked) {
         btn.innerText = t("web.btn_save_both");
     } else if (offlineChecked) {
-        btn.innerText = t("web.btn_save_offline");
+        btn.innerText = t("web.btn_download_only");
     } else {
         btn.innerText = t("web.btn_save_link");
     }
@@ -3570,8 +4241,19 @@ async function showDownloadOptions(forceState = null) {
 
     let folders = [];
     if (currentSettings && currentSettings.media_folders) {
-        folders = currentSettings.media_folders;
+        folders = [...currentSettings.media_folders];
     }
+
+    // Load custom folders from localStorage
+    let customFolders = [];
+    try {
+        customFolders = JSON.parse(localStorage.getItem("custom_download_folders")) || [];
+    } catch(e) {}
+    customFolders.forEach(cf => {
+        if (cf && !folders.includes(cf)) {
+            folders.push(cf);
+        }
+    });
 
     if (folders.length === 0) {
         const opt = document.createElement("option");
@@ -3586,6 +4268,9 @@ async function showDownloadOptions(forceState = null) {
             if (f.startsWith("${APP_DIR}")) {
                 displayPath = f.replace("${APP_DIR}", "[App]");
             }
+            if (customFolders.includes(f)) {
+                displayPath = "📁 [Libre] " + displayPath;
+            }
             opt.innerText = displayPath;
             folderSelect.appendChild(opt);
         });
@@ -3595,17 +4280,24 @@ async function showDownloadOptions(forceState = null) {
     const formatSelect = document.getElementById("dl-format");
     formatSelect.innerHTML = "";
 
-    // V58: Auto-select folder when format changes
+    // V58: Auto-select folder when format changes & handle subs
     formatSelect.onchange = () => {
         const fmt = formatSelect.value;
-        const folders = Array.from(folderSelect.options);
+        const foldersList = Array.from(folderSelect.options);
         let targetSub = "";
         
-        if (fmt.startsWith("audio_")) targetSub = "Audios";
-        else if (fmt.startsWith("video_")) targetSub = "Videos";
+        if (fmt.startsWith("audio_")) {
+            targetSub = "Audios";
+            const chkSubs = document.getElementById("dl-subs");
+            if (chkSubs) chkSubs.checked = false;
+        } else if (fmt.startsWith("video_")) {
+            targetSub = "Videos";
+            const chkSubs = document.getElementById("dl-subs");
+            if (chkSubs) chkSubs.checked = true;
+        }
 
         if (targetSub) {
-            const bestMatch = folders.find(opt => opt.value.includes(targetSub));
+            const bestMatch = foldersList.find(opt => opt.value.includes(targetSub));
             if (bestMatch) folderSelect.value = bestMatch.value;
         }
     };
@@ -3643,11 +4335,44 @@ async function showDownloadOptions(forceState = null) {
     if (formatSelect.onchange) formatSelect.onchange();
 }
 
+async function browseCustomDownloadFolder() {
+    try {
+        const res = await fetch("/api/utils/select_folder");
+        const data = await res.json();
+        if (data && data.status === "ok" && data.path) {
+            const folderSelect = document.getElementById("dl-folder");
+            
+            let exists = Array.from(folderSelect.options).some(opt => opt.value === data.path);
+            if (!exists) {
+                const opt = document.createElement("option");
+                opt.value = data.path;
+                opt.innerText = "📁 [Libre] " + data.path;
+                folderSelect.appendChild(opt);
+            }
+            folderSelect.value = data.path;
+
+            // Save in localStorage
+            let customFolders = [];
+            try {
+                customFolders = JSON.parse(localStorage.getItem("custom_download_folders")) || [];
+            } catch(e) {}
+            if (!customFolders.includes(data.path)) {
+                customFolders.push(data.path);
+                localStorage.setItem("custom_download_folders", JSON.stringify(customFolders));
+            }
+        }
+    } catch(e) {
+        console.error("Browse custom download folder error:", e);
+        alert("Erreur lors de la sélection du dossier.");
+    }
+}
+
 async function startDownload() {
     const url = document.getElementById("edit-url").value;
     const format = document.getElementById("dl-format").value;
     const folder = document.getElementById("dl-folder").value;
     const subs = document.getElementById("dl-subs").checked;
+    const addToLib = document.getElementById("dl-add-to-lib") ? document.getElementById("dl-add-to-lib").checked : true;
 
     if (!url) return alert(t("web.msg_url_required"));
     if (!folder || folder.innerText === t("web.msg_no_folder_config")) return alert(t("web.msg_no_folder_config"));
@@ -3673,7 +4398,8 @@ async function startDownload() {
             format_id: format,
             target_folder: folder,
             subs: subs,
-            metadata: metadata
+            metadata: metadata,
+            add_to_library: addToLib
         };
 
         const res = await fetch("/api/dl/start", {
@@ -4000,7 +4726,10 @@ async function deleteTrack(index) {
 }
 
 function playTrackAt(index) {
-    const track = currentTrackList.find(t => t.originalIndex === index);
+    let track = currentTrackList.find(t => t.originalIndex === index);
+    if (!track && typeof webLinks !== 'undefined') {
+        track = webLinks[index];
+    }
     if (track) playTrack(track);
 }
 
@@ -4018,6 +4747,7 @@ function playMediaByUid(uid, isOrchestrated = false) {
         clearSetlistOrchestrator();
     }
 
+    console.log("[DEBUG PLAY] playMediaByUid UID:", uid, "item:", item);
     // Determine source and call appropriate player
     if (uid.startsWith('set')) {
         playTrack(item);
@@ -4025,8 +4755,18 @@ function playMediaByUid(uid, isOrchestrated = false) {
         const realIdx = localFiles.indexOf(item);
         if (realIdx !== -1) playLocal(realIdx);
     } else if (uid.startsWith('web')) {
-        const realIdx = webLinks.indexOf(item);
-        if (realIdx !== -1) playWebLink(realIdx);
+        // V60: Unified YouTube/Web links logic
+        const openMode = item.open_mode || "auto";
+        const isYoutube = item.url && (item.url.includes("youtube.com") || item.url.includes("youtu.be"));
+        const shouldPlayInternal = openMode === "iframe" || (openMode === "auto" && isYoutube);
+        console.log("[DEBUG PLAY] Web item - openMode:", openMode, "isYoutube:", isYoutube, "shouldPlayInternal:", shouldPlayInternal);
+        
+        if (shouldPlayInternal) {
+            playTrack(item);
+        } else {
+            const realIdx = webLinks.indexOf(item);
+            if (realIdx !== -1) playWebLink(realIdx);
+        }
     } else {
         // Ultimate Fallback
         playTrack(item); 
@@ -4099,13 +4839,8 @@ function playTrack(track) {
     window.currentAutoreplay = isAutoreplay; // Global state for end-of-track logic
     updatePlaybackOptionsUI(isAutoreplay, isAutoplay);
 
-    // Reset Containers
-    const videoContainer = document.getElementById("video-container");
-    const audioContainer = document.getElementById("audio-player-container");
-    const multitrackContainer = document.getElementById("multitrack-container");
-    videoContainer.style.display = "flex";
-    audioContainer.style.display = "none";
-    if (multitrackContainer) multitrackContainer.style.display = "none";
+    // Reset Containers V37
+    showActivePlayerContainer('youtube');
 
     // Volume Default logic
     const trackVolume = (track.volume !== undefined) ? parseInt(track.volume, 10) : 100;
@@ -4151,10 +4886,20 @@ function playTrack(track) {
         return (item.target_profile && item.target_profile !== "Auto") ? item.target_profile : def;
     }
 
+    const isYoutube = track.url && (track.url.includes("youtube.com") || track.url.includes("youtu.be"));
+    if (isYoutube && !track.id) {
+        track.id = getYouTubeId(track.url);
+    }
+    const shouldPlayYTInternal = track.open_mode === "iframe" || 
+                                 (!track.open_mode && isYoutube) || 
+                                 (track.open_mode === "auto" && isYoutube);
+
+    console.log("[DEBUG PLAY] playTrack check - isYoutube:", isYoutube, "track.id:", track.id, "open_mode:", track.open_mode, "shouldPlayYTInternal:", shouldPlayYTInternal);
+
     if (track.open_mode === "external") {
         fetch(`/api/open_external?url=${encodeURIComponent(track.url)}`);
         setMode("GENERIC", getProfile(track, track.profile_name)); // External apps don't have a web mode
-    } else if (track.open_mode === "iframe" && track.id) {
+    } else if (shouldPlayYTInternal && track.id) {
         // YouTube Iframe
         setMode("YOUTUBE", getProfile(track, "Web YouTube")); // Context Switch
 
@@ -4171,7 +4916,7 @@ function playTrack(track) {
         const globalCover = document.getElementById("global-video-cover");
         if (globalCover) {
             globalCover.style.display = "block";
-            globalCover.src = track.thumbnail || `https://i.ytimg.com/vi/${track.id}/mqdefault.jpg`;
+            globalCover.src = resolveThumbnail(track.thumbnail || `https://i.ytimg.com/vi/${track.id}/mqdefault.jpg`);
             globalCover.onerror = () => { globalCover.style.display = "none"; };
         }
 
@@ -4659,6 +5404,7 @@ window.onload = () => {
 
 function setMode(mode, targetProfile) {
     console.log(`[DEBUG JS] setMode called with Mode=${mode}, Target=${targetProfile}`);
+    console.trace("[DEBUG JS] setMode Trace");
     currentMode = mode;
 
     // STRICTLY UPDATE WEB MODE STATE
@@ -4671,9 +5417,9 @@ function setMode(mode, targetProfile) {
     // UPDATE DOCUMENT TITLE for ContextMonitor
     // This ensures the native app detects the context change even if WS fails
     if (targetProfile) {
-        document.title = "Midi-Kbd Control Studio - " + targetProfile;
+        document.title = "GuitarPracticeTool - " + targetProfile;
     } else {
-        document.title = "Midi-Kbd Control Studio - Web Generic"; // Fallback
+        document.title = "GuitarPracticeTool - Web Generic"; // Fallback
     }
 
     // Also notify backend
@@ -4731,7 +5477,7 @@ function initWaveSurfer() {
         wavesurfer.on('finish', () => {
             wavesurfer.pause();
             wavesurfer.seekTo(0);
-            if (window.currentAutoreplay === true) {
+            if (window.currentAutoreplay === true && !(window.isLiveMode && isSetlistMode)) {
                 wavesurfer.play();
                 updatePlayPauseUI();
                 // TRAINING HOOK: Local Audio Autoreplay
@@ -4808,6 +5554,7 @@ async function loadLocalFiles() {
     // Initialize Custom Autocompletes
     setupCustomAutocomplete("edit-category", "suggestions-category", "category");
     setupCustomAutocomplete("edit-genre", "suggestions-genre", "genre");
+    setupCustomAutocomplete("web-link-type", "suggestions-type", "type");
 
     renderLocalFiles();
     refreshInterconnections(); // V55: Wake up header UI after loading
@@ -5190,6 +5937,13 @@ async function loadMultitrackSettings(file) {
             if (settings.autoreplay !== undefined) file.autoreplay = settings.autoreplay;
 
             settings.tracks.forEach((trackData, i) => {
+                if (i < file.stems.length) {
+                    if (trackData.name) {
+                        file.stems[i].name = trackData.name;
+                        const titleSpan = document.getElementById(`mt-title-${i}`);
+                        if (titleSpan) titleSpan.innerText = trackData.name;
+                    }
+                }
                 const muteBtn = document.getElementById(`mt-mute-${i}`);
                 const soloBtn = document.getElementById(`mt-solo-${i}`);
                 const hideBtn = document.getElementById(`mt-hide-${i}`);
@@ -5420,24 +6174,38 @@ async function playLocal(index) {
             file.stems = file.stems.map(s => ({ path: s, name: s.split(/[\\/]/).pop().replace(/\.[^/.]+$/, "") }));
         }
 
-        // Restore Stem Order from localStorage
+        // Restore Stem Order & Names from Backend (or localStorage fallback)
         try {
-            const saved = localStorage.getItem(getMultitrackStorageKey(file));
-            if (saved) {
-                const settings = JSON.parse(saved);
-                if (settings.tracks && Array.isArray(settings.tracks) && settings.tracks.length === file.stems.length) {
-                    const orderedStems = [];
-                    const availableStems = [...file.stems];
-                    settings.tracks.forEach(trackData => {
-                        const matchIdx = availableStems.findIndex(s => s.path === trackData.path);
-                        if (matchIdx !== -1) {
-                            orderedStems.push(availableStems.splice(matchIdx, 1)[0]);
-                        }
-                    });
-                    file.stems = orderedStems.concat(availableStems);
-                }
+            let settings = null;
+            const resp = await fetch(`/api/local/multitrack_settings/${index}`);
+            if (resp.ok) {
+                settings = await resp.json();
             }
-        } catch (e) { console.error("Order restore failed", e); }
+            if (!settings || !settings.tracks) {
+                const saved = localStorage.getItem(getMultitrackStorageKey(file));
+                if (saved) settings = JSON.parse(saved);
+            }
+
+            if (settings && settings.tracks && settings.tracks.length === file.stems.length) {
+                const orderedStems = [];
+                const availableStems = [...file.stems];
+                settings.tracks.forEach(trackData => {
+                    const matchIdx = availableStems.findIndex(s => {
+                        const sFile = s.path.split(/[\\/]/).pop().toLowerCase();
+                        const tFile = trackData.path.split(/[\\/]/).pop().toLowerCase();
+                        return sFile === tFile;
+                    });
+                    if (matchIdx !== -1) {
+                        const stemObj = availableStems.splice(matchIdx, 1)[0];
+                        if (trackData.name) {
+                            stemObj.name = trackData.name;
+                        }
+                        orderedStems.push(stemObj);
+                    }
+                });
+                file.stems = orderedStems.concat(availableStems);
+            }
+        } catch (e) { console.error("Order and names restore failed", e); }
 
         // --- MULTITRACK MODE ---
         const target = getProfile(file, "Web Audio Local");
@@ -5450,12 +6218,8 @@ async function playLocal(index) {
         updateHeaderScaleDisplay(file);
 
 
-        videoContainer.style.display = "none";
-        audioContainer.style.display = "none";
+        showActivePlayerContainer('multitrack');
         document.getElementById("video-controls-container").style.display = "none";
-
-        const multitrackContainer = document.getElementById("multitrack-container");
-        if (multitrackContainer) multitrackContainer.style.display = "flex";
 
         // Fix Loop Bar persistence: Hide Video Timeline when switching to Multitrack
         const valT = document.getElementById("video-timeline-container");
@@ -5766,6 +6530,7 @@ async function playLocal(index) {
                     if (newName) {
                         file.stems[i].name = newName;
                         titleSpan.innerText = newName;
+                        saveMultitrackSettings(file); // Persist settings on rename
                     }
                     input.replaceWith(titleSpan);
                 };
@@ -5985,8 +6750,7 @@ async function playLocal(index) {
             globalCover.src = `/api/local/art/${index}?t=${Date.now()}`;
         }
 
-        videoContainer.style.display = "none";
-        audioContainer.style.display = "flex";
+        showActivePlayerContainer('waveform');
         document.getElementById("video-controls-container").style.display = "none";
         // Hide Custom Timeline
         const valT = document.getElementById("video-timeline-container");
@@ -5994,9 +6758,6 @@ async function playLocal(index) {
 
         const vPitch = document.getElementById("video-pitch-control-inline");
         if (vPitch) vPitch.style.display = "none";
-
-        const multitrackContainer = document.getElementById("multitrack-container");
-        if (multitrackContainer) multitrackContainer.style.display = "none";
 
         v.style.display = "none";
 
@@ -6081,12 +6842,9 @@ async function playLocal(index) {
             globalCover.src = `/api/local/art/${index}?t=${Date.now()}`;
         }
 
-        videoContainer.style.display = "flex";
-        audioContainer.style.display = "none";
+        showActivePlayerContainer('local_video');
         v.style.display = "block";
         document.getElementById("video-controls-container").style.display = "flex";
-        const multitrackContainer = document.getElementById("multitrack-container");
-        if (multitrackContainer) multitrackContainer.style.display = "none";
 
         // Show Custom Timeline
         const timeline = document.getElementById("video-timeline-container");
@@ -6158,7 +6916,7 @@ async function playLocal(index) {
         v.onended = () => {
             v.pause();
             v.currentTime = 0;
-            if (window.currentAutoreplay === true) {
+            if (window.currentAutoreplay === true && !(window.isLiveMode && isSetlistMode)) {
                 v.play();
             } else {
                 handleMediaEnd();
@@ -7217,7 +7975,9 @@ function openEditLocalModal(index) {
     editingLocalIndex = index;
     lastEditContext = 'library';
     const item = localFiles[index];
-    currentEditingLinkedIds = item.linked_ids || []; // V58: Initialize links for local edit
+    if (!window.isNavigatingLinkedMedia) {
+        currentEditingLinkedIds = item.linked_ids || []; // V58: Initialize links for local edit
+    }
     
     // Reveal sidebar if in theater mode to give context to editing
     if (isTheaterMode && typeof toggleTheaterMode === 'function') {
@@ -7225,6 +7985,18 @@ function openEditLocalModal(index) {
     }
 
     document.getElementById("media-modal").showModal();
+
+    // Dynamically update Modal Title based on type (Video or Audio)
+    const modalTitleEl = document.querySelector("#media-modal .modal-header h3");
+    if (modalTitleEl) {
+        if (item.path.match(/\.(mp4|mkv|mov|avi|webm|m4v)$/i)) {
+            modalTitleEl.innerText = t("web.modal_local_video_title", "Éditer Vidéo Locale");
+            modalTitleEl.setAttribute("data-i18n", "web.modal_local_video_title");
+        } else {
+            modalTitleEl.innerText = t("web.modal_local_audio_title", "Éditer Audio Local");
+            modalTitleEl.setAttribute("data-i18n", "web.modal_local_audio_title");
+        }
+    }
 
     // Auto-scroll in background
     setTimeout(scrollToActiveTrack, 200);
@@ -7256,6 +8028,16 @@ function openEditLocalModal(index) {
     const isPrimaryVal = (item.is_primary === true || item.is_primary === "true");
     document.getElementById("edit-is-primary").checked = isPrimaryVal;
     console.log("[DEBUG] Opening EditLocal Modal - is_primary:", isPrimaryVal, "raw:", item.is_primary);
+
+    // Affichage explicite du formulaire d'édition et des boutons d'action
+    const editContainer = document.getElementById("media-edit-fields-container");
+    if (editContainer) editContainer.classList.remove("hidden");
+
+    const saveBtnElem = document.getElementById("btn-save-item");
+    if (saveBtnElem) saveBtnElem.style.display = "inline-block";
+
+    const previewBtnElem = document.getElementById("btn-preview-item");
+    if (previewBtnElem) previewBtnElem.style.display = "none";
 
     // V58: Hide Action Selector for local files
     const actionSel = document.querySelector(".actions-selector");
@@ -7384,7 +8166,9 @@ function openMultitrackModal(index) {
     document.getElementById("mt-target-profile").value = item.target_profile || "Auto";
 
     // V57: Initialize linked IDs
-    currentEditingLinkedIds = item.linked_ids || [];
+    if (!window.isNavigatingLinkedMedia) {
+        currentEditingLinkedIds = item.linked_ids || [];
+    }
     renderModalLinkedItems(); // V58: Display linked items in multitrack modal
 
     let volVal = (item.volume !== undefined) ? item.volume : 100;
@@ -7688,6 +8472,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     setupUniversalLoopSelection();
+    if (typeof initTabsDragAndDrop === "function") initTabsDragAndDrop();
     setupSliderReset(document.getElementById("mt-modal-volume"), "volume");
 
     // V60: Initialization of resizing engines
@@ -8350,7 +9135,7 @@ function setupVideoTimeline() {
 
     // --- NEW: Autoreplay & Training Hook ---
     v.onended = () => {
-        if (window.currentAutoreplay === true) {
+        if (window.currentAutoreplay === true && !(window.isLiveMode && isSetlistMode)) {
             v.currentTime = 0;
             v.play();
             // TRAINING HOOK: Local Video Autoreplay
@@ -8365,6 +9150,9 @@ function setupVideoTimeline() {
             v.currentTime = 0;
             v.pause();
             updatePlayPauseIcon('video', false);
+            if (window.isLiveMode && isSetlistMode) {
+                handleMediaEnd();
+            }
         }
     };
 }
@@ -8797,7 +9585,7 @@ setInterval(() => {
             // Fin atteinte !
             window.multitrack.pause();
             window.multitrack.setTime(0);
-            if (window.currentAutoreplay === true) {
+            if (window.currentAutoreplay === true && !(window.isLiveMode && isSetlistMode)) {
                 window.multitrack.play();
                 // TRAINING HOOK: Autoreplay
                 if (window.MediaTrainingManager && window.MediaTrainingManager['multitrack'] && window.MediaTrainingManager['multitrack'].active) {
@@ -10929,13 +11717,14 @@ function refreshSetlistHighlights() {
 }
 
 function handlePlayerError(el) {
-    // Si on est en train de charger un multipiste, on ignore les erreurs du joueur vidéo résiduel
-    if (window.currentActivePlayer === 'multitrack' && el.id === 'html5-player') {
+    if (!el.src || el.src === "" || el.src.includes('undefined')) return;
+
+    // Ignorer les erreurs résiduelles de html5-player si le lecteur actif n'est pas le lecteur local
+    if (el.id === 'html5-player' && window.currentActivePlayer !== 'local') {
         return; 
     }
 
     console.warn("Player Error detected on:", el.id);
-    if (!el.src || el.src === "" || el.src.includes('undefined')) return;
     
     if (window.currentPlayingIndex !== null) {
         const track = findTrackInLibraryOrSetlist(window.currentPlayingIndex, window.currentSource);
@@ -11653,6 +12442,752 @@ async function confirmRelocateUnitary() {
     }
 }
 
+// ==========================================
+// LOGIQUE DE RENOMMAGE PHYSIQUE DES MÉDIAS & STEMS (V10+)
+// ==========================================
+let renameStemsData = []; // Stockage temporaire des stems pour le renommage
+const DEFAULT_INSTRUMENTS = ["Drums", "Bass", "Rhythm", "Vocals", "Lead", "Keys", "Acoustic", "Synth", "Percussion", "Click"];
+
+function getInstrumentsList() {
+    let list = localStorage.getItem("airstep_instruments");
+    if (!list) {
+        localStorage.setItem("airstep_instruments", JSON.stringify(DEFAULT_INSTRUMENTS));
+        return DEFAULT_INSTRUMENTS;
+    }
+    try {
+        return JSON.parse(list);
+    } catch (e) {
+        return DEFAULT_INSTRUMENTS;
+    }
+}
+
+function saveInstrumentsList(list) {
+    localStorage.setItem("airstep_instruments", JSON.stringify(list));
+}
+
+async function openPhysicalRenameModal() {
+    const idx = editingLocalIndex;
+    if (idx === null || idx === undefined || idx === -1) return;
+    const item = localFiles[idx];
+    if (!item || !item.path) {
+        alert(t('web.msg_error_path_not_found', "Action impossible : chemin du média introuvable."));
+        return;
+    }
+
+    // Récupérer les éléments UI
+    const modal = document.getElementById("modal-physical-rename");
+    const currentPathEl = document.getElementById("rename-current-path");
+    const classicContainer = document.getElementById("rename-classic-container");
+    const mainInputClassic = document.getElementById("rename-main-input-classic");
+    const stemsContainer = document.getElementById("rename-stems-container");
+    const mainInputEl = document.getElementById("rename-main-input");
+
+    if (!modal || !currentPathEl) return;
+
+    // Remplir le chemin actuel
+    currentPathEl.innerText = item.path;
+
+    // Déterminer le nom de base
+    let baseName = "";
+    if (item.is_multitrack) {
+        baseName = item.path.split(/[\\/]/).pop();
+        if (classicContainer) classicContainer.style.display = "none";
+        stemsContainer.style.display = "flex";
+        
+        // Configurer les cases à cocher par défaut (décochées pour éviter les fausses manipulations)
+        const folderChk = document.getElementById("rename-folder-chk");
+        if (folderChk) folderChk.checked = false;
+        
+        const stemsChk = document.getElementById("rename-stems-chk");
+        if (stemsChk) stemsChk.checked = false;
+
+        const stemsLabelsChk = document.getElementById("rename-stems-labels-chk");
+        if (stemsLabelsChk) stemsLabelsChk.checked = false;
+
+        // Coche par défaut radio "as_stems"
+        const radioAsStems = document.querySelector('input[name="rename_stems_option"][value="as_stems"]');
+        if (radioAsStems) radioAsStems.checked = true;
+
+        const prefixChk = document.getElementById("rename-prefix-instrument-chk");
+        if (prefixChk) prefixChk.checked = false;
+        
+        if (mainInputEl) mainInputEl.value = baseName;
+        
+        // Ajuster l'affichage des sections (avant chargement des stems, rendu initial vide)
+        onRenameFolderChkChanged();
+        onRenameStemsOrLabelsChanged();
+        onRenameOptionChanged();
+        
+        // Charger les stems
+        await loadPhysicalRenameStems(idx, item);
+
+        // Auto-détecter le nom de base commun depuis les noms de fichiers des stems
+        // (en retirant l'instrument trouvé via la liste d'instruments)
+        const stemsBaseInput = document.getElementById("rename-stems-base-input");
+        if (stemsBaseInput) {
+            let autoBase = item.title || baseName;
+            if (renameStemsData.length > 0) {
+                const instruments = getInstrumentsList();
+                let detectedBase = null;
+                let consistent = true;
+                for (const stem of renameStemsData) {
+                    const fn = stem.path.split(/[\\/]/).pop();
+                    const extI = fn.lastIndexOf('.');
+                    const fb = extI !== -1 ? fn.substring(0, extI) : fn;
+                    const { baseName: b, instrument: inst } = extractBaseAndInstrument(fb, instruments);
+                    if (inst) { // un instrument a été trouvé
+                        if (detectedBase === null) detectedBase = b;
+                        else if (b.toLowerCase() !== detectedBase.toLowerCase()) { consistent = false; break; }
+                    }
+                }
+                if (consistent && detectedBase) autoBase = detectedBase;
+            }
+            stemsBaseInput.value = autoBase;
+        }
+
+        // Rafraîchir la liste après chargement et détection
+        onRenameStemsOrLabelsChanged();
+    } else {
+        const filename = item.path.split(/[\\/]/).pop();
+        const dotIdx = filename.lastIndexOf('.');
+        baseName = dotIdx !== -1 ? filename.substring(0, dotIdx) : filename;
+        
+        if (classicContainer) classicContainer.style.display = "block";
+        stemsContainer.style.display = "none";
+        if (mainInputClassic) mainInputClassic.value = baseName;
+        renameStemsData = [];
+    }
+
+    // Appliquer les traductions à la modale
+    if (window.translatePage) {
+        window.translatePage(modal);
+    }
+
+    modal.showModal();
+}
+
+async function loadPhysicalRenameStems(idx, item) {
+    renameStemsData = [];
+    try {
+        const res = await fetch(`/api/local/multitrack_settings/${idx}`);
+        const data = await res.json();
+        if (data && data.tracks && data.tracks.length > 0) {
+            renameStemsData = data.tracks.map(t => ({
+                path: t.path,
+                name: t.name || t.path.split(/[\\/]/).pop().split('.')[0]
+            }));
+        }
+    } catch (e) {
+        console.warn("Failed to load multitrack settings for rename, fallback to stems array", e);
+    }
+
+    if (renameStemsData.length === 0 && item.stems) {
+        renameStemsData = item.stems.map(s => ({
+            path: s,
+            name: s.split(/[\\/]/).pop().split('.')[0]
+        }));
+    }
+}
+
+function onRenameFolderChkChanged() {
+    const chk = document.getElementById("rename-folder-chk");
+    const container = document.getElementById("rename-folder-input-container");
+    if (chk && container) {
+        container.style.display = chk.checked ? "flex" : "none";
+    }
+    updateStemsPreviews();
+}
+
+function onRenameStemsChkChanged() {
+    onRenameStemsOrLabelsChanged();
+}
+
+function onRenameStemsLabelsChkChanged() {
+    onRenameStemsOrLabelsChanged();
+}
+
+function onRenameStemsOrLabelsChanged() {
+    const stemsChk = document.getElementById("rename-stems-chk");
+    const labelsChk = document.getElementById("rename-stems-labels-chk");
+    const wrapper = document.getElementById("rename-stems-options-wrapper");
+    const mappingArea = document.getElementById("rename-stems-mapping-area");
+
+    const anyChecked = (stemsChk?.checked || false) || (labelsChk?.checked || false);
+
+    if (wrapper && mappingArea) {
+        if (anyChecked) {
+            wrapper.style.display = "flex";
+            mappingArea.style.display = "flex";
+            renderRenameStemsList();
+        } else {
+            wrapper.style.display = "none";
+            mappingArea.style.display = "none";
+        }
+    }
+    updateStemsPreviews();
+}
+
+function onRenameOptionChanged() {
+    const option = document.querySelector('input[name="rename_stems_option"]:checked').value;
+    const prefixContainer = document.getElementById("rename-prefix-container");
+    const stemsBaseContainer = document.getElementById("rename-stems-base-container");
+    
+    if (stemsBaseContainer) {
+        if (option === "as_stems") {
+            const radioAsStems = document.querySelector('input[name="rename_stems_option"][value="as_stems"]');
+            if (radioAsStems) {
+                const parentLabel = radioAsStems.closest('label') || radioAsStems.parentNode;
+                parentLabel.parentNode.insertBefore(stemsBaseContainer, parentLabel.nextSibling);
+            }
+            stemsBaseContainer.style.display = "flex";
+        } else if (option === "by_instrument") {
+            const radioByInst = document.querySelector('input[name="rename_stems_option"][value="by_instrument"]');
+            if (radioByInst) {
+                const parentLabel = radioByInst.closest('label') || radioByInst.parentNode;
+                parentLabel.parentNode.insertBefore(stemsBaseContainer, parentLabel.nextSibling);
+            }
+            stemsBaseContainer.style.display = "flex";
+        } else {
+            stemsBaseContainer.style.display = "none";
+        }
+    }
+
+    if (prefixContainer) {
+        if (option === "as_stems" || option === "by_instrument") {
+            if (stemsBaseContainer) {
+                stemsBaseContainer.parentNode.insertBefore(prefixContainer, stemsBaseContainer.nextSibling);
+            }
+            prefixContainer.style.display = "flex";
+        } else {
+            prefixContainer.style.display = "none";
+        }
+    }
+
+    renderRenameStemsList();
+}
+
+function onRenameMainInputChanged() {
+    updateStemsPreviews();
+}
+
+function renderRenameStemsList() {
+    const container = document.getElementById("rename-stems-rows-container");
+    if (!container) return;
+    container.innerHTML = "";
+
+    const option = document.querySelector('input[name="rename_stems_option"]:checked').value;
+    const instruments = getInstrumentsList();
+
+    renameStemsData.forEach((stem, i) => {
+        const row = document.createElement("div");
+        row.className = "rename-stem-row";
+
+        const originalFilename = stem.path.split(/[\\/]/).pop();
+        const extIdx = originalFilename.lastIndexOf('.');
+        const ext = extIdx !== -1 ? originalFilename.substring(extIdx) : "";
+        const originalBase = extIdx !== -1 ? originalFilename.substring(0, extIdx) : originalFilename;
+
+        // Label d'origine
+        const nameLabel = document.createElement("div");
+        nameLabel.style.flex = "1";
+        nameLabel.style.fontWeight = "bold";
+        nameLabel.style.overflow = "hidden";
+        nameLabel.style.textOverflow = "ellipsis";
+        nameLabel.style.whiteSpace = "nowrap";
+        nameLabel.innerText = originalBase; // Toujours afficher le nom de fichier réel (sans extension), pas le nom d'affichage qui peut contenir des métadonnées parasites
+        nameLabel.title = originalFilename;
+        row.appendChild(nameLabel);
+
+        if (option === "by_instrument") {
+            // Select d'instrument
+            const select = document.createElement("select");
+            select.id = `rename-stem-select-${i}`;
+            select.onchange = () => onStemSelectorChanged(i);
+
+            // Remplir le select
+            instruments.forEach(inst => {
+                const opt = document.createElement("option");
+                opt.value = inst;
+                opt.innerText = inst;
+                select.appendChild(opt);
+            });
+
+            const optCustom = document.createElement("option");
+            optCustom.value = "CUSTOM";
+            optCustom.innerText = t("web.lbl_add_custom_instrument", "Personnalisé...");
+            select.appendChild(optCustom);
+
+            // Essayer de trouver une correspondance intelligente par défaut
+            let matched = "";
+            const lowerName = (stem.name || "").toLowerCase();
+            const lowerFile = originalBase.toLowerCase();
+
+            // Parcourir la liste dynamique des instruments (y compris les customs !)
+            for (const inst of instruments) {
+                const lowerInst = inst.toLowerCase();
+                if (lowerName.includes(lowerInst) || lowerFile.includes(lowerInst)) {
+                    matched = inst;
+                    break;
+                }
+            }
+
+            // Fallback synonymes si aucune correspondance directe dynamique
+            if (!matched) {
+                if (lowerName.includes("drum") || lowerFile.includes("drum") || lowerName.includes("batterie")) matched = "Drums";
+                else if (lowerName.includes("bass") || lowerFile.includes("bass") || lowerName.includes("basse")) matched = "Bass";
+                else if (lowerName.includes("vocal") || lowerFile.includes("vocal") || lowerName.includes("chant") || lowerName.includes("voice") || lowerName.includes("lead voc")) matched = "Vocals";
+                else if (lowerName.includes("lead") || lowerFile.includes("lead") || lowerName.includes("solo")) matched = "Lead";
+                else if (lowerName.includes("key") || lowerFile.includes("key") || lowerName.includes("synth") || lowerName.includes("piano") || lowerName.includes("clavier")) matched = "Keys";
+                else if (lowerName.includes("acoustic") || lowerFile.includes("acoustic") || lowerName.includes("folk")) matched = "Acoustic";
+                else if (lowerName.includes("click") || lowerFile.includes("click") || lowerName.includes("metronome") || lowerName.includes("tempo")) matched = "Click";
+            }
+
+            // Si toujours pas trouvé, on se replie sur "Rhythm" (ou le premier disponible)
+            if (!matched) {
+                matched = instruments.includes("Rhythm") ? "Rhythm" : (instruments[0] || "Other");
+            }
+            
+            if (instruments.includes(matched)) {
+                select.value = matched;
+            } else {
+                select.value = instruments[0] || "Rhythm";
+            }
+
+            row.appendChild(select);
+
+            // Input personnalisé masqué par défaut
+            const customInput = document.createElement("input");
+            customInput.type = "text";
+            customInput.id = `rename-stem-custom-${i}`;
+            customInput.className = "custom-inst-input";
+            customInput.style.display = "none";
+            customInput.placeholder = "...";
+            customInput.oninput = () => updateStemsPreviews();
+            row.appendChild(customInput);
+        } else if (option === "individual") {
+            // Input individuel de saisie libre
+            const indInput = document.createElement("input");
+            indInput.type = "text";
+            indInput.id = `rename-stem-individual-input-${i}`;
+            indInput.className = "custom-inst-input";
+            indInput.style.flex = "1";
+            indInput.value = originalBase; // Toujours pré-remplir avec le vrai nom de fichier
+            indInput.oninput = () => updateStemsPreviews();
+            row.appendChild(indInput);
+        }
+
+        // Aperçu du résultat
+        const preview = document.createElement("div");
+        preview.id = `rename-stem-preview-${i}`;
+        preview.className = "stem-result-name";
+        preview.innerText = "-";
+        row.appendChild(preview);
+
+        container.appendChild(row);
+    });
+
+    updateStemsPreviews();
+}
+
+function onStemSelectorChanged(idx) {
+    const select = document.getElementById(`rename-stem-select-${idx}`);
+    const customInput = document.getElementById(`rename-stem-custom-${idx}`);
+    
+    if (select && customInput) {
+        if (select.value === "CUSTOM") {
+            customInput.style.display = "block";
+            customInput.focus();
+        } else {
+            customInput.style.display = "none";
+        }
+    }
+    updateStemsPreviews();
+}
+
+function capitalizeFirstLetter(string) {
+    if (!string) return "";
+    return string.charAt(0).toUpperCase() + string.slice(1);
+}
+
+/**
+ * Extrait le nom de base et l'instrument d'un nom de fichier stem.
+ * Utilise UNIQUEMENT la liste d'instruments configurée par l'utilisateur (localStorage).
+ * Recherche insensible à la casse. Aucun filtre heuristique supplémentaire.
+ * @param {string} filename - Nom de fichier sans extension
+ * @param {string[]} instruments - Liste des instruments (depuis getInstrumentsList())
+ * @returns {{ baseName: string, instrument: string|null }}
+ *   baseName  : tout ce qui précède l'instrument (séparateurs retirés)
+ *   instrument: la sous-chaîne trouvée telle qu'elle est dans le fichier (casse originale)
+ *               null si aucun instrument n'est reconnu → fallback = nom de fichier complet
+ */
+function extractBaseAndInstrument(filename, instruments) {
+    if (!filename) return { baseName: "", instrument: null };
+
+    // Trier du plus long au plus court pour éviter les conflits de sous-chaînes
+    const sorted = [...instruments].sort((a, b) => b.length - a.length);
+    const filenameLower = filename.toLowerCase();
+
+    for (const inst of sorted) {
+        const instLower = inst.toLowerCase();
+        const idx = filenameLower.indexOf(instLower);
+        if (idx !== -1) {
+            // Nom de base = tout ce qui précède l'instrument, séparateurs finaux retirés
+            const base = filename.substring(0, idx).replace(/[-_\s]+$/, "").trim();
+            // Instrument tel qu'il apparaît dans le fichier (casse originale)
+            const instrumentFound = filename.substring(idx, idx + inst.length);
+            return { baseName: base || filename, instrument: instrumentFound };
+        }
+    }
+
+    // Fallback : aucun instrument reconnu → renvoyer le nom complet tel quel
+    return { baseName: filename, instrument: null };
+}
+
+function updateStemsPreviews() {
+    const idx = editingLocalIndex;
+    if (idx === null || idx === undefined || idx === -1) return;
+    const item = localFiles[idx];
+    if (!item) return;
+
+    const renameFolder = document.getElementById("rename-folder-chk")?.checked || false;
+    const renameStems = document.getElementById("rename-stems-chk")?.checked || false;
+    const renameLabels = document.getElementById("rename-stems-labels-chk")?.checked || false;
+    
+    // Déterminer le nom du dossier parent
+    let folderPart = item.path.split(/[\\/]/).pop();
+    if (renameFolder) {
+        const folderNameVal = document.getElementById("rename-main-input").value.trim();
+        if (folderNameVal) {
+            folderPart = folderNameVal;
+        }
+    }
+
+    const option = document.querySelector('input[name="rename_stems_option"]:checked').value;
+    const prefixFirst = document.getElementById("rename-prefix-instrument-chk")?.checked || false;
+    const stemsBaseInput = document.getElementById("rename-stems-base-input");
+    const stemsBaseName = stemsBaseInput ? stemsBaseInput.value.trim() : "";
+
+    renameStemsData.forEach((stem, i) => {
+        const previewEl = document.getElementById(`rename-stem-preview-${i}`);
+        if (!previewEl) return;
+
+        const originalFilename = stem.path.split(/[\\/]/).pop();
+        const extIdx = originalFilename.lastIndexOf('.');
+        const ext = extIdx !== -1 ? originalFilename.substring(extIdx) : "";
+        const originalBase = extIdx !== -1 ? originalFilename.substring(0, extIdx) : originalFilename;
+
+        let stemName = "";
+        let finalFilename = "";
+
+        if (!renameStems && !renameLabels) {
+            finalFilename = originalBase;
+        } else {
+            if (option === "as_stems") {
+                // Extraire l'instrument depuis le nom de fichier en utilisant UNIQUEMENT la liste d'instruments
+                const { instrument } = extractBaseAndInstrument(originalBase, getInstrumentsList());
+
+                if (instrument && stemsBaseName) {
+                    finalFilename = prefixFirst
+                        ? `${capitalizeFirstLetter(instrument)}-${stemsBaseName}`
+                        : `${stemsBaseName}-${instrument}`;
+                } else if (instrument) {
+                    finalFilename = instrument;
+                } else {
+                    // Fallback : aucun instrument reconnu → nom de fichier original
+                    finalFilename = originalBase;
+                }
+            } else if (option === "by_instrument") {
+                const select = document.getElementById(`rename-stem-select-${i}`);
+                const customInput = document.getElementById(`rename-stem-custom-${i}`);
+                
+                if (select) {
+                    if (select.value === "CUSTOM") {
+                        stemName = customInput ? customInput.value.trim() : "Custom";
+                    } else {
+                        stemName = select.value;
+                    }
+                }
+                if (!stemName) stemName = "Track";
+
+                if (stemsBaseName) {
+                    finalFilename = prefixFirst ? `${stemName}-${stemsBaseName}` : `${stemsBaseName}-${stemName}`;
+                } else if (folderPart) {
+                    finalFilename = prefixFirst ? `${stemName}-${folderPart}` : `${folderPart}-${stemName}`;
+                } else {
+                    finalFilename = stemName;
+                }
+            } else if (option === "individual") {
+                const indInput = document.getElementById(`rename-stem-individual-input-${i}`);
+                stemName = indInput ? indInput.value.trim() : "";
+                if (!stemName) stemName = originalBase;
+                finalFilename = stemName;
+            }
+        }
+
+        previewEl.innerText = `${folderPart} \\ ${finalFilename}${ext}`;
+    });
+}
+
+function toggleInstrumentEditor() {
+    const editor = document.getElementById("instrument-list-editor");
+    const btn = document.getElementById("btn-toggle-instrument-editor");
+    if (!editor) return;
+
+    if (editor.style.display === "none") {
+        editor.style.display = "flex";
+        if (btn) btn.innerHTML = '<i class="ph ph-caret-up"></i> ' + t("web.btn_close", "Fermer");
+        renderInstrumentsBag();
+    } else {
+        editor.style.display = "none";
+        if (btn) btn.innerHTML = '<i class="ph ph-gear"></i> ' + t("web.btn_configure", "Gérer la liste");
+    }
+}
+
+function renderInstrumentsBag() {
+    const container = document.getElementById("instruments-bag-list");
+    if (!container) return;
+    container.innerHTML = "";
+
+    const list = getInstrumentsList();
+    list.forEach(inst => {
+        const badge = document.createElement("span");
+        badge.className = "instrument-badge";
+        badge.innerText = inst;
+        badge.onclick = () => {
+            // Remplir le champ d'ajout rapide ou faire une action
+            const input = document.getElementById("new-instrument-name");
+            if (input) {
+                input.value = inst;
+                input.focus();
+            }
+        };
+
+        const delBtn = document.createElement("span");
+        delBtn.className = "btn-del-badge";
+        delBtn.innerText = " ×";
+        delBtn.onclick = (e) => {
+            e.stopPropagation();
+            deleteCustomInstrument(inst);
+        };
+        badge.appendChild(delBtn);
+
+        container.appendChild(badge);
+    });
+}
+
+function addCustomInstrument() {
+    const input = document.getElementById("new-instrument-name");
+    if (!input) return;
+    const val = input.value.trim();
+    if (!val) return;
+
+    let list = getInstrumentsList();
+    if (!list.includes(val)) {
+        list.push(val);
+        saveInstrumentsList(list);
+        input.value = "";
+        renderInstrumentsBag();
+        // Regénérer la liste des selects
+        renderRenameStemsList();
+    }
+}
+
+function deleteCustomInstrument(name) {
+    let list = getInstrumentsList();
+    list = list.filter(item => item !== name);
+    saveInstrumentsList(list);
+    renderInstrumentsBag();
+    // Regénérer la liste des selects
+    renderRenameStemsList();
+}
+
+async function submitPhysicalRename() {
+    const idx = editingLocalIndex;
+    if (idx === null || idx === undefined || idx === -1) return;
+
+    const item = localFiles[idx];
+    if (!item) return;
+
+    let newFolderName = "";
+    let renameFolder = false;
+    let renameStems = false;
+    let renameStemsOption = "none";
+    let stemsMapping = [];
+
+    if (!item.is_multitrack) {
+        // --- CAS CLASSIQUE (FICHIER UNIQUE) ---
+        newFolderName = document.getElementById("rename-main-input-classic").value.trim();
+        if (!newFolderName) {
+            alert(t("web.msg_rename_error", "Nom invalide."));
+            return;
+        }
+        renameFolder = true;
+    } else {
+        // --- CAS MULTIPISTE (DOSSIER + STEMS) ---
+        renameFolder = document.getElementById("rename-folder-chk")?.checked || false;
+        renameStems = document.getElementById("rename-stems-chk")?.checked || false;
+        const renameStemsLabels = document.getElementById("rename-stems-labels-chk")?.checked || false;
+
+        if (!renameFolder && !renameStems && !renameStemsLabels) {
+            alert(t("web.msg_rename_select_option", "Veuillez cocher au moins une option (Renommer le dossier, les fichiers de stems ou les étiquettes)."));
+            return;
+        }
+
+        if (renameFolder) {
+            newFolderName = document.getElementById("rename-main-input").value.trim();
+            if (!newFolderName) {
+                alert(t("web.msg_rename_error", "Nom de dossier invalide."));
+                return;
+            }
+        } else {
+            // Conserver le nom actuel
+            newFolderName = item.path.split(/[\\/]/).pop();
+        }
+
+        if (renameStems || renameStemsLabels) {
+            renameStemsOption = document.querySelector('input[name="rename_stems_option"]:checked').value;
+            const prefixFirst = document.getElementById("rename-prefix-instrument-chk")?.checked || false;
+            const stemsBaseInput = document.getElementById("rename-stems-base-input");
+            const stemsBaseName = stemsBaseInput ? stemsBaseInput.value.trim() : "";
+
+            renameStemsData.forEach((stem, i) => {
+                const originalFilename = stem.path.split(/[\\/]/).pop();
+                const extIdx = originalFilename.lastIndexOf('.');
+                const ext = extIdx !== -1 ? originalFilename.substring(extIdx) : "";
+                const originalBase = extIdx !== -1 ? originalFilename.substring(0, extIdx) : originalFilename;
+
+                let stemName = "";
+                let newFilename = "";
+                let displayName = "";
+
+                if (renameStemsOption === "as_stems") {
+                    // Extraire l'instrument depuis le nom de fichier (liste d'instruments uniquement, sans filtres)
+                    const { instrument } = extractBaseAndInstrument(originalBase, getInstrumentsList());
+
+                    if (instrument && stemsBaseName) {
+                        const instCap = capitalizeFirstLetter(instrument);
+                        newFilename = prefixFirst
+                            ? `${instCap}-${stemsBaseName}`
+                            : `${stemsBaseName}-${instrument}`;
+                        displayName = prefixFirst
+                            ? `${instCap}-${stemsBaseName}`
+                            : `${stemsBaseName}-${instCap}`;
+                    } else if (instrument) {
+                        newFilename = instrument;
+                        displayName = capitalizeFirstLetter(instrument);
+                    } else {
+                        // Fallback : aucun instrument reconnu → nom de fichier original
+                        newFilename = originalBase;
+                        displayName = originalBase;
+                    }
+
+                } else if (renameStemsOption === "by_instrument") {
+                    const select = document.getElementById(`rename-stem-select-${i}`);
+                    const customInput = document.getElementById(`rename-stem-custom-${i}`);
+                    if (select) {
+                        if (select.value === "CUSTOM") {
+                            stemName = customInput ? customInput.value.trim() : "Custom";
+                        } else {
+                            stemName = select.value;
+                        }
+                    }
+                    if (!stemName) stemName = "Track";
+
+                    const stemNameCap = capitalizeFirstLetter(stemName);
+
+                    if (stemsBaseName) {
+                        newFilename = prefixFirst ? `${stemName}-${stemsBaseName}` : `${stemsBaseName}-${stemName}`;
+                        // Utiliser le même séparateur tiret que le nom de fichier physique
+                        displayName = prefixFirst ? `${stemNameCap}-${stemsBaseName}` : `${stemsBaseName}-${stemNameCap}`;
+                    } else if (newFolderName) {
+                        newFilename = prefixFirst ? `${stemName}-${newFolderName}` : `${newFolderName}-${stemName}`;
+                        // Utiliser le même séparateur tiret que le nom de fichier physique
+                        displayName = prefixFirst ? `${stemNameCap}-${newFolderName}` : `${newFolderName}-${stemNameCap}`;
+                    } else {
+                        newFilename = stemName;
+                        displayName = stemNameCap;
+                    }
+
+                } else if (renameStemsOption === "individual") {
+                    const indInput = document.getElementById(`rename-stem-individual-input-${i}`);
+                    stemName = indInput ? indInput.value.trim() : "";
+                    if (!stemName) stemName = originalBase;
+                    
+                    newFilename = stemName;
+                    displayName = capitalizeFirstLetter(stemName);
+                }
+
+                stemsMapping.push({
+                    old_path: stem.path,
+                    new_filename: newFilename, // Sans extension
+                    name: displayName // Nom d'affichage propre
+                });
+            });
+        }
+    }
+
+    // Confirmation
+    const confirmTitle = t("web.msg_rename_confirm_title", "Confirmer le renommage physique");
+    const confirmText = t("web.msg_rename_confirm_text", "Attention : cette action modifie réellement les fichiers et dossiers sur votre disque dur. Voulez-vous continuer ?");
+    
+    if (!confirm(`${confirmTitle}\n\n${confirmText}`)) {
+        return;
+    }
+
+    try {
+        const renameStemsLabels = document.getElementById("rename-stems-labels-chk")?.checked || false;
+        console.log(`[RenamePhysical] Sending rename for index ${idx}: Folder=${renameFolder} (${newFolderName}), Stems=${renameStems} (${renameStemsOption}), Labels=${renameStemsLabels}`);
+        const res = await fetch(`/api/local/rename_physical/${idx}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                new_name: newFolderName,
+                rename_folder: renameFolder,
+                rename_stems: renameStems,
+                rename_stems_labels: renameStemsLabels,
+                rename_stems_option: renameStemsOption,
+                stems_mapping: stemsMapping
+            })
+        });
+
+        const data = await res.json();
+        if (data && data.status === "ok") {
+            alert(t("web.msg_rename_success", "Média renommé physiquement avec succès !"));
+            
+            // Fermer la modale
+            document.getElementById("modal-physical-rename").close();
+
+            // Mettre à jour l'élément en cours d'édition s'il y a des champs d'édition ouverts
+            const isMT = document.getElementById("modal-multitrack").open;
+            const isLocal = document.getElementById("media-modal").open;
+
+            // Mettre à jour le chemin dans l'UI d'édition
+            if (isMT) {
+                const mtPath = document.getElementById("mt-path-display");
+                if (mtPath) mtPath.innerText = data.new_path;
+            } else if (isLocal) {
+                const lp = document.getElementById("local-path-display");
+                if (lp) lp.innerText = data.new_path;
+            }
+            // Recharger la bibliothèque de façon asynchrone
+            await loadLocalFiles();
+
+            // Retrouver le nouvel index du morceau renommé dans localFiles pour rafraîchir editingLocalIndex
+            if (localFiles) {
+                const newIdx = localFiles.findIndex(f => f.path === data.new_path);
+                if (newIdx !== -1) {
+                    editingLocalIndex = newIdx;
+                }
+            }
+        } else {
+            alert(t("web.msg_rename_error", "Erreur lors du renommage physique : ") + (data.message || "Inconnue"));
+        }
+    } catch (e) {
+        console.error("[RenamePhysical] Fetch error:", e);
+        alert(t("web.msg_rename_error", "Erreur lors du renommage physique : ") + e.toString());
+    }
+}
+
 function updateBulkProgress(current, total, text = null) {
     const container = document.getElementById('bulk-progress-container');
     const fill = document.getElementById('bulk-progress-fill');
@@ -11821,27 +13356,37 @@ function renderLibraryManagerItems() {
         const isSelected = libManagerSelectedIndices.has(originalIndex);
         
         const div = document.createElement("div");
-        div.className = "bulk-item-row";
-        div.style.display = "flex";
-        div.style.alignItems = "center";
-        div.style.padding = "8px";
-        div.style.borderBottom = "1px solid #222";
-        div.style.gap = "10px";
+        div.className = "bulk-item-row" + (isSelected ? " selected" : "");
 
         const chk = document.createElement("input");
         chk.type = "checkbox";
         chk.checked = isSelected;
         chk.onchange = (e) => {
-            if (e.target.checked) libManagerSelectedIndices.add(originalIndex);
-            else libManagerSelectedIndices.delete(originalIndex);
+            if (e.target.checked) {
+                libManagerSelectedIndices.add(originalIndex);
+                div.classList.add("selected");
+            } else {
+                libManagerSelectedIndices.delete(originalIndex);
+                div.classList.remove("selected");
+            }
             updateLibManagerStatus();
-        }
+        };
+
+        // Rendre toute la ligne cliquable pour cocher/décocher
+        div.onclick = (e) => {
+            if (e.target !== chk) {
+                chk.checked = !chk.checked;
+                chk.dispatchEvent(new Event('change'));
+            }
+        };
 
         const info = document.createElement("div");
-        info.style.flex = "1";
-        info.innerHTML = `<div style="font-weight:bold; font-size:0.9em;">${item.title}</div>
-                          <div style="font-size:0.75em; color:#888;">${item.artist || "---"}</div>
-                          <div style="font-size:0.75em; color:#555; word-break:break-all;">${item.path}</div>`;
+        info.className = "bulk-item-info";
+        info.innerHTML = `
+            <div class="bulk-item-title">${item.title}</div>
+            <div class="bulk-item-artist">${item.artist || "---"}</div>
+            <div class="bulk-item-path">${item.path}</div>
+        `;
 
         div.appendChild(chk);
         div.appendChild(info);
@@ -12175,6 +13720,7 @@ function renderExistingLinks() {
 
 /**
  * V58: Unified rendering of linked items across all edit modals (Main, Multitrack, WebLink)
+ * Modified to support browser-style tabs and stable sorting (V60)
  */
 function renderModalLinkedItems() {
     // We try to fill all potential display areas
@@ -12184,27 +13730,134 @@ function renderModalLinkedItems() {
         document.getElementById("web-link-linked-items-display") // Future-proofing web modal if needed
     ];
 
+    // Determine the UID of the item currently being edited
+    let activeUid = null;
+    if (document.getElementById("media-modal")?.hasAttribute("open")) {
+        // Can be either library or setlist
+        if (lastEditContext === 'library' && typeof editingLocalIndex !== 'undefined' && editingLocalIndex !== null) {
+            activeUid = localFiles[editingLocalIndex]?.uid;
+        } else if (typeof editingIndex !== 'undefined' && editingIndex !== null) {
+            const track = currentTrackList.find(t => t.originalIndex === editingIndex);
+            if (track) activeUid = track.uid;
+        }
+    } else if (document.getElementById("modal-multitrack")?.hasAttribute("open") && typeof editingLocalIndex !== 'undefined' && editingLocalIndex !== null) {
+        activeUid = localFiles[editingLocalIndex]?.uid;
+    } else if (document.getElementById("modal-web-link")?.hasAttribute("open") && typeof currentWebLinkIndex !== 'undefined' && currentWebLinkIndex !== -1) {
+        activeUid = webLinks[currentWebLinkIndex]?.uid;
+    }
+
     containers.forEach(container => {
         if (!container) return;
         container.innerHTML = "";
 
-        if (!currentEditingLinkedIds || currentEditingLinkedIds.length === 0) {
+        console.log("[DEBUG TABS] container:", container.id, "activeUid:", activeUid, "currentEditingLinkedIds:", currentEditingLinkedIds);
+
+        const uidsToRender = [];
+        const seenItems = new Set();
+        
+        // Collect active + linked UIDs to form the full interconnect family
+        let allFamilyUids = [];
+        
+        if (!window.isNavigatingLinkedMedia) {
+            if (activeUid) allFamilyUids.push(activeUid);
+            if (currentEditingLinkedIds) {
+                currentEditingLinkedIds.forEach(id => {
+                    if (!allFamilyUids.includes(id)) {
+                        allFamilyUids.push(id);
+                    }
+                });
+            }
+            window.currentFamilySession = [...allFamilyUids];
+        } else {
+            // We are navigating between tabs. Enforce the session family to prevent disappearing tabs!
+            if (window.currentFamilySession) {
+                allFamilyUids = [...window.currentFamilySession];
+                if (activeUid && !allFamilyUids.includes(activeUid)) {
+                    allFamilyUids.push(activeUid);
+                    window.currentFamilySession.push(activeUid);
+                }
+                
+                // Override the current item's linked_ids to maintain bidirectionality in JS memory
+                if (activeUid) {
+                    currentEditingLinkedIds = allFamilyUids.filter(id => id !== activeUid);
+                    const activeItem = getLinkedItem(activeUid);
+                    if (activeItem) {
+                        activeItem.linked_ids = [...currentEditingLinkedIds];
+                    }
+                }
+            } else {
+                if (activeUid) allFamilyUids.push(activeUid);
+            }
+        }
+        
+        // Resolve items and details
+        const familyItems = [];
+        allFamilyUids.forEach(uid => {
+            const item = getLinkedItem(uid);
+            if (item) {
+                familyItems.push({ uid, item });
+            }
+        });
+        
+        // V60: Sort the family in an ABSOLUTELY STABLE order:
+        // 1- Multipistes, 2- Audios local, 3- Vidéos Locales, 4- YouTube Web, 5- Web Links
+        familyItems.sort((a, b) => {
+            const getSortOrder = (entry) => {
+                const uid = entry.uid;
+                const item = entry.item;
+                if (uid.startsWith('lib')) {
+                    const type = (typeof getLocalType === 'function') ? getLocalType(item) : 'audio';
+                    if (type === 'multitrack') return 1;
+                    if (type === 'audio') return 2;
+                    if (type === 'video') return 3;
+                    return 3;
+                } else if (uid.startsWith('set') || uid.startsWith('web')) {
+                    const canonical = resolveCanonicalType(item.type, item.url);
+                    if (canonical === 'youtube') return 4;
+                    return 5;
+                }
+                return 9;
+            };
+            
+            const valA = getSortOrder(a);
+            const valB = getSortOrder(b);
+            if (valA !== valB) {
+                return valA - valB;
+            }
+            const titleA = (a.item.title || "").toLowerCase();
+            const titleB = (b.item.title || "").toLowerCase();
+            return titleA.localeCompare(titleB);
+        });
+
+        // Unique filtration in stable order to populate uidsToRender
+        familyItems.forEach(entry => {
+            const identifier = entry.item.url || entry.item.path || entry.uid;
+            if (!seenItems.has(identifier)) {
+                seenItems.add(identifier);
+                uidsToRender.push(entry.uid);
+            }
+        });
+
+        console.log("[DEBUG TABS] Final uidsToRender for", container.id, ":", uidsToRender);
+
+        if (uidsToRender.length === 0) {
             container.style.display = "none";
             return;
         }
 
         container.style.display = "flex";
         
-        currentEditingLinkedIds.forEach(uid => {
+        uidsToRender.forEach(uid => {
             const item = getLinkedItem(uid);
             if (!item) return;
 
+            const isActive = (uid === activeUid);
             const badge = document.createElement("div");
-            badge.className = "link-pill"; 
-            badge.style = "background:rgba(187,134,252,0.1); border:1px solid rgba(187,134,252,0.3); padding:3px 10px; border-radius:15px; font-size:0.75em; color:#bb86fc; display:flex; align-items:center; gap:8px; cursor:default; position:relative;";
-            badge.title = item.artist ? `${item.artist} - ${item.title}` : item.title;
+            badge.className = "modal-tab" + (isActive ? " active" : ""); 
             
-            // Icon logic (YouTube vs others)
+            badge.title = isActive ? (currentLang === 'fr' ? "Média actuellement en cours d'édition" : "Media currently being edited") : (item.artist ? `${item.artist} - ${item.title}` : item.title);
+            
+            // Icon logic using our canonical helper or local type checks
             let iconClass = "ph ph-link";
             if (uid.startsWith('set')) iconClass = "ph ph-youtube-logo";
             else if (uid.startsWith('lib')) {
@@ -12213,40 +13866,89 @@ function renderModalLinkedItems() {
                 else if (type === 'multitrack') iconClass = "ph ph-stack-simple";
                 else iconClass = "ph ph-music-notes";
             } else if (uid.startsWith('web')) {
-                iconClass = "ph ph-globe";
+                const canonical = resolveCanonicalType(item.type, item.url);
+                if (canonical === 'youtube') iconClass = "ph ph-youtube-logo";
+                else if (canonical === 'spotify') iconClass = "ph ph-spotify-logo";
+                else if (canonical === 'songsterr') iconClass = "ph ph-guitar";
+                else if (canonical === 'moises') iconClass = "ph ph-scissors";
+                else if (canonical === 'lesson') iconClass = "ph ph-graduation-cap";
+                else iconClass = "ph ph-globe";
             }
 
-            // Sync Status (Cloud Icon)
-            const isShared = item.shared_with_group === true || item.shared_with_group === "true";
-            const cloudIconClass = isShared ? "ph-fill ph-cloud-arrow-up" : "ph ph-cloud-slash";
-            const cloudColor = isShared ? "#03DAC6" : "#666";
-            const cloudTitle = isShared ? (currentLang === 'fr' ? 'Partagé avec le groupe' : 'Shared with group') : (currentLang === 'fr' ? 'Non partagé' : 'Not shared');
+            if (isActive) {
+                badge.innerHTML = `
+                    <i class="${iconClass}"></i> 
+                    <span class="badge-title" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.title}</span>
+                `;
+            } else {
+                // Determine label type based on context
+                let typeLabel = "library";
+                if (uid.startsWith('web')) {
+                    const canonical = resolveCanonicalType(item.type, item.url);
+                    typeLabel = (canonical === 'youtube') ? "youtube" : "web_links";
+                }
+                const actualIndex = item.originalIndex;
 
-            badge.innerHTML = `
-                <i class="${iconClass}"></i> 
-                <span class="badge-title" style="max-width:110px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer;" title="(Cliquez pour ouvrir)">${item.title}</span>
-                <i class="ph ${cloudIconClass}" 
-                   style="color:${cloudColor}; cursor:pointer; font-size:1.2em; margin-left:5px;" 
-                   title="${cloudTitle}"
-                   onclick="toggleSharedForUID('${uid}', event)"></i>
-            `;
-            
-            // Navigation click on badge text
-            const textSpan = badge.querySelector(".badge-title");
-            if (textSpan) {
-                textSpan.onclick = (e) => {
-                    e.stopPropagation();
-                    openLinkedMedia(uid);
-                };
+                badge.innerHTML = `
+                    <i class="${iconClass}" style="cursor:pointer;"></i> 
+                    <span class="badge-title" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer;" title="(Cliquer pour ouvrir)">${item.title}</span>
+                    <span class="modal-tab-close" title="${currentLang === 'fr' ? 'Délier ce média' : 'Unlink this media'}">×</span>
+                `;
+                
+                // Navigation click on badge text/icon
+                const textSpan = badge.querySelector(".badge-title");
+                if (textSpan) {
+                    textSpan.onclick = (e) => {
+                        e.stopPropagation();
+                        openLinkedMedia(uid);
+                    };
+                }
+                const iconElem = badge.querySelector("i");
+                if (iconElem) {
+                    iconElem.onclick = (e) => {
+                        e.stopPropagation();
+                        openLinkedMedia(uid);
+                    };
+                }
+
+                // Delete click
+                const closeBtn = badge.querySelector(".modal-tab-close");
+                if (closeBtn) {
+                    closeBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        toggleMediaLink(typeLabel, actualIndex);
+                    };
+                }
             }
             
             container.appendChild(badge);
         });
+
+        // V60: Add the "+" Browser-style Add Tab Button
+        const addBtn = document.createElement("div");
+        addBtn.className = "modal-tab-add";
+        addBtn.innerHTML = '<i class="ph ph-plus"></i>';
+        addBtn.title = currentLang === 'fr' ? "Lier un autre média à cette famille..." : "Link another media to this family...";
+        
+        addBtn.onclick = (e) => {
+            e.stopPropagation();
+            if (lastEditContext === 'library') {
+                openMediaLinker('library');
+            } else {
+                openMediaLinkerFromEdit();
+            }
+        };
+        
+        container.appendChild(addBtn);
     });
 }
 
 function openLinkedMedia(uid) {
     console.log("[LINK_NAV] Navigation vers UID:", uid);
+    
+    // V60: Preserve current session links during tabbed navigation
+    window.isNavigatingLinkedMedia = true;
+    
     // Close current modals first to avoid stacking issues or confusion
     if (document.getElementById("media-modal")?.hasAttribute("open")) {
         document.getElementById("media-modal").close();
@@ -12260,11 +13962,25 @@ function openLinkedMedia(uid) {
 
     // Delay the opening to let the browser resolve the DOM close state
     setTimeout(() => {
-        // Find item by UUID
-        if (uid.startsWith('set:') || uid.startsWith('set_')) {
-            const track = currentTrackList.find(t => t.uid === uid);
-            if (track) openEditModal(track.originalIndex);
-            else console.error("Track not found for UID:", uid);
+        // Find item by UUID robustly in unified databases
+        if (uid.startsWith('set:') || uid.startsWith('set_') || uid.startsWith('web:') || uid.startsWith('web_')) {
+            const index = webLinks.findIndex(t => t.uid === uid);
+            if (index !== -1) {
+                const item = webLinks[index];
+                const isYoutube = item.open_mode === 'iframe' || 
+                                  (item.type && item.type.toLowerCase().includes('youtube')) ||
+                                  (item.url && (item.url.includes("youtube.com") || item.url.includes("youtu.be")));
+                
+                if (isYoutube) {
+                    // Open in main YouTube edit modal using originalIndex
+                    openEditModal(item.originalIndex);
+                } else {
+                    // Open in web link modal
+                    openWebLinkModal(index);
+                }
+            } else {
+                console.error("Web/Set link not found in unified database for UID:", uid);
+            }
         } else if (uid.startsWith('lib:') || uid.startsWith('lib_')) {
             const index = localFiles.findIndex(t => t.uid === uid);
             if (index !== -1) {
@@ -12276,11 +13992,10 @@ function openLinkedMedia(uid) {
             } else {
                 console.error("Local file not found for UID:", uid);
             }
-        } else if (uid.startsWith('web:') || uid.startsWith('web_')) {
-            const index = webLinks.findIndex(t => t.uid === uid);
-            if (index !== -1) openWebLinkModal(index);
-            else console.error("Web link not found for UID:", uid);
         }
+        
+        // Reset flag after UI loads
+        window.isNavigatingLinkedMedia = false;
     }, 50);
 }
 

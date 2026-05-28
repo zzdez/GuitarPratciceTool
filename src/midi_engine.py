@@ -246,7 +246,12 @@ class BleakProvider(MidiProvider):
         self.log("BLE Engine Stopped.")
 
     def get_ports(self):
-        return [d.name for d in self.discovered_devices if d.name]
+        ports = [d.name for d in self.discovered_devices if d.name]
+        # Si le périphérique est déjà connecté en BLE, il n'émet plus de trames d'advertising actives
+        # et n'apparaîtrait plus dans le scan passif de découvrabilité. On l'injecte donc impérativement.
+        if self.is_connected and self.target_name and self.target_name not in ports:
+            ports.append(self.target_name)
+        return ports
 
     def _run_async_loop(self):
         self.log("Async Loop Thread Entering...")
@@ -390,6 +395,7 @@ class MidiManager:
         self.on_config_change = on_config_change
         self.current_provider = None
         self.current_mode = None
+        self.active_providers = []  # Liste des providers physiques actifs en simultane
         
         # Output ports state
         self._active_output_ports = []
@@ -433,58 +439,117 @@ class MidiManager:
             
             time.sleep(5.0)
 
+    def switch_composite(self, physical_devices):
+        """
+        Démarrage simultané de plusieurs providers physiques.
+        physical_devices: list of dict, ex: [{"type": "BLE", "name": "AIRSTEP"}, {"type": "USB", "name": "FS1-WL"}]
+        """
+        print(f"[MIDI] Commutation Composite: {physical_devices}")
+        
+        # 1. Arrêter proprement tous les anciens providers actifs
+        for provider in self.active_providers:
+            print(f"[MIDI] Arrêt du provider: {provider.__class__.__name__} ({provider.target_name})")
+            try:
+                provider.stop()
+            except Exception as e:
+                print(f"[MIDI] Erreur lors de l'arrêt du provider: {e}")
+        
+        self.active_providers = []
+        self.current_provider = None
+        
+        # 2. Instancier les nouveaux providers correspondants
+        for dev in physical_devices:
+            dev_type = dev.get("type")
+            dev_name = dev.get("name")
+            if not dev_type or not dev_name or dev_name in ("None", "Virtuel", "Virtual", ""):
+                continue
+                
+            print(f"[MIDI] Instanciation du provider Composite: Type={dev_type}, Nom={dev_name}")
+            if dev_type == "BLE":
+                provider = BleakProvider(dev_name, self.callback)
+            else:
+                provider = MidoProvider(dev_name, self.callback)
+                
+            self.active_providers.append(provider)
+            
+            # Définir le premier comme current_provider pour la compatibilité ascendante
+            if not self.current_provider:
+                self.current_provider = provider
+        
+        # 3. Démarrer tous les providers actifs
+        for provider in self.active_providers:
+            try:
+                provider.start()
+                print(f"[MIDI] Provider démarré pour '{provider.target_name}'")
+            except Exception as e:
+                print(f"[MIDI] Erreur de démarrage pour '{provider.target_name}': {e}")
+
     def switch_mode(self, mode, device_name):
         """
         Radical switch: Kill old, start new.
-        Persists callback.
+        Persists callback. Encapsulated in switch_composite for unification.
         """
         self.log(f"Switching Mode to {mode} / Target: {device_name}")
-        
-        # 1. Kill current
-        if self.current_provider:
-            self.log(f"Stopping current provider: {self.current_provider.__class__.__name__}")
-            try:
-                self.current_provider.stop()
-            except Exception as e:
-                self.log(f"Error stopping provider: {e}")
-            self.current_provider = None
-            
-        # 2. Instantiate new
-        if mode == "BLE":
-            self.current_provider = BleakProvider(device_name, self.callback)
-        else:
-            self.current_provider = MidoProvider(device_name, self.callback)
-            
         self.current_mode = mode
         
-        # 3. Start
-        try:
-            self.current_provider.start()
-            self.log("New provider started.")
-        except Exception as e:
-            self.log(f"Error starting provider: {e}")
+        is_virtual_or_none = (
+            mode in (None, "None", "Virtuel", "Virtual") or 
+            device_name in (None, "None", "Virtuel", "Virtual", "")
+        )
+        
+        if is_virtual_or_none:
+            self.switch_composite([])
+        else:
+            self.switch_composite([{"type": mode, "name": device_name}])
 
     def get_ports(self):
-        if self.current_provider:
-            return self.current_provider.get_ports()
-        return []
+        ports = []
+        for provider in self.active_providers:
+            try:
+                ports.extend(provider.get_ports())
+            except: pass
+        return list(set(ports))
 
     def set_scanning(self, enabled):
-        if self.current_provider:
-            self.current_provider.set_scanning(enabled)
+        for provider in self.active_providers:
+            try:
+                provider.set_scanning(enabled)
+            except: pass
 
     def force_rescan(self):
-        if self.current_provider:
-             self.current_provider.force_rescan()
+        for provider in self.active_providers:
+            try:
+                provider.force_rescan()
+            except: pass
 
     @property
     def is_connected(self):
-        return self.current_provider.is_connected if self.current_provider else False
+        if not self.active_providers:
+            return False
+        return any(provider.is_connected for provider in self.active_providers)
 
     @property
     def active_device_name(self):
-        """Returns the target name of the current provider"""
-        return self.current_provider.target_name if self.current_provider else None
+        """Returns the target names of all active providers"""
+        if not self.active_providers:
+            return None
+        connected_names = [p.target_name for p in self.active_providers if p.is_connected]
+        if connected_names:
+            return ", ".join(connected_names)
+        # Fallback aux noms cibles configurés s'ils ne sont pas encore connectés
+        return ", ".join([p.target_name for p in self.active_providers])
+
+    def get_providers_status(self):
+        """Retourne la liste des périphériques gérés par les providers actifs et leur statut de connexion."""
+        status_list = []
+        for provider in self.active_providers:
+            dev_type = "BLE" if "BleakProvider" in provider.__class__.__name__ else "USB"
+            status_list.append({
+                "name": provider.target_name,
+                "type": dev_type,
+                "connected": provider.is_connected
+            })
+        return status_list
 
     # --- Output Management (Instance Methods) ---
     

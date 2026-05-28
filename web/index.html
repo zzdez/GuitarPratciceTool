@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MIDI-KBD Control Studio</title>
+    <title>GuitarPracticeTool</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://www.youtube.com/iframe_api"></script>
     <script src="lib/wavesurfer.min.js"></script>
@@ -21,7 +21,7 @@
         
         <!-- COL 1: Logo -->
         <div class="logo" style="display: flex; align-items: center; gap: 10px; min-width: 210px; flex-shrink: 0;">
-            <img src="/assets/logo.png" alt="MidiKbd Control Studio" id="main-logo" style="height: 32px; width: auto;">
+            <img src="/assets/logo.png" alt="GuitarPracticeTool" id="main-logo" style="height: 50px; width: auto;">
             <span id="header-device-status" data-i18n="web.status_waiting" style="font-size: 0.8em; color: #888; font-weight: normal;">○ En attente...</span>
         </div>
 
@@ -62,7 +62,6 @@
 
         <!-- COL 4: Status Bar / Buttons -->
         <div class="status-bar" style="display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; min-width: 300px; justify-content: flex-end; flex-shrink: 0;">
-            <button id="btn-remote-native" class="btn-icon" onclick="toggleNativeRemote()" data-i18n-title="web.btn_remote" title="Télécommande"><i class="ph ph-device-mobile"></i></button>
             <button id="btn-toggle-metronome" class="btn-icon" onclick="toggleMetronomeUI()" data-i18n-title="web.title_metronome" title="Métronome"><i class="ph ph-metronome"></i></button>
             <button id="btn-toggle-drum-machine" class="btn-icon" onclick="openDrumModal()" data-i18n-title="web.title_drum_machine" title="Boîte-Rythmes"><i class="ph ph-speaker-hifi"></i></button>
             <button id="btn-toggle-fretboard" class="btn-icon" onclick="toggleFretboard()" data-i18n-title="web.title_fretboard" title="Gammes"><i class="ph ph-grid-nine"></i></button>
@@ -85,6 +84,15 @@
             </button>
             <button id="btn-cockpit" class="btn-icon" onclick="toggleCockpitMode(true)" data-i18n-title="setlist.btn_cockpit_mode" title="Mode Live (Cockpit)" style="color:var(--accent); font-weight:bold;"><i class="ph ph-gauge"></i></button>
             <button id="btn-toggle-theater" class="btn-icon" onclick="toggleTheaterMode()" data-i18n-title="web.btn_theater" title="Théâtre"><i class="ph ph-corners-out"></i></button>
+            
+            <div class="active-device-container" style="display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.05); padding: 4px 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); margin-right: 5px;">
+                <button id="btn-remote-native" class="btn-icon" onclick="toggleNativeRemote()" data-i18n-title="web.btn_remote" title="Télécommande" style="font-size: 1.1em; color: var(--accent); padding: 0; background: transparent; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform 0.15s ease, color 0.15s ease;" onmouseover="this.style.transform='scale(1.15)'; this.style.color='white';" onmouseout="this.style.transform='scale(1)'; this.style.color='var(--accent)';">
+                    <i class="ph ph-device-mobile"></i>
+                </button>
+                <select id="select-active-device" onchange="changeActiveDevice(this.value)" style="background: transparent; color: white; border: none; font-size: 0.85em; font-weight: 500; cursor: pointer; outline: none; padding-right: 5px;">
+                    <!-- Injecté dynamiquement -->
+                </select>
+            </div>
             <span id="active-profile" data-i18n="web.profile_prefix" style="white-space: nowrap; font-size: 0.8em; color: #ccc;">Profil : Global</span>
             <button id="btn-settings" class="btn-icon" onclick="openSettingsModal()" data-i18n-title="web.btn_settings" title="Paramètres"><i class="ph ph-gear"></i></button>
         </div>
@@ -103,8 +111,37 @@
 
         <!-- COLONNE GAUCHE (70%) -->
         <section class="media-zone">
+            <!-- Écran d'attente Cockpit (V37) -->
+            <div id="media-placeholder" style="display:flex; flex-direction:column; align-items:center; justify-content:center; width:100%; height:100%; min-height:400px; background:#121212; color:#555; border-radius:8px; gap:16px; border: 1px solid rgba(255,255,255,0.03); box-sizing: border-box;">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 430" width="430" height="430" preserveAspectRatio="xMidYMid meet" id="placeholder-disc" style="content-visibility: visible;">
+                    <g transform="matrix(1,0,0,1,-35,-35)">
+                        <g transform="matrix(0.5621687173843384,0.8270225524902344,-0.8270225524902344,0.5621687173843384,285.7533874511719,-119.07474517822266)" opacity="1" style="display: block;">
+                            
+                            <!-- Le corps de la guitare de couleur accentuée (d'origine class="secondary") -->
+                            <g opacity="1" transform="matrix(1,0,0,1,221.31399536132812,103.38400268554688)">
+                                <path stroke-linecap="round" stroke-linejoin="round" fill="none" style="stroke: var(--accent); stroke-width: 8px;" d=" M8.62399959564209,122.45899963378906 C8.62399959564209,122.45899963378906 -17.649999618530273,136.57400512695312 -24.46500015258789,77.13300323486328 C-24.46500015258789,77.13300323486328 -41.816001892089844,124.15399932861328 -41.816001892089844,124.15399932861328 C-41.816001892089844,124.15399932861328 7.517000198364258,183.08299255371094 -61.481998443603516,259.33099365234375 C-61.481998443603516,259.33099365234375 -17.50200080871582,337.57501220703125 -17.50200080871582,337.57501220703125 C-17.50200080871582,337.57501220703125 27.437000274658203,249.33599853515625 62.39799880981445,301.29901123046875 C62.39799880981445,301.29901123046875 91.02200317382812,346.7650146484375 91.02200317382812,346.7650146484375 C91.02200317382812,346.7650146484375 112.85399627685547,270.39599609375 112.85399627685547,270.39599609375 C112.85399627685547,270.39599609375 54.856998443603516,202.8040008544922 98.68900299072266,164.4709930419922 C98.68900299072266,164.4709930419922 91.41000366210938,115.54299926757812 91.41000366210938,115.54299926757812 C91.41000366210938,115.54299926757812 61.3390007019043,187.64300537109375 43.45100021362305,139.7779998779297 M43.45100021362305,77.53099822998047 C43.45100021362305,77.53099822998047 8.621999740600586,77.53099822998047 8.621999740600586,77.53099822998047 M5.263000011444092,-21.290000915527344 C5.263000011444092,-21.290000915527344 -5.263000011444092,-21.290000915527344 -5.263000011444092,-21.290000915527344 M57.29199981689453,-21.290000915527344 C57.29199981689453,-21.290000915527344 46.76599884033203,-21.290000915527344 46.76599884033203,-21.290000915527344 M43.45100021362305,130.7239990234375 C43.45100021362305,130.7239990234375 8.621999740600586,130.7239990234375 8.621999740600586,130.7239990234375 M57.4379997253418,0 C57.4379997253418,0 46.9119987487793,0 46.9119987487793,0 M5.263000011444092,0 C5.263000011444092,0 -5.263000011444092,0 -5.263000011444092,0"/>
+                            </g>
+                            
+                            <!-- Le manche de la guitare (d'origine class="primary", avec lueur d'accentuation en-dessous) -->
+                            <g opacity="1" transform="matrix(1,0,0,1,299.010986328125,360.9429931640625)">
+                                <!-- Silhouette lumineuse diffuse (Glow) -->
+                                <path stroke-linecap="round" stroke-linejoin="round" fill="none" stroke="var(--accent)" stroke-opacity="0.18" stroke-width="18" d=" M-77.33599853515625,-48.84000015258789 C-77.33599853515625,-48.84000015258789 -25.983999252319336,-48.84000015258789 -25.983999252319336,-48.84000015258789 C-25.983999252319336,-48.84000015258789 -25.983999252319336,-71.30799865722656 -25.983999252319336,-71.30799865722656 C-25.983999252319336,-71.30799865722656 -77.33599853515625,-71.30799865722656 -77.33599853515625,-71.30799865722656 C-77.33599853515625,-71.30799865722656 -77.33599853515625,-48.84000015258789 -77.33599853515625,-48.84000015258789z M-34.24700164794922,-233.22000122070312 C-34.24700164794922,-233.22000122070312 -34.24700164794922,-71.30799865722656 -34.24700164794922,-71.30799865722656 M-69.072998046875,-71.30799865722656 C-69.072998046875,-71.30799865722656 -69.072998046875,-233.22000122070312 -69.072998046875,-233.22000122070312 M-30.959999084472656,-297.17401123046875 C-30.959999084472656,-297.17401123046875 -30.8799991607666,-247.47900390625 -30.8799991607666,-247.47900390625 C-30.8799991607666,-247.47900390625 -34.24700164794922,-233.2169952392578 -34.24700164794922,-233.2169952392578 C-34.24700164794922,-233.2169952392578 -69.07599639892578,-233.2169952392578 -69.07599639892578,-233.2169952392578 C-69.07599639892578,-233.2169952392578 -72.43399810791016,-246.43800354003906 -72.43399810791016,-246.43800354003906 C-72.43399810791016,-246.43800354003906 -72.43399810791016,-296.70599365234375 -72.43399810791016,-296.70599365234375 C-72.43399810791016,-296.70599365234375 -60.34400177001953,-281.4840087890625 -60.34400177001953,-281.4840087890625 C-56.07400131225586,-276.1080017089844 -47.917999267578125,-276.0840148925781 -43.61600112915039,-281.4339904785156 C-43.61600112915039,-281.4339904785156 -30.959999084472656,-297.17401123046875 -30.959999084472656,-297.17401123046875z M-77.33599853515625,-12.255999565124512 C-77.33599853515625,-12.255999565124512 -25.983999252319336,-12.255999565124512 -25.983999252319336,-12.255999565124512 M1.49399995803833,27.832000732421875 C1.49399995803833,27.832000732421875 1.503999948501587,27.832000732421875 1.503999948501587,27.832000732421875 M-0.004999999888241291,0 C-0.004999999888241291,0 0.004999999888241291,0 0.004999999888241291,0"/>
+                                
+                                <!-- Tracé principal visible en blanc éclatant -->
+                                <path stroke-linecap="round" stroke-linejoin="round" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="6" d=" M-77.33599853515625,-48.84000015258789 C-77.33599853515625,-48.84000015258789 -25.983999252319336,-48.84000015258789 -25.983999252319336,-48.84000015258789 C-25.983999252319336,-48.84000015258789 -25.983999252319336,-71.30799865722656 -25.983999252319336,-71.30799865722656 C-25.983999252319336,-71.30799865722656 -77.33599853515625,-71.30799865722656 -77.33599853515625,-71.30799865722656 C-77.33599853515625,-71.30799865722656 -77.33599853515625,-48.84000015258789 -77.33599853515625,-48.84000015258789z M-34.24700164794922,-233.22000122070312 C-34.24700164794922,-233.22000122070312 -34.24700164794922,-71.30799865722656 -34.24700164794922,-71.30799865722656 M-69.072998046875,-71.30799865722656 C-69.072998046875,-71.30799865722656 -69.072998046875,-233.22000122070312 -69.072998046875,-233.22000122070312 M-30.959999084472656,-297.17401123046875 C-30.959999084472656,-297.17401123046875 -30.8799991607666,-247.47900390625 -30.8799991607666,-247.47900390625 C-30.8799991607666,-247.47900390625 -34.24700164794922,-233.2169952392578 -34.24700164794922,-233.2169952392578 C-34.24700164794922,-233.2169952392578 -69.07599639892578,-233.2169952392578 -69.07599639892578,-233.2169952392578 C-69.07599639892578,-233.2169952392578 -72.43399810791016,-246.43800354003906 -72.43399810791016,-246.43800354003906 C-72.43399810791016,-246.43800354003906 -72.43399810791016,-296.70599365234375 -72.43399810791016,-296.70599365234375 C-72.43399810791016,-296.70599365234375 -60.34400177001953,-281.4840087890625 -60.34400177001953,-281.4840087890625 C-56.07400131225586,-276.1080017089844 -47.917999267578125,-276.0840148925781 -43.61600112915039,-281.4339904785156 C-43.61600112915039,-281.4339904785156 -30.959999084472656,-297.17401123046875 -30.959999084472656,-297.17401123046875z M-77.33599853515625,-12.255999565124512 C-77.33599853515625,-12.255999565124512 -25.983999252319336,-12.255999565124512 -25.983999252319336,-12.255999565124512 M1.49399995803833,27.832000732421875 C1.49399995803833,27.832000732421875 1.503999948501587,27.832000732421875 1.503999948501587,27.832000732421875 M-0.004999999888241291,0 C-0.004999999888241291,0 0.004999999888241291,0 0.004999999888241291,0"/>
+                            </g>
+                            
+                        </g>
+                    </g>
+                </svg>
+                <div style="text-align:center;">
+                    <h3 style="color:#888; margin:0; font-size:1.05rem; font-weight:600;" data-i18n="web.lbl_no_media_title">Aucun média actif</h3>
+                    <p style="color:#444; margin:5px 0 0 0; font-size:0.78rem;" data-i18n="web.lbl_no_media_desc">Sélectionnez un morceau dans la liste pour démarrer la lecture</p>
+                </div>
+            </div>
+
             <!-- Lecteur -->
-            <div id="video-container" style="position:relative;">
+            <div id="video-container" style="position:relative; display:none;">
                 <div id="player"></div>
                 <iframe id="generic-player" style="width:100%; height:100%; display:none; border:none;"
                     allowfullscreen></iframe>
@@ -741,19 +778,19 @@
 
             <!-- TAB NAVIGATION -->
             <div class="nav-tabs">
-                <button id="tab-library" class="active" onclick="switchView('library')"><i class="ph ph-youtube-logo"
+                <button id="tab-library" draggable="true" class="active" onclick="switchView('library')"><i class="ph ph-youtube-logo"
                         style="font-size:1.1em; vertical-align:middle; margin-right:5px;"></i> <span
                         data-i18n="web.tab_library">YouTube</span></button>
-                <button id="tab-local" onclick="switchView('local')"><i class="ph ph-music-notes"
+                <button id="tab-local" draggable="true" onclick="switchView('local')"><i class="ph ph-music-notes"
                         style="font-size:1.1em; vertical-align:middle; margin-right:5px;"></i> <span
                         data-i18n="web.tab_local">Fichiers Locaux</span></button>
-                <button id="tab-setlists" onclick="switchView('setlists')"><i class="ph ph-playlist"
+                <button id="tab-setlists" draggable="true" onclick="switchView('setlists')"><i class="ph ph-playlist"
                         style="font-size:1.1em; vertical-align:middle; margin-right:5px;"></i> <span
                         data-i18n="web.tab_setlists">Setlists Live</span></button>
-                <button id="tab-web-links" onclick="switchView('web-links')"><i class="ph ph-link"
+                <button id="tab-web-links" draggable="true" onclick="switchView('web-links')"><i class="ph ph-link"
                         style="font-size:1.1em; vertical-align:middle; margin-right:5px;"></i> <span
                         data-i18n="web.tab_web_links">Autres Liens</span></button>
-                <button id="tab-apps" onclick="switchView('apps')"><i class="ph ph-windows-logo"
+                <button id="tab-apps" draggable="true" onclick="switchView('apps')"><i class="ph ph-windows-logo"
                         style="font-size:1.1em; vertical-align:middle; margin-right:5px;"></i> <span
                         data-i18n="web.tab_apps">Applications</span></button>
             </div>
@@ -761,11 +798,13 @@
 <div id="view-library" class="view-container">
 
                 <div class="sidebar-section">
-                    <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
-                        Setlist
-                        <button class="btn-icon" onclick="openAddModal()" data-i18n-title="web.btn_add_youtube"
-                            title="Ajouter">+</button>
+                    <div class="section-title">
+                        <span data-i18n="web.menu_setlist">Vidéos YouTube / Web</span>
                     </div>
+
+                    <button class="btn-primary-add" onclick="openAddModal()">
+                        <i class="ph ph-plus-circle"></i> <span data-i18n="web.btn_add_youtube_web">Ajouter une Vidéo YouTube / Web</span>
+                    </button>
 
                     <!-- Search / Filters -->
                     <div class="search-filters" style="align-items: center;">
@@ -824,10 +863,13 @@
             <!-- VIEW: APPS -->
             <div id="view-apps" class="view-container" style="display:none;">
                 <div class="sidebar-section">
-                    <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
-                        <span data-i18n="web.lbl_launcher">Lanceur</span>
-                        <button class="btn-icon" onclick="openAppModal()">+</button>
+                    <div class="section-title">
+                        <span data-i18n="web.lbl_launcher">Raccourcis Logiciels PC</span>
                     </div>
+
+                    <button class="btn-primary-add" onclick="openAppModal()">
+                        <i class="ph ph-windows-logo"></i> <span data-i18n="web.btn_add_windows_app">Ajouter une Application Windows</span>
+                    </button>
 
                     <div id="apps-container" class="app-grid-large">
                         <!-- Apps JS -->
@@ -838,10 +880,13 @@
             <!-- VIEW: WEB LINKS -->
             <div id="view-web-links" class="view-container" style="display:none;">
                 <div class="sidebar-section">
-                    <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
+                    <div class="section-title">
                         <span data-i18n="web.title_web_links">Autres Liens (Web)</span>
-                        <button class="btn-icon" onclick="openWebLinkModal()" title="Ajouter un lien web">+</button>
                     </div>
+
+                    <button class="btn-primary-add" onclick="openWebLinkModal()">
+                        <i class="ph ph-link"></i> <span data-i18n="web.btn_add_external_link">Ajouter un Lien Web Externe</span>
+                    </button>
 
                     <!-- Web Links Filters -->
                     <div class="search-filters" style="align-items: center;">
@@ -910,19 +955,21 @@
                 </div>
 
                 <div class="sidebar-section">
-                    <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
-                        Fichiers Locaux
-                        <div style="display:flex; gap:5px;">
-                            <button class="btn-icon" onclick="openLibraryManagerModal()"
-                                title="Gérer la Bibliothèque" data-i18n-title="web.btn_manage_library"><i
-                                    class="ph ph-books"></i></button>
-                            <button class="btn-icon" onclick="addLocalMultitrack()"
-                                title="Ajouter un Dossier Multipiste" data-i18n-title="web.hint_add_multitrack"><i
-                                    class="ph ph-folder-plus"></i></button>
-                            <button class="btn-icon" onclick="addLocalFile()" title="Ajouter un Fichier"
-                                data-i18n-title="web.hint_add_file">+</button>
-                        </div>
+                    <div class="section-title">
+                        <span data-i18n="web.tab_local">Médias locaux</span>
                     </div>
+
+                    <div class="action-grid-local">
+                        <button class="btn-action-add" onclick="addLocalFile()">
+                            <i class="ph ph-music-note"></i> <span data-i18n="web.btn_add_local_file">Fichier Simple (Audio/Vidéo)</span>
+                        </button>
+                        <button class="btn-action-add" onclick="addLocalMultitrack()">
+                            <i class="ph ph-folders"></i> <span data-i18n="web.btn_add_local_multitrack">Dossier Stems (Multipiste)</span>
+                        </button>
+                    </div>
+                    <button class="btn-action-manage" onclick="openLibraryManagerModal()">
+                        <i class="ph ph-books"></i> <span data-i18n="web.btn_manage_local_library">Gérer la Bibliothèque & Actions en masse</span>
+                    </button>
 
                     <!-- Local Filters -->
                     <div class="search-filters" style="align-items: center;">
@@ -981,10 +1028,13 @@
             <!-- VIEW: SETLISTS V2 -->
             <div id="view-setlists" class="view-container" style="display:none;">
                 <div class="sidebar-section">
-                    <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
+                    <div class="section-title">
                         <span data-i18n="web.title_setlists">Setlists Live</span>
-                        <button class="btn-icon" onclick="openNewSetlistModal()" data-i18n-title="web.btn_add_setlist" title="Créer une Setlist">+</button>
                     </div>
+
+                    <button class="btn-primary-add" onclick="openNewSetlistModal()">
+                        <i class="ph ph-playlist"></i> <span data-i18n="web.btn_create_live_setlist">Créer une Setlist Live</span>
+                    </button>
 
                     <!-- Liste des Setlists -->
                     <div id="setlists-v2-list" class="setlist-grid" style="margin-top:10px;">
@@ -1158,13 +1208,14 @@
 
 
 
-    <!-- MULTITRACK MODAL -->
     <dialog id="modal-multitrack">
         <div class="modal-header">
             <h3 data-i18n="web.modal_mt_title">Éditer Dossier Multipiste</h3>
             <button onclick="closeMultitrackModal()" class="btn-close">×</button>
         </div>
         <div class="modal-body">
+            <!-- Browser-style Tabs Bar (V60) -->
+            <div id="mt-linked-items-display" class="modal-tabs-bar"></div>
             <!-- ART PREVIEW WITH VERTICAL SLIDERS -->
             <div class="modal-media-stack">
                 <!-- Volume (Left) -->
@@ -1223,25 +1274,31 @@
                         <button class="btn-secondary" style="padding:2px 6px; font-size:0.75em; height:24px; border-color:#444;" onclick="relocateFromEdit('move')" title="Déplacer vers..." data-i18n-title="web.btn_move_to">
                             <i class="ph ph-arrows-out-cardinal" style="font-size:1.1em;"></i>
                         </button>
+                        <button class="btn-secondary" style="padding:2px 6px; font-size:0.75em; height:24px; border-color:#444;" onclick="openPhysicalRenameModal()" title="Renommer physiquement..." data-i18n-title="web.btn_physical_rename">
+                            <i class="ph ph-textbox" style="font-size:1.1em;"></i>
+                        </button>
                     </div>
                 </div>
 
-                <label data-i18n="web.lbl_title">Titre</label>
-                <div style="display:flex; gap:10px;">
-                    <input type="text" id="mt-title" style="flex:1;">
-                    <button class="btn-secondary" onclick="openMediaLinker('library')"
-                        title="Lier un média" data-i18n-title="web.btn_link_media">
-                        <i class="ph ph-link-simple"></i>
-                    </button>
-                    <button class="btn-secondary" onclick="autoTagMultitrack()"
-                        title="Rechercher sur MusicBrainz/YouTube" data-i18n-title="web.hint_autotag">🔍
-                        Auto-Tag</button>
-                    <button id="btn-edit-shared-mt" class="btn-secondary" onclick="toggleEditShared()" title="Partager avec le Groupe" style="color: #666;" data-i18n-title="web.hint_share_group">
-                        <i class="ph ph-cloud-arrow-up"></i>
-                    </button>
+                <div class="zone-title" style="display:flex; gap:10px; align-items:flex-end; margin-bottom:10px;">
+                    <div style="flex:1; min-width: 0;">
+                        <label data-i18n="web.lbl_title">Titre</label>
+                        <div style="display:flex; gap:10px;">
+                            <input type="text" id="mt-title" style="flex:1;">
+                            <button class="btn-secondary" onclick="openMediaLinker('library')"
+                                title="Lier un média" data-i18n-title="web.btn_link_media" style="display:none;">
+                                <i class="ph ph-link-simple"></i>
+                            </button>
+                            <button class="btn-secondary" onclick="autoTagMultitrack()"
+                                title="Rechercher sur MusicBrainz/YouTube" data-i18n-title="web.hint_autotag">🔍
+                                Auto-Tag</button>
+                            <button id="btn-edit-shared-mt" class="btn-secondary" onclick="toggleEditShared()" title="Partager avec le Groupe" style="color: #666;" data-i18n-title="web.hint_share_group">
+                                <i class="ph ph-cloud-arrow-up"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <button class="btn-secondary" onclick="openNotesDescModal('mt-notes', null)" style="flex-shrink:0;" data-i18n="web.btn_notes_desc">Notes & Desc</button>
                 </div>
-                <!-- V61: Display linked items in Multitrack modal -->
-                <div id="mt-linked-items-display" style="display:flex; flex-wrap:wrap; gap:8px; margin-top: 5px;"></div>
 
                 <div class="row-inputs">
                     <div class="col">
@@ -1343,18 +1400,17 @@
                 </div>
 
 
-                <label data-i18n="web.lbl_notes">Notes</label>
-                <textarea id="mt-notes" rows="3"></textarea>
+                <textarea id="mt-notes" style="display:none;"></textarea>
             </div>
         </div>
         <div class="modal-footer">
+            <button class="btn-text" onclick="closeMultitrackModal()" data-i18n="web.btn_cancel">Annuler</button>
             <button class="btn-primary" onclick="saveMultitrackItem()" data-i18n="web.btn_save">Sauvegarder</button>
         </div>
     </dialog>
 
     <!-- LOCAL MEDIA MODAL (AUDIO STANDARD) -->
 
-    <!-- MEDIA MODAL -->
     <dialog id="media-modal">
         <div class="modal-header">
             <h3 data-i18n="web.modal_youtube_title">Ajouter / Modifier un Média</h3>
@@ -1362,6 +1418,8 @@
         </div>
 
         <div class="modal-body edit-form">
+            <!-- Browser-style Tabs Bar (V60) -->
+            <div id="edit-linked-items-display" class="modal-tabs-bar"></div>
             <!-- Search Zone -->
             <div id="search-zone-container">
                 <div class="input-group">
@@ -1370,20 +1428,20 @@
                     <button id="yt-search-btn" onclick="searchYouTube()">🔍</button>
                 </div>
                 <div id="no-api-key-msg"
-                    style="display:none; padding:10px; background:#2a2a2a; border-radius:5px; border-left:4px solid #f39c12; margin-bottom:10px; font-size:0.85em; line-height:1.4;">
-                    <strong>Info :</strong> Pour utiliser pleinement cette fonction, il vous faut une clé API YouTube
-                    (gratuite) a renseigner ici : <a href="#" onclick="closeModal(); openSettingsModal(); return false;"
-                        style="color:var(--accent);">Réglages</a>.<br>
-                    Vous pouvez cependant toujours ajouter une vidéo manuellement en collant son adresse URL (ex:
-                    <i>https://youtube.com/watch...</i>) directement dans le champ <b>URL du flux vidéo</b> ci-dessous,
-                    mais vous n'aurez pas les détails de la vidéo qu'il faudra entrer manuellement.<br>
-                    Pour obtenir une clé API (gratuite), <a href="https://console.cloud.google.com/" target="_blank"
-                        style="color:var(--accent); text-decoration:none;">allez a cette adresse ↗</a>.
+                    style="display:none; padding:8px 12px; background:rgba(243,156,18,0.06); border-radius:8px; border:1px solid rgba(243,156,18,0.2); border-left:4px solid #f39c12; margin-bottom:8px; font-size:0.82em; line-height:1.4; color:#eee;">
+                    <div style="font-weight:bold; color:#f39c12; margin-bottom:3px; display:flex; align-items:center; gap:6px;">
+                        <i class="ph ph-warning-circle" style="font-size:14px;"></i> Mode Saisie Manuelle YouTube
+                    </div>
+                    Renseignez ci-dessous le titre, l'artiste et l'URL de votre vidéo YouTube.
+                    <span style="font-size:0.92em; opacity:0.8; display:block; margin-top:4px;">
+                        💡 <i>Pour activer la recherche automatique, renseignez une clé API gratuite dans les <a href="#" onclick="closeModal(); openSettingsModal(); return false;" style="color:var(--accent); text-decoration:underline;">Réglages</a>.</i>
+                    </span>
                 </div>
                 <!-- Search Results Grid (Temporary) -->
                 <div id="search-results" class="results-grid" style="margin-top:10px;"></div>
             </div>
 
+            <div id="media-edit-fields-container" class="hidden">
             <hr class="separator">
 
             <!-- Zone 2: Media Stack (Sliders | Image | Switches) -->
@@ -1444,6 +1502,9 @@
                     <button class="btn-secondary" style="padding:2px 6px; font-size:0.75em; height:24px; border-color:#444;" onclick="relocateFromEdit('move')" title="Déplacer vers..." data-i18n-title="web.btn_move_to">
                         <i class="ph ph-arrows-out-cardinal" style="font-size:1.1em;"></i>
                     </button>
+                    <button class="btn-secondary" style="padding:2px 6px; font-size:0.75em; height:24px; border-color:#444;" onclick="openPhysicalRenameModal()" title="Renommer physiquement..." data-i18n-title="web.btn_physical_rename">
+                        <i class="ph ph-textbox" style="font-size:1.1em;"></i>
+                    </button>
                 </div>
             </div>
 
@@ -1459,7 +1520,7 @@
                         <input type="text" id="edit-title" data-i18n-placeholder="web.placeholder_song_title"
                             placeholder="Titre de la chanson" style="flex:1;">
                         <button class="btn-secondary" onclick="openMediaLinkerFromEdit()"
-                            title="Lier un média" data-i18n-title="web.btn_link_media">
+                            title="Lier un média" data-i18n-title="web.btn_link_media" style="display:none;">
                             <i class="ph ph-link-simple"></i>
                         </button>
                         <button class="btn-secondary" onclick="openUniversalTagModal('edit')"
@@ -1477,9 +1538,6 @@
             <!-- Hidden legacy fields to prevent JS crash -->
             <textarea id="youtube-desc-input" style="display:none;"></textarea>
             <textarea id="user-notes-input" style="display:none;"></textarea>
-
-            <!-- Zone: Linked Items Display (Visual confirmation) -->
-            <div id="edit-linked-items-display" style="display:flex; flex-wrap:wrap; gap:8px; margin: 3px 0 8px 0; padding: 0 5px;"></div>
 
             <!-- Zone 3: Metadata Grid -->
             <div class="zone-metadata">
@@ -1607,7 +1665,7 @@
                 <div class="row-inputs" style="align-items: center; gap: 20px;">
                     <!-- Action A: Link -->
                     <div class="col" style="flex: none;">
-                        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:#eee; font-size: 0.85em; margin:0;">
+                        <label id="lbl-action-link" style="display:flex; align-items:center; gap:8px; cursor:pointer; color:#eee; font-size: 0.85em; margin:0;">
                             <input type="checkbox" id="chk-action-link" checked
                                 style="width:16px; height:16px; accent-color:var(--accent);">
                             <i class="ph ph-youtube-logo" style="font-size:18px; color:#ff0000;"></i>
@@ -1653,7 +1711,10 @@
                     </div>
                     <div class="col" style="flex: 1;">
                         <label style="font-size:0.85em; color:#888;" data-i18n="web.lbl_dest_folder">Dossier de Destination</label>
-                        <select id="dl-folder" style="font-size:0.9em; padding:4px 8px; min-height:32px;"></select>
+                        <div style="display:flex; gap:5px;">
+                            <select id="dl-folder" style="font-size:0.9em; padding:4px 8px; min-height:32px; flex:1;"></select>
+                            <button id="btn-browse-dl-folder" class="btn-secondary" style="padding:0 10px; height:32px; border-color:#444;" onclick="browseCustomDownloadFolder()" title="Choisir un dossier libre..."><i class="ph ph-folder-open" style="font-size:1.1em;"></i></button>
+                        </div>
                     </div>
                 </div>
 
@@ -1661,6 +1722,10 @@
                     <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.85em; color:#ccc; margin:0;">
                         <input type="checkbox" id="dl-subs" checked style="width:16px; height:16px; accent-color:var(--accent);">
                         <span data-i18n="web.lbl_download_subs">Sous-titres (SRT)</span>
+                    </label>
+                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.85em; color:#ccc; margin:0;">
+                        <input type="checkbox" id="dl-add-to-lib" style="width:16px; height:16px; accent-color:var(--accent);">
+                        <span data-i18n="web.lbl_add_to_lib">Ajouter à la bibliothèque locale</span>
                     </label>
                     <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.85em; color:#ccc; margin:0;">
                         <input type="checkbox" id="dl-autoclose" style="width:16px; height:16px; accent-color:var(--accent);">
@@ -1682,14 +1747,14 @@
                         style="width:0%; height:100%; background:var(--accent); transition:width 0.2s ease;"></div>
                 </div>
 
-        </div>
+            </div>
 
         <div class="modal-footer">
-            <button class="btn-secondary" onclick="previewItem()" data-i18n="web.btn_preview">Prévisualiser</button>
+            <button id="btn-preview-item" class="btn-secondary" onclick="previewItem()" data-i18n="web.btn_preview">Prévisualiser</button>
 
             <div style="flex:1"></div>
             <button class="btn-text" onclick="closeModal()" data-i18n="web.btn_cancel">Annuler</button>
-            <button id="btn-save-item" class="btn-primary" onclick="saveItem()" data-i18n="web.btn_save_web_lib">Ajouter à la Bibliothèque Web</button>
+            <button id="btn-save-item" class="btn-primary" onclick="saveItem()" data-i18n="web.btn_save">Enregistrer</button>
         </div>
     </dialog>
 
@@ -1700,6 +1765,8 @@
             <button onclick="closeWebLinkModal()" class="btn-close">×</button>
         </div>
         <div class="modal-body">
+            <!-- Browser-style Tabs Bar (V60) -->
+            <div id="web-link-linked-items-display" class="modal-tabs-bar"></div>
             <!-- Zone 1 : Media Stack (Pochette) -->
             <div class="modal-media-stack">
                 <!-- Volume (Left) -->
@@ -1712,7 +1779,7 @@
 
                 <!-- Poster (Center) -->
                 <div id="web-link-art-container" class="art-container wide-art"
-                    onclick="document.getElementById('web-link-cover-upload').click()">
+                    onclick="onWebLinkCoverClick()">
                     <img id="web-link-art-img" src="" style="display:none;">
                     <div id="web-link-art-placeholder"
                         style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:#888; background:#222; border: 1px dashed #444; border-radius:8px;">
@@ -1738,23 +1805,27 @@
                     onchange="handleWebLinkCover(this)">
             </div>
 
+
+
             <div class="edit-form">
-                <!-- Row 1: Titre / Artiste -->
-                <div class="row-inputs">
-                    <div class="col" style="flex:2;">
+                <div class="zone-title" style="display:flex; gap:10px; align-items:flex-end; margin-bottom:10px;">
+                    <div style="flex:1; min-width: 0;">
+                        <label data-i18n="web.lbl_title">Titre</label>
                         <div style="display:flex; gap:10px;">
                             <input type="text" id="web-link-title" placeholder="Ex: Tablature Solo" style="flex:1;">
                             <button class="btn-secondary" onclick="openMediaLinkerFromEdit()"
-                                title="Lier un média" data-i18n-title="web.btn_link_media">
+                                title="Lier un média" data-i18n-title="web.btn_link_media" style="display:none;">
                                 <i class="ph ph-link-simple"></i>
                             </button>
                             <button class="btn-secondary" onclick="openUniversalTagModal('web-link')"
                                 title="Rechercher des métadonnées" data-i18n-title="web.hint_autotag">🔍
                                 Auto-Tag</button>
                         </div>
-                        <!-- V58: Display linked items in Web Link modal -->
-                        <div id="web-link-linked-items-display" style="display:flex; flex-wrap:wrap; gap:8px; margin-top: 5px;"></div>
                     </div>
+                    <button class="btn-secondary" onclick="openNotesDescModal('web-link-notes', null)" style="flex-shrink:0;" data-i18n="web.btn_notes_desc">Notes & Desc</button>
+                </div>
+                <!-- Row 1: Artiste -->
+                <div class="row-inputs">
                     <div class="col">
                         <label data-i18n="web.lbl_artist">Artiste</label>
                         <input type="text" id="web-link-artist" placeholder="Ex: Dire Straits">
@@ -1767,15 +1838,10 @@
                         <label data-i18n="web.lbl_url">Lien Web</label>
                         <input type="text" id="web-link-url" placeholder="https://...">
                     </div>
-                    <div class="col">
+                    <div class="col" style="position: relative;">
                         <label data-i18n="web.lbl_link_type">Type de lien</label>
-                        <select id="web-link-type">
-                            <option value="songsterr" data-i18n="web.opt_songsterr">Songsterr</option>
-                            <option value="moises" data-i18n="web.opt_moises">Moises</option>
-                            <option value="spotify" data-i18n="web.opt_spotify">Spotify</option>
-                            <option value="lesson" data-i18n="web.opt_lessons">Cours / Tuto</option>
-                            <option value="other" data-i18n="web.opt_useful_links">Autre</option>
-                        </select>
+                        <input type="text" id="web-link-type" placeholder="Ex: Songsterr, Moises..." autocomplete="off" style="width: 100%; box-sizing: border-box;">
+                        <div id="suggestions-type" class="suggestions-box"></div>
                     </div>
                 </div>
 
@@ -1829,8 +1895,7 @@
                 </div>
 
                 <div class="col" style="margin-top:10px;">
-                    <label data-i18n="web.lbl_notes">Notes</label>
-                    <textarea id="web-link-notes" rows="3" style="width:100%; box-sizing:border-box; background:#111; color:#fff; border:1px solid #444; border-radius:4px; padding:8px;"></textarea>
+                    <textarea id="web-link-notes" style="display:none;"></textarea>
                 </div>
             </div>
         </div>
@@ -1989,7 +2054,7 @@
                 <button class="nav-btn active" onclick="switchSettingsTab('general')"
                     data-i18n="web.tab_general">Général</button>
                 <button class="nav-btn" onclick="switchSettingsTab('library')"
-                    data-i18n="web.tab_library">Médiathèque</button>
+                    data-i18n="web.tab_settings_library">Médiathèque</button>
                 <button class="nav-btn" onclick="switchSettingsTab('storage')"
                     data-i18n="web.tab_storage">Stockage</button>
                 <button class="nav-btn" onclick="switchSettingsTab('controller')"
@@ -2005,6 +2070,16 @@
                         <select id="setting-language" onchange="changeLanguage()" style="height:20px; width:120px; padding:2px; font-size:0.8em; margin:0;">
                             <option value="fr">Français</option>
                             <option value="en">English</option>
+                        </select>
+                    </div>
+
+                    <div class="settings-row" style="justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <h4 data-i18n="web.lbl_theme_choice" style="margin:0; border:none; padding:0; font-size:0.8em;">Thème Visuel</h4>
+                        <select id="setting-theme" onchange="changeWebTheme()" style="height:20px; width:120px; padding:2px; font-size:0.8em; margin:0;">
+                            <option value="steel_blue" data-i18n="web.theme_steel_blue">Steel Blue</option>
+                            <option value="amethyst" data-i18n="web.theme_amethyst">Amethyst</option>
+                            <option value="emerald" data-i18n="web.theme_emerald">Emerald</option>
+                            <option value="amber" data-i18n="web.theme_amber">Amber</option>
                         </select>
                     </div>
 
@@ -2040,8 +2115,13 @@
 
                     <h4 data-i18n="web.lbl_youtube_api">Clé API YouTube</h4>
                     <div class="settings-control-group" style="padding:4px 8px; margin-bottom:8px;">
-                        <input type="password" id="setting-youtube-key" data-i18n-placeholder="web.placeholder_youtube_api" style="height:22px;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:2px;">
+                        <div class="input-password-wrapper" style="position: relative; display: flex; align-items: center;">
+                            <input type="password" id="setting-youtube-key" data-i18n-placeholder="web.placeholder_youtube_api" style="height:22px; width: 100%; padding-right: 30px; box-sizing: border-box;">
+                            <button type="button" onclick="togglePasswordVisibility('setting-youtube-key', this)" style="position: absolute; right: 5px; background: none; border: none; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center; height: 100%; padding: 0 5px;">
+                                <i class="ph ph-eye" style="font-size: 1.1em;"></i>
+                            </button>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
                             <p class="hint" data-i18n="web.msg_api_info" style="margin:0; font-size:0.7em;">Raccourci titres/images.</p>
                             <a href="https://console.cloud.google.com/" target="_blank" style="color:var(--accent); text-decoration:none; font-size:0.7em;" data-i18n="web.link_get_api_key">Clé API ↗</a>
                         </div>
@@ -2049,19 +2129,14 @@
 
                     <h4 data-i18n="web.lbl_music_apis">APIs Musique (BPM & Ton.)</h4>
                     <div class="settings-control-group" style="padding:4px 8px; margin-bottom:8px;">
-                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
-                            <div>
-                                <label data-i18n="web.lbl_spotify_client_id" style="font-size:0.7em;">ID Spotify</label>
-                                <input type="password" id="setting-spotify-client-id" placeholder="..." style="height:20px;">
-                            </div>
-                            <div>
-                                <label data-i18n="web.lbl_spotify_client_secret" style="font-size:0.7em;">Secret Spotify</label>
-                                <input type="password" id="setting-spotify-client-secret" placeholder="..." style="height:20px;">
-                            </div>
-                        </div>
-                        <div style="margin-top:4px; padding-top:4px; border-top:1px solid #333;">
+                        <div>
                             <label data-i18n="web.lbl_getsong_api_key" style="font-size:0.7em;">GetSongBPM Key</label>
-                            <input type="password" id="setting-getsong-api-key" placeholder="..." style="height:20px;">
+                            <div class="input-password-wrapper" style="position: relative; display: flex; align-items: center; margin-top: 4px;">
+                                <input type="password" id="setting-getsong-api-key" placeholder="..." style="height:22px; width: 100%; padding-right: 30px; box-sizing: border-box;">
+                                <button type="button" onclick="togglePasswordVisibility('setting-getsong-api-key', this)" style="position: absolute; right: 5px; background: none; border: none; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center; height: 100%; padding: 0 5px;">
+                                    <i class="ph ph-eye" style="font-size: 1.1em;"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2920,70 +2995,75 @@
         </div>
     </dialog>
     
-    <!-- LIBRARY MANAGER MODAL (V40) -->
+    <!-- LIBRARY MANAGER MODAL (V35) -->
     <dialog id="modal-library-manager" class="modal-advanced">
         <div class="modal-header">
-            <h3 data-i18n="web.title_library_manager">Gestionnaire de Bibliothèque</h3>
-            <button onclick="closeLibraryManagerModal()" class="btn-close">×</button>
+            <h3><i class="ph ph-books" style="color:var(--accent); font-size:1.2em; vertical-align:middle; margin-right:8px;"></i> <span data-i18n="web.title_library_manager">Gestionnaire de Bibliothèque</span></h3>
+            <button onclick="closeLibraryManagerModal()" class="btn-close"><i class="ph ph-x"></i></button>
         </div>
-        <div class="modal-body" style="padding:15px; display:flex; flex-direction:column; gap:15px;">
-            <div style="display:flex; gap:15px; align-items:flex-end;">
-                <div style="flex:1;">
-                    <label style="font-size:0.8em; color:#aaa;" data-i18n="web.lbl_search">Recherche (Artiste, Titre...)</label>
-                    <input type="text" id="lib-manager-search" onkeyup="renderLibraryManagerItems()" placeholder="..." style="width:100%; background:#222; border:1px solid #444; color:white; padding:8px; border-radius:4px;">
-                </div>
-                <div style="flex:1;">
-                    <label style="font-size:0.8em; color:#aaa;" data-i18n="web.lbl_action_to_apply">Action :</label>
-                    <select id="lib-manager-action-select" onchange="updateLibManagerDestState()" style="width:100%; background:#222; border:1px solid #444; color:white; padding:8px; border-radius:4px;">
-                        <option value="copy" data-i18n="web.opt_copy">Copier vers dossier</option>
-                        <option value="move" data-i18n="web.opt_move">Déplacer vers dossier</option>
-                    </select>
-                </div>
-            </div>
+        <div class="modal-body">
+            <div class="modal-advanced-layout">
+                <!-- PANNEAU DE CONTROLE DE MASSE -->
+                <div class="bulk-control-panel">
+                    <div class="bulk-grid">
+                        <div class="bulk-field">
+                            <label data-i18n="web.lbl_search">Recherche (Artiste, Titre...)</label>
+                            <input type="text" id="lib-manager-search" onkeyup="renderLibraryManagerItems()" placeholder="...">
+                        </div>
+                        <div class="bulk-field">
+                            <label data-i18n="web.lbl_action_to_apply">Action à appliquer :</label>
+                            <select id="lib-manager-action-select" onchange="updateLibManagerDestState()">
+                                <option value="copy" data-i18n="web.opt_copy">Copier vers dossier</option>
+                                <option value="move" data-i18n="web.opt_move">Déplacer vers dossier</option>
+                            </select>
+                        </div>
+                    </div>
 
-            <div style="background:#222; padding:12px; border-radius:8px; border:1px solid #333;">
-                <div style="display:flex; flex-direction:column; gap:12px;">
-                    <div>
-                        <label style="font-size:0.8em; color:#aaa; display:block; margin-bottom:5px;" data-i18n="web.lbl_bulk_target">Dossier de destination :</label>
-                        <div style="display:flex; gap:8px;">
-                            <select id="lib-manager-dest-select" style="flex:1; background:#111; border:1px solid #444; color:white; border-radius:4px; padding:8px;">
+                    <div class="bulk-field">
+                        <label data-i18n="web.lbl_bulk_target">Dossier de destination :</label>
+                        <div class="bulk-dest-row">
+                            <select id="lib-manager-dest-select" style="flex: 1;">
                                 <option value="AUTO" data-i18n="web.opt_auto_artist_dest">-- Auto-routage par Artiste --</option>
                             </select>
-                            <button id="btn-lib-browse-dest" class="btn-secondary" onclick="openNativeFolderPicker('lib-dest')" style="padding:0 12px;">
-                                <i class="ph ph-folder-open"></i>
+                            <button id="btn-lib-browse-dest" class="btn-secondary" onclick="openNativeFolderPicker('lib-dest')" style="padding:0 12px; height: 38px; flex-shrink: 0;" title="Parcourir...">
+                                <i class="ph ph-folder-open" style="font-size: 1.15em;"></i>
                             </button>
                         </div>
                     </div>
+                    
+                    <button class="btn-primary" onclick="applyLibraryManagerActions()" style="width:100%; height:40px; font-weight:bold; font-size: 0.9rem;">
+                        <i class="ph ph-check-circle" style="font-size:1.15em; vertical-align:middle; margin-right:4px;"></i> <span data-i18n="web.btn_apply_actions">Appliquer les actions</span>
+                    </button>
                 </div>
-                
-                <button class="btn-primary" onclick="applyLibraryManagerActions()" style="width:100%; height:40px; background:#03dac6; color:black; font-weight:bold; margin-top:15px;">
-                    <i class="ph ph-check-circle"></i> <span data-i18n="web.btn_apply_actions">Appliquer les actions</span>
-                </button>
-            </div>
 
-            <div class="bulk-list-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px; font-size:0.85em; color:#aaa;">
-                <div>
-                   <input type="checkbox" id="lib-manager-select-all" onchange="toggleLibManagerSelectAll(this.checked)">
-                   <label for="lib-manager-select-all" data-i18n="web.lbl_select_all" style="cursor:pointer;">Tout sélectionner</label>
+                <!-- LISTE DES TITRES ET STATUT -->
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                    <div class="bulk-list-header" style="display:flex; justify-content:space-between; align-items:center; font-size:0.8rem; color:#888;">
+                        <div style="display:flex; align-items:center; gap:6px;">
+                           <input type="checkbox" id="lib-manager-select-all" onchange="toggleLibManagerSelectAll(this.checked)" style="width:14px; height:14px; accent-color:var(--accent); cursor:pointer; flex: none !important;">
+                           <label for="lib-manager-select-all" data-i18n="web.lbl_select_all" style="cursor:pointer; font-weight: 500;">Tout sélectionner</label>
+                        </div>
+                        <span id="lib-manager-count-status" style="font-family: 'JetBrains Mono', 'Roboto Mono', monospace; font-size: 0.8rem; color: var(--accent);">0 / 0 sélectionné(s)</span>
+                    </div>
+
+                    <div id="lib-manager-items-list" class="bulk-list-container">
+                        <!-- JS Generated items -->
+                    </div>
                 </div>
-                <span id="lib-manager-count-status">0 / 0 sélectionné(s)</span>
-            </div>
 
-            <div id="lib-manager-items-list" class="bulk-items-list" style="flex:1; max-height:350px; min-height:200px; overflow-y:auto; border:1px solid #333; border-radius:4px; background:#1a1a1a;">
-                <!-- JS Generated items -->
-            </div>
-
-            <div id="lib-manager-progress-container" style="display:none; margin-top:10px;">
-                <div style="display:flex; justify-content:space-between; font-size:0.85em; margin-bottom:5px;">
-                    <span id="lib-manager-progress-text">Traitement...</span>
-                    <span id="lib-manager-progress-percent">0%</span>
-                </div>
-                <div class="progress-bar-bg" style="height:8px; background:#333; border-radius:4px; overflow:hidden;">
-                    <div id="lib-manager-progress-fill" style="height:100%; width:0%; background:var(--accent); transition:width 0.2s;"></div>
+                <!-- JAUGE DE PROGRESSION -->
+                <div id="lib-manager-progress-container" style="display:none; padding: 4px 0;">
+                    <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:6px;">
+                        <span id="lib-manager-progress-text" style="color:#aaa; font-weight:500;">Traitement...</span>
+                        <span id="lib-manager-progress-percent" style="color:var(--accent); font-weight:bold; font-family: monospace;">0%</span>
+                    </div>
+                    <div class="progress-bar-bg" style="height:6px; background:#222; border-radius:3px; overflow:hidden; border: 1px solid rgba(255,255,255,0.03);">
+                        <div id="lib-manager-progress-fill" style="height:100%; width:0%; background:var(--accent); transition:width 0.2s;"></div>
+                    </div>
                 </div>
             </div>
         </div>
-        <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:15px;">
+        <div class="modal-footer">
             <button class="btn-secondary" onclick="closeLibraryManagerModal()" data-i18n="web.btn_close">Fermer</button>
         </div>
     </dialog>
@@ -3095,7 +3175,7 @@
     </dialog>
 
     <!-- Modal: Interconnection Choice (Multiple matches) -->
-    <dialog id="modal-interconnection-choice" class="modal-modern" style="width: 400px; max-width: 90vw;">
+    <dialog id="modal-interconnection-choice" class="modal-modern" style="width: 550px; max-width: 95vw;">
         <div class="modal-header">
             <h2 data-i18n="web.modal_choice_title">Choisir un média</h2>
             <button class="btn-close-modal" onclick="document.getElementById('modal-interconnection-choice').close()">×</button>
@@ -3104,6 +3184,26 @@
             <p id="interconnection-choice-desc" style="font-size: 0.9em; color: #888; margin-bottom: 15px;">Plusieurs médias de ce type sont disponibles :</p>
             <div id="interconnection-choice-list" style="display:flex; flex-direction:column; gap:10px; max-height: 400px; overflow-y: auto;">
                 <!-- Buttons will be injected here -->
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Modal: Cover Selection Choice -->
+    <dialog id="modal-cover-choice" class="modal-modern" style="width: 420px; max-width: 90vw;">
+        <div class="modal-header">
+            <h2 data-i18n="web.modal_cover_choice_title">Source de l'image</h2>
+            <button class="btn-close-modal" onclick="document.getElementById('modal-cover-choice').close()">×</button>
+        </div>
+        <div class="modal-body" style="padding: 20px; display:flex; flex-direction:column; gap:15px;">
+            <button class="btn-primary" onclick="triggerManualCoverUpload()" style="width:100%; height:45px; display:flex; align-items:center; justify-content:center; gap:8px;">
+                <i class="ph ph-upload-simple" style="font-size:1.2em;"></i> <span data-i18n="web.btn_upload_local_image">Importer depuis mon ordinateur...</span>
+            </button>
+            
+            <div id="cover-choice-suggestions-section" style="display:flex; flex-direction:column; gap:8px; border-top:1px solid #333; padding-top:12px; margin-top:5px;">
+                <span style="font-size:0.85em; color:#888; text-transform:uppercase; font-weight:bold;"><i class="ph ph-sparkle" style="color:var(--accent);"></i> <span data-i18n="web.lbl_select_existing_cover">Ou choisir une image existante :</span></span>
+                <div id="cover-choice-suggestions-list" style="display:flex; gap:12px; flex-wrap:wrap; margin-top:5px;">
+                    <!-- Suggested covers here -->
+                </div>
             </div>
         </div>
     </dialog>
@@ -3172,6 +3272,120 @@
         <div class="modal-footer">
             <button class="btn-text" onclick="document.getElementById('modal-new-setlist').close()" data-i18n="web.btn_cancel">Annuler</button>
             <button class="btn-primary" onclick="createNewSetlist()" data-i18n="web.btn_validate">Créer</button>
+        </div>
+    </dialog>
+
+    <!-- MODAL: PHYSICAL RENAME (V10+) -->
+    <dialog id="modal-physical-rename" style="width: 900px; max-width: 95vw; height: 80vh; border: 1px solid #444; border-radius: 12px; background: #1a1a1a; color: #eee; padding: 0; overflow: hidden;">
+        <div class="modal-header" style="flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; border-bottom: 1px solid #333; background: #222;">
+            <h3 style="margin: 0; font-size: 1.2em; display: flex; align-items: center; gap: 8px;">
+                <i class="ph ph-textbox" style="color: var(--accent);"></i>
+                <span data-i18n="web.modal_rename_title">Renommage physique du média</span>
+            </h3>
+            <button class="btn-close-modal" style="background: transparent; border: none; color: #aaa; font-size: 1.5em; cursor: pointer;" onclick="document.getElementById('modal-physical-rename').close()">×</button>
+        </div>
+        <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 20px; font-size: 0.9em; display: flex; flex-direction: column; gap: 15px;">
+            <!-- Current Path Display -->
+            <div class="form-group">
+                <label data-i18n="web.lbl_current_path" style="font-weight: bold; color: #888; display: block; margin-bottom: 5px;">Chemin actuel :</label>
+                <div id="rename-current-path" style="font-family: monospace; font-size: 0.85em; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px; border: 1px solid #333; word-break: break-all; color: #aaa;"></div>
+            </div>
+
+            <!-- Classic File Options (Single File) -->
+            <div id="rename-classic-container" class="form-group">
+                <label id="rename-main-label" data-i18n="web.lbl_new_filename" style="font-weight: bold; display: block; margin-bottom: 5px;">Nouveau nom physique (sans extension)</label>
+                <input type="text" id="rename-main-input-classic" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #444; background: #2a2a2a; color: #fff; box-sizing: border-box;">
+            </div>
+
+            <!-- Multi-track Stems Options -->
+            <div id="rename-stems-container" style="display: none; border-top: 1px solid #333; padding-top: 15px; flex-direction: column; gap: 15px;">
+                
+                <!-- Option A: Renommer le dossier parent -->
+                <div class="form-group" style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 6px; border: 1px solid #333; flex: none !important;">
+                    <label style="display: flex; align-items: center; gap: 8px; font-weight: bold; cursor: pointer; margin-bottom: 0;">
+                        <input type="checkbox" id="rename-folder-chk" checked onchange="onRenameFolderChkChanged()">
+                        <span data-i18n="web.lbl_rename_folder_chk">Renommer le dossier parent</span>
+                    </label>
+                    <div id="rename-folder-input-container" style="margin-top: 10px; padding-left: 24px; display: flex; flex-direction: column; gap: 5px;">
+                        <label id="rename-folder-label" data-i18n="web.lbl_new_foldername" style="font-size: 0.85em; color: #aaa; margin-bottom: 0;">Nouveau nom de dossier</label>
+                        <input type="text" id="rename-main-input" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #444; background: #2a2a2a; color: #fff; box-sizing: border-box; flex: none !important; height: auto !important;" oninput="onRenameMainInputChanged()">
+                    </div>
+                </div>
+
+                <!-- Option B: Renommer les fichiers et les étiquettes des stems -->
+                <div class="form-group" style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 6px; border: 1px solid #333; display: flex; flex-direction: column; gap: 12px; flex: none !important;">
+                    <label style="display: flex; align-items: center; gap: 8px; font-weight: bold; cursor: pointer; margin-bottom: 0;">
+                        <input type="checkbox" id="rename-stems-chk" onchange="onRenameStemsChkChanged()">
+                        <span data-i18n="web.lbl_rename_stems_chk">Renommer les fichiers de stems</span>
+                    </label>
+                    
+                    <label style="display: flex; align-items: center; gap: 8px; font-weight: bold; cursor: pointer; margin-bottom: 0;">
+                        <input type="checkbox" id="rename-stems-labels-chk" checked onchange="onRenameStemsLabelsChkChanged()">
+                        <span data-i18n="web.lbl_rename_stems_labels_chk">Renommer les étiquettes d'affichage dans le lecteur multipiste</span>
+                    </label>
+                    
+                    <div id="rename-stems-options-wrapper" style="display: none; flex-direction: column; gap: 10px; padding-left: 24px; border-left: 2px solid #444;">
+                        <!-- Radio Options -->
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 0;">
+                            <input type="radio" name="rename_stems_option" value="as_stems" checked onchange="onRenameOptionChanged()">
+                            <span data-i18n="web.lbl_rename_stems_as_display">Renommer les fichiers selon leurs noms d'affichage</span>
+                        </label>
+                        <!-- Champ pour le nom de base des stems -->
+                        <div id="rename-stems-base-container" style="display: flex; flex-direction: column; padding-left: 24px; margin-top: -4px; margin-bottom: 4px; gap: 4px;">
+                            <label style="font-size: 0.8em; color: #aaa; margin-bottom: 0;" data-i18n="web.lbl_stems_base_name">Nom de base des fichiers de stems :</label>
+                            <input type="text" id="rename-stems-base-input" style="width: 95%; padding: 4px 8px; border-radius: 4px; border: 1px solid #444; background: #2a2a2a; color: #fff; font-size: 0.85em; flex: none !important; height: auto !important;" oninput="updateStemsPreviews()">
+                        </div>
+
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 0;">
+                            <input type="radio" name="rename_stems_option" value="by_instrument" onchange="onRenameOptionChanged()">
+                            <span data-i18n="web.lbl_rename_stems_by_instrument">Renommer en attribuant une nomenclature d'instrument</span>
+                        </label>
+                        <!-- La case à cocher de préfixe pour l'instrument -->
+                        <div id="rename-prefix-container" style="display: none; align-items: center; padding-left: 24px; margin-top: -4px; margin-bottom: 4px;">
+                            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.8em; color: #aaa; cursor: pointer; margin-bottom: 0;">
+                                <input type="checkbox" id="rename-prefix-instrument-chk" onchange="updateStemsPreviews()">
+                                <span data-i18n="web.lbl_prefix_instrument">Afficher l'instrument/nom en premier (ex: Drums - Titre)</span>
+                            </label>
+                        </div>
+
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 0;">
+                            <input type="radio" name="rename_stems_option" value="individual" onchange="onRenameOptionChanged()">
+                            <span data-i18n="web.lbl_rename_stems_individually">Renommer chaque fichier de stem individuellement</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Stems Mapping List Area -->
+                <div id="rename-stems-mapping-area" style="display: none; flex-direction: column; gap: 10px; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; border: 1px solid #333;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h4 style="margin: 0; font-size: 1em;" data-i18n="web.lbl_stem_rename_list">Nomenclature des fichiers de stems</h4>
+                        <!-- Instrument List Manager button -->
+                        <button id="btn-toggle-instrument-editor" class="btn-secondary" style="padding: 2px 8px; font-size: 0.8em;" onclick="toggleInstrumentEditor()">
+                            <i class="ph ph-gear"></i> <span data-i18n="web.btn_configure">Gérer la liste</span>
+                        </button>
+                    </div>
+
+                    <!-- Custom Instrument Editor (Collapsed by default) -->
+                    <div id="instrument-list-editor" style="display: none; flex-direction: column; gap: 10px; margin-bottom: 15px; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px solid #444;">
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" id="new-instrument-name" style="flex: 1; padding: 6px; border: 1px solid #444; background: #2a2a2a; color: #fff; border-radius: 4px;" data-i18n-placeholder="web.lbl_add_custom_instrument" placeholder="Ajouter un instrument...">
+                            <button class="btn-primary" style="padding: 6px 12px;" onclick="addCustomInstrument()" data-i18n="web.btn_add_instrument">Ajouter</button>
+                        </div>
+                        <div id="instruments-bag-list" style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 120px; overflow-y: auto; padding: 5px; background: rgba(0,0,0,0.2); border-radius: 4px;">
+                            <!-- Bag elements injected here dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Stems Rows -->
+                    <div id="rename-stems-rows-container" style="display: flex; flex-direction: column; gap: 8px; max-height: 250px; overflow-y: auto; padding-right: 5px;">
+                        <!-- Rows dynamically generated here by JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer" style="flex-shrink: 0; padding: 15px 20px; border-top: 1px solid #333; background: #222; display: flex; justify-content: flex-end; gap: 10px;">
+            <button class="btn-text" onclick="document.getElementById('modal-physical-rename').close()" data-i18n="web.btn_cancel" style="color: #aaa; background: transparent; border: none; padding: 8px 16px; cursor: pointer;">Annuler</button>
+            <button class="btn-primary" onclick="submitPhysicalRename()" data-i18n="web.btn_validate" style="padding: 8px 20px; border-radius: 6px; font-weight: bold;">Enregistrer</button>
         </div>
     </dialog>
 

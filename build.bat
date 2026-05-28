@@ -2,11 +2,11 @@
 setlocal enabledelayedexpansion
 
 echo ========================================================
-echo   COMPILATION MIDI-KBD CONTROL STUDIO (FULL MUTAGEN SUPPORT)
+echo   COMPILATION GUITAR PRACTICE TOOL
 echo ========================================================
 
 :: 1. TUER L'APPLICATION
-taskkill /F /IM "MidiKbdControlStudio.exe" >nul 2>&1
+taskkill /F /IM "GuitarPracticeTool.exe" >nul 2>&1
 timeout /t 1 /nobreak >nul
 
 :: 2. VERIFICATION ENV
@@ -23,7 +23,7 @@ if exist _BUILD_TEMP rmdir /s /q _BUILD_TEMP
 if exist build rmdir /s /q build
 if exist dist rmdir /s /q dist
 if exist *.spec del *.spec
-if exist MidiKbdControlStudio.exe del MidiKbdControlStudio.exe
+if exist GuitarPracticeTool.exe del GuitarPracticeTool.exe
 
 mkdir _BUILD_TEMP
 copy src\*.py _BUILD_TEMP\ >nul
@@ -48,10 +48,12 @@ if exist data\midi_devices (
 
 :: 4. COMPILATION
 cd _BUILD_TEMP
+mkdir build 2>nul
+mkdir build\GuitarPracticeTool 2>nul
 
 :: COMMANDE AVEC TOUS LES MODULES MUTAGEN EXPLICITES
 pyinstaller --noconfirm --onefile --windowed ^
- --name "MidiKbdControlStudio" ^
+ --name "GuitarPracticeTool" ^
  --add-data "config.json;." ^
  --add-data "web;web" ^
  --add-data "assets;assets" ^
@@ -96,10 +98,10 @@ pyinstaller --noconfirm --onefile --windowed ^
 
 :: 5. FINALISATION
 cd ..
-if exist "_BUILD_TEMP\dist\MidiKbdControlStudio.exe" (
-    move /Y "_BUILD_TEMP\dist\MidiKbdControlStudio.exe" "MidiKbdControlStudio.exe" >nul
+if exist "_BUILD_TEMP\dist\GuitarPracticeTool.exe" (
+    move /Y "_BUILD_TEMP\dist\GuitarPracticeTool.exe" "GuitarPracticeTool.exe" >nul
     echo.
-    echo [SUCCES] MidiKbdControlStudio.exe est pret !
+    echo [SUCCES] GuitarPracticeTool.exe est pret !
 ) else (
     echo [ECHEC] L'executable n'a pas ete cree.
     pause

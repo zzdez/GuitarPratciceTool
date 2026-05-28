@@ -26,11 +26,11 @@ from utils import get_app_dir, get_data_dir, to_portable_path, resolve_portable_
 from i18n import _
 
 # Configure Logging
-log_path = os.path.join(os.getcwd(), 'midikbd_debug.log')
+log_path = os.path.join(get_app_dir(), 'guitarpracticetool_debug.log')
 print(f"DIAGNOSTIC: Logging to {log_path}")
 logging.basicConfig(
     filename=log_path,
-    level=logging.WARNING,
+    level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logging.warning(f"=== SERVER STARTING AT {os.getcwd()} ===")
@@ -692,23 +692,46 @@ async def get_cover_image(path: str):
 async def get_status():
     config_manager._load_config()
     is_connected = False
+    ports_status = []
     if hasattr(app.state, "midi_manager") and app.state.midi_manager:
         is_connected = app.state.midi_manager.is_connected
+        ports_status = app.state.midi_manager.get_providers_status()
 
     active_profile_name = "Global / Aucun"
     if hasattr(app.state, "action_handler") and app.state.action_handler.current_profile:
          active_profile_name = app.state.action_handler.current_profile.get("name", "Global / Aucun")
-    elif hasattr(app.state, "profile_manager") and app.state.profile_manager:
-         # Fallback if needed, but ActionHandler tracks the live context
-         pass
+
+    available_devices = []
+    active_device_name = config_manager.get("midi_device_name", _("web.none"))
+    if hasattr(app.state, "gui_app") and app.state.gui_app:
+        gui_app = app.state.gui_app
+        if hasattr(gui_app, "device_manager") and gui_app.device_manager:
+            available_devices = [d.get("name") for d in gui_app.device_manager.definitions if d.get("name")]
+        if hasattr(gui_app, "current_profile") and gui_app.current_profile:
+            active_device_name = gui_app.current_profile.get("device_name", active_device_name)
 
     return {
         "status": "ok",
-        "device_name": config_manager.get("midi_device_name", _("web.none")),
+        "device_name": active_device_name,
         "connection_mode": config_manager.get("connection_mode", "MIDO"),
         "is_connected": is_connected,
-        "active_profile_name": active_profile_name
+        "active_profile_name": active_profile_name,
+        "ports_status": ports_status,
+        "available_devices": available_devices,
+        "active_device_name": active_device_name
     }
+
+@app.post("/api/active_device")
+async def change_active_device(payload: dict):
+    device_name = payload.get("device_name")
+    if not device_name:
+        raise HTTPException(status_code=400, detail="Missing device_name")
+    
+    if hasattr(app.state, "change_device_callback") and app.state.change_device_callback:
+        app.state.change_device_callback(device_name)
+        return {"status": "ok", "message": f"Active device changed to {device_name}"}
+    else:
+        raise HTTPException(status_code=500, detail="Callback change_device_callback not registered")
 
 @app.get("/api/metronome/sounds")
 async def get_metronome_sounds():
@@ -1117,13 +1140,12 @@ async def get_settings():
     # Construct settings object
     return {
         "YOUTUBE_API_KEY": config_manager.get("YOUTUBE_API_KEY", ""),
-        "spotify_client_id": config_manager.get("spotify_client_id", ""),
-        "spotify_client_secret": config_manager.get("spotify_client_secret", ""),
         "getsong_api_key": config_manager.get("getsong_api_key") or config_manager.get("getsongbpm_api_key") or "",
         "media_folders": config_manager.get("media_folders", []),
         "midi_output_names": config_manager.get("midi_output_names", []),
         "midi_output_name": config_manager.get("midi_output_name", ""), # Legacy fallback
         "language": config_manager.get("language", "fr"),
+        "theme": config_manager.get("theme", "steel_blue"),
         "autoplay": config_manager.get("autoplay", False),
         "autoreplay": config_manager.get("autoreplay", False),
         "sidebar_autohide": config_manager.get("sidebar_autohide", False),
@@ -1152,6 +1174,12 @@ async def get_locale(lang: str):
 async def update_settings(settings: Dict):
     """Updates configuration."""
     for key, value in settings.items():
+        # PROTECTION : Do not overwrite existing API keys with an empty value
+        if key in ["YOUTUBE_API_KEY", "getsong_api_key"] and not value:
+            existing = config_manager.get(key)
+            if existing:
+                continue # Keep existing, do not overwrite with empty value
+                
         config_manager.set(key, value)
         
     # Apply MIDI settings immediately if present
@@ -2513,6 +2541,275 @@ async def edit_local_file(index: int, item: Dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/local/rename_physical/{index}")
+async def rename_physical_media(index: int, data: Dict):
+    try:
+        from utils import get_app_dir, to_portable_path, resolve_portable_path
+        import re
+        import glob
+
+        # 1. Charger la bibliothèque locale
+        items = []
+        if os.path.exists(LOCAL_LIB_FILE):
+            with open(LOCAL_LIB_FILE, "r", encoding="utf-8") as f:
+                items = json.load(f)
+
+        if index < 0 or index >= len(items):
+            raise HTTPException(status_code=404, detail="Index out of range")
+
+        current_item = items[index]
+        old_path_portable = current_item.get("path", "")
+        old_path_abs = resolve_portable_path(old_path_portable)
+
+        if not old_path_abs or not os.path.exists(old_path_abs):
+            return {"status": "error", "message": f"Fichier ou dossier d'origine introuvable : {old_path_abs}"}
+
+        new_name = data.get("new_name", "").strip()
+        # Supprimer les caractères interdits pour les noms de fichiers/dossiers
+        new_name = re.sub(r'[\\/*?:"<>|]', '_', new_name)
+        if not new_name:
+            return {"status": "error", "message": "Le nouveau nom est invalide."}
+
+        is_multitrack = current_item.get("is_multitrack", False)
+        parent_dir = os.path.dirname(old_path_abs)
+
+        new_path_abs = ""
+        new_stems_portable = []
+
+        if not is_multitrack:
+            # --- CAS 1 : FICHIER UNIQUE (AUDIO OU VIDÉO) ---
+            _, ext = os.path.splitext(old_path_abs)
+            new_filename = new_name + ext
+            new_path_abs = os.path.normpath(os.path.join(parent_dir, new_filename))
+
+            if os.path.exists(new_path_abs) and new_path_abs.lower() != old_path_abs.lower():
+                return {"status": "error", "message": f"Un fichier nommé '{new_filename}' existe déjà à cet emplacement."}
+
+            # Renommage physique du fichier principal
+            logging.warning(f"[RenamePhysical] Renaming file: {old_path_abs} -> {new_path_abs}")
+            os.rename(old_path_abs, new_path_abs)
+
+            # Renommage des sidecars associés (JSON + sous-titres)
+            old_base_name, _ = os.path.splitext(os.path.basename(old_path_abs))
+            pattern = glob.escape(os.path.join(parent_dir, old_base_name)) + "*"
+            for sidecar_path in glob.glob(pattern):
+                # Ignorer les fichiers principaux
+                if sidecar_path.lower() == old_path_abs.lower() or sidecar_path.lower() == new_path_abs.lower():
+                    continue
+                try:
+                    s_filename = os.path.basename(sidecar_path)
+                    suffix = s_filename[len(old_base_name):]
+                    new_sidecar_filename = new_name + suffix
+                    new_sidecar_path = os.path.join(parent_dir, new_sidecar_filename)
+                    if os.path.exists(sidecar_path):
+                        os.rename(sidecar_path, new_sidecar_path)
+                        logging.info(f"[RenamePhysical] Renamed sidecar: {s_filename} -> {new_sidecar_filename}")
+                except Exception as es:
+                    logging.error(f"[RenamePhysical] Failed to rename sidecar {sidecar_path}: {es}")
+
+        else:
+            # --- CAS 2 : MULTIPISTE (DOSSIER) ---
+            rename_folder = data.get("rename_folder", True)
+            rename_stems = data.get("rename_stems", True)
+            rename_stems_labels = data.get("rename_stems_labels", True)
+
+            if rename_folder:
+                new_dir_abs = os.path.normpath(os.path.join(parent_dir, new_name))
+                if os.path.exists(new_dir_abs) and new_dir_abs.lower() != old_path_abs.lower():
+                    return {"status": "error", "message": f"Un dossier nommé '{new_name}' existe déjà."}
+            else:
+                new_dir_abs = old_path_abs
+
+            rename_stems_option = data.get("rename_stems_option", "none") if (rename_stems or rename_stems_labels) else "none"
+            stems_mapping = data.get("stems_mapping", []) if (rename_stems or rename_stems_labels) else []
+
+            # Charger les métadonnées internes du dossier multitrack
+            settings_file = os.path.join(old_path_abs, "airstep_meta.json")
+            mt_settings = {}
+            if os.path.exists(settings_file):
+                try:
+                    with open(settings_file, "r", encoding="utf-8") as sf:
+                        mt_settings = json.load(sf)
+                except: pass
+
+            # Récupérer les stems actuels (chemins absolus)
+            current_stems_portable = current_item.get("stems", [])
+            current_stems_abs = [resolve_portable_path(s) for s in current_stems_portable]
+
+            # Étape A : Traitement des stems (fichiers physiques et/ou étiquettes JSON)
+            if (rename_stems or rename_stems_labels) and current_stems_abs and stems_mapping:
+                new_tracks = []
+                for mapping in stems_mapping:
+                    m_old_path_abs = resolve_portable_path(mapping.get("old_path", ""))
+                    m_new_filename = mapping.get("new_filename", "").strip()
+                    m_new_name = mapping.get("name", "").strip()
+
+                    # Nettoyer le nom de fichier
+                    m_new_filename = re.sub(r'[\\/*?:"<>|]', '_', m_new_filename)
+
+                    if m_old_path_abs and os.path.exists(m_old_path_abs):
+                        final_stem_abs = m_old_path_abs
+                        
+                        # A.1 Renommage physique du fichier stem si demandé
+                        if rename_stems and m_new_filename:
+                            m_ext = os.path.splitext(m_old_path_abs)[1]
+                            m_new_path_abs = os.path.normpath(os.path.join(old_path_abs, m_new_filename + m_ext))
+                            
+                            if m_new_path_abs.lower() != m_old_path_abs.lower():
+                                # Éviter écrasement si conflit
+                                if os.path.exists(m_new_path_abs):
+                                    base_s, ext_s = os.path.splitext(m_new_filename)
+                                    ct = 1
+                                    while os.path.exists(os.path.normpath(os.path.join(old_path_abs, f"{base_s}_{ct}{m_ext}"))):
+                                        ct += 1
+                                    m_new_path_abs = os.path.normpath(os.path.join(old_path_abs, f"{base_s}_{ct}{m_ext}"))
+                                
+                                os.rename(m_old_path_abs, m_new_path_abs)
+                                logging.info(f"[RenamePhysical] Renamed stem file: {m_old_path_abs} -> {m_new_path_abs}")
+                                final_stem_abs = m_new_path_abs
+
+                        new_stems_portable.append(to_portable_path(final_stem_abs))
+
+                        # A.2 Rechercher l'ancienne configuration pour conserver volume, pan, mute, solo
+                        old_vol = 1.0
+                        old_pan = 0.0
+                        old_mute = False
+                        old_solo = False
+                        fallback_name = os.path.basename(final_stem_abs).split('.')[0]
+
+                        # Comparer par nom de fichier (basename) de façon insensible à la casse pour retrouver l'état
+                        old_stem_filename = os.path.basename(m_old_path_abs).lower()
+                        for track in mt_settings.get("tracks", []):
+                            t_path_abs = resolve_portable_path(track.get("path", ""))
+                            if os.path.basename(t_path_abs).lower() == old_stem_filename:
+                                old_vol = track.get("volume", 1.0)
+                                old_pan = track.get("pan", 0.0)
+                                old_mute = track.get("mute", False)
+                                old_solo = track.get("solo", False)
+                                if not rename_stems_labels:
+                                    fallback_name = track.get("name", fallback_name)
+                                break
+
+                        new_tracks.append({
+                            "path": to_portable_path(final_stem_abs),
+                            "name": m_new_name if rename_stems_labels else fallback_name,
+                            "volume": old_vol,
+                            "pan": old_pan,
+                            "mute": old_mute,
+                            "solo": old_solo
+                        })
+                    else:
+                        if m_old_path_abs:
+                            new_stems_portable.append(to_portable_path(m_old_path_abs))
+
+                # Mettre à jour tracks
+                mt_settings["tracks"] = new_tracks
+
+                # Écrire airstep_meta.json mis à jour
+                try:
+                    with open(settings_file, "w", encoding="utf-8") as sf:
+                        json.dump(mt_settings, sf, indent=4)
+                except Exception as esf:
+                    logging.error(f"[RenamePhysical] Failed to write airstep_meta.json before rename: {esf}")
+
+            # Étape B : Renommer physiquement le dossier parent
+            if rename_folder and new_dir_abs.lower() != old_path_abs.lower():
+                logging.warning(f"[RenamePhysical] Renaming directory: {old_path_abs} -> {new_dir_abs}")
+                os.rename(old_path_abs, new_dir_abs)
+                new_path_abs = new_dir_abs
+            else:
+                new_path_abs = old_path_abs
+
+            # Ajuster les chemins portables des stems avec le nouveau nom du dossier
+            if new_stems_portable:
+                adjusted_stems = []
+                for s_port in new_stems_portable:
+                    s_abs = resolve_portable_path(s_port)
+                    s_filename = os.path.basename(s_abs)
+                    s_new_abs = os.path.join(new_dir_abs, s_filename)
+                    adjusted_stems.append(to_portable_path(s_new_abs))
+                new_stems_portable = adjusted_stems
+            else:
+                adjusted_stems = []
+                for s_port in current_stems_portable:
+                    s_abs = resolve_portable_path(s_port)
+                    s_filename = os.path.basename(s_abs)
+                    s_new_abs = os.path.join(new_dir_abs, s_filename)
+                    adjusted_stems.append(to_portable_path(s_new_abs))
+                new_stems_portable = adjusted_stems
+
+            # Mettre à jour airstep_meta.json à son nouvel emplacement
+            new_settings_file = os.path.join(new_dir_abs, "airstep_meta.json")
+            if os.path.exists(new_settings_file):
+                try:
+                    with open(new_settings_file, "r", encoding="utf-8") as sf:
+                        meta_data = json.load(sf)
+                    if "tracks" in meta_data:
+                        for track in meta_data["tracks"]:
+                            t_abs = resolve_portable_path(track.get("path", ""))
+                            t_filename = os.path.basename(t_abs)
+                            t_new_abs = os.path.join(new_dir_abs, t_filename)
+                            track["path"] = to_portable_path(t_new_abs)
+                    with open(new_settings_file, "w", encoding="utf-8") as sf:
+                        json.dump(meta_data, sf, indent=4)
+                except Exception as es:
+                    logging.error(f"[RenamePhysical] Failed to adjust airstep_meta.json at new location: {es}")
+
+        # --- PROPAGATION UNIVERSELLE DANS LES BASES DE DONNÉES ---
+        new_path_portable = to_portable_path(new_path_abs)
+        
+        # 1. Mettre à jour local_lib.json
+        for it in items:
+            if it.get("path") == old_path_portable:
+                it["path"] = new_path_portable
+                it["is_missing"] = False
+                if is_multitrack:
+                    it["stems"] = new_stems_portable
+        
+        with open(LOCAL_LIB_FILE, "w", encoding="utf-8") as f:
+            json.dump(items, f, indent=4)
+            f.flush()
+            os.fsync(f.fileno())
+
+        # 2. Mettre à jour setlist.json
+        setlists_items = []
+        if os.path.exists(SETLIST_FILE):
+            with open(SETLIST_FILE, "r", encoding="utf-8") as f:
+                setlists_items = json.load(f)
+            
+            changed = False
+            for it in setlists_items:
+                if it.get("url") == old_path_portable:
+                    it["url"] = new_path_portable
+                    it["is_missing"] = False
+                    if is_multitrack:
+                        it["stems"] = new_stems_portable
+                    changed = True
+            
+            if changed:
+                with open(SETLIST_FILE, "w", encoding="utf-8") as f:
+                    json.dump(setlists_items, f, indent=4)
+                    f.flush()
+                    os.fsync(f.fileno())
+
+        # Mettre à jour également les sidecars de métadonnées s'ils existent à leur nouvel emplacement
+        if not is_multitrack:
+            new_sidecar_path = new_path_abs + ".json"
+            if os.path.exists(new_sidecar_path):
+                try:
+                    with open(new_sidecar_path, "r", encoding="utf-8") as sf:
+                        s_data = json.load(sf)
+                    s_data["path"] = new_path_portable
+                    with open(new_sidecar_path, "w", encoding="utf-8") as sf:
+                        json.dump(s_data, sf, indent=4)
+                except: pass
+
+        return {"status": "ok", "items": items, "new_path": new_path_portable}
+
+    except Exception as e:
+        logging.error(f"Rename Physical Error: {e}")
+        return {"status": "error", "message": str(e)}
+
 @app.post("/api/setlist/edit/{index}")
 async def edit_setlist_item(index: int, item: Dict):
     try:
@@ -2988,54 +3285,58 @@ async def dl_start(data: Dict):
     def completion_cb(success, result):
         if success:
             path = result["path"]
-            # Add to Local Library
-            try:
-                # Refresh Metadata from file to be sure
-                file_data = metadata_service.scan_file_metadata(path)
-                # V57: Always convert to portable path for DB storage
-                file_data["path"] = to_portable_path(path)
-                file_data["added_at"] = time.time()
+            add_to_lib = data.get("add_to_library", True)
+            if add_to_lib:
+                # Add to Local Library
+                try:
+                    # Refresh Metadata from file to be sure
+                    file_data = metadata_service.scan_file_metadata(path)
+                    # V57: Always convert to portable path for DB storage
+                    file_data["path"] = to_portable_path(path)
+                    file_data["added_at"] = time.time()
 
-                # Inject Chapters from Download Service
-                if "chapters" in result:
-                    file_data["chapters"] = result["chapters"]
+                    # Inject Chapters from Download Service
+                    if "chapters" in result:
+                        file_data["chapters"] = result["chapters"]
 
-                # Check for cover art passed in metadata to force cached refresh if needed?
-                # Actually scan_file_metadata is enough usually.
+                    # Check for cover art passed in metadata to force cached refresh if needed?
+                    # Actually scan_file_metadata is enough usually.
 
-                # MERGE LOGICAL METADATA (Category, Notes, Profile)
-                # scan_file_metadata only gets physical tags. We want to keep what user entered.
-                original_meta = data.get("metadata", {})
-                if original_meta:
-                    if "url" in original_meta: file_data["url"] = original_meta["url"]
-                    if "category" in original_meta: file_data["category"] = original_meta["category"]
-                    if "user_notes" in original_meta: file_data["user_notes"] = original_meta["user_notes"]
-                    if "target_profile" in original_meta: file_data["target_profile"] = original_meta["target_profile"]
-                    # If physical title/artist empty, use input
-                    if not file_data.get("title") and "title" in original_meta: file_data["title"] = original_meta["title"]
-                    if not file_data.get("artist") and "artist" in original_meta: file_data["artist"] = original_meta["artist"]
+                    # MERGE LOGICAL METADATA (Category, Notes, Profile)
+                    # scan_file_metadata only gets physical tags. We want to keep what user entered.
+                    original_meta = data.get("metadata", {})
+                    if original_meta:
+                        if "url" in original_meta: file_data["url"] = original_meta["url"]
+                        if "category" in original_meta: file_data["category"] = original_meta["category"]
+                        if "user_notes" in original_meta: file_data["user_notes"] = original_meta["user_notes"]
+                        if "target_profile" in original_meta: file_data["target_profile"] = original_meta["target_profile"]
+                        # If physical title/artist empty, use input
+                        if not file_data.get("title") and "title" in original_meta: file_data["title"] = original_meta["title"]
+                        if not file_data.get("artist") and "artist" in original_meta: file_data["artist"] = original_meta["artist"]
 
-                items = []
-                if os.path.exists(LOCAL_LIB_FILE):
-                    with open(LOCAL_LIB_FILE, "r", encoding="utf-8") as f:
-                        items = json.load(f)
+                    items = []
+                    if os.path.exists(LOCAL_LIB_FILE):
+                        with open(LOCAL_LIB_FILE, "r", encoding="utf-8") as f:
+                            items = json.load(f)
 
-                # Update if exists
-                existing_idx = next((i for i, x in enumerate(items) if x["path"] == path), -1)
-                if existing_idx >= 0:
-                    items[existing_idx] = file_data
-                else:
-                    items.append(file_data)
+                    # Update if exists
+                    existing_idx = next((i for i, x in enumerate(items) if x["path"] == path), -1)
+                    if existing_idx >= 0:
+                        items[existing_idx] = file_data
+                    else:
+                        items.append(file_data)
 
-                with open(LOCAL_LIB_FILE, "w", encoding="utf-8") as f:
-                    json.dump(items, f, indent=4)
+                    with open(LOCAL_LIB_FILE, "w", encoding="utf-8") as f:
+                        json.dump(items, f, indent=4)
 
-                broadcast_sync(json.dumps({"type": "dl_complete", "path": to_portable_path(path)}))
-            except Exception as e:
-                logging.error(f"Post-DL Library Error: {e}")
-                broadcast_sync(json.dumps({"type": "dl_error", "error": "Library Update Failed"}))
+                except Exception as e:
+                    logging.error(f"Post-DL Library Error: {e}")
+                    broadcast_sync(json.dumps({"type": "dl_error", "error": "Library Update Failed"}))
+                    return
+
+            broadcast_sync(json.dumps({"type": "dl_complete", "path": to_portable_path(path)}))
         else:
-             broadcast_sync(json.dumps({"type": "dl_error", "error": result}))
+            broadcast_sync(json.dumps({"type": "dl_error", "error": result}))
 
     # V57: Ensure target_folder is resolved if it was a portable path from UI
     if "target_folder" in data:
@@ -3544,6 +3845,51 @@ async def upload_cover_generic(request: Request):
         shutil.copyfileobj(file.file, buffer)
 
     return {"status": "ok", "path": to_portable_path(dest_path)}
+
+@app.get("/api/youtube/cover/{video_id}")
+async def get_youtube_cover(video_id: str):
+    """
+    Downloads the YouTube cover image for a video_id if not present locally,
+    stores it in data/youtube_covers/, and serves it locally.
+    This respects the user's wish to have local offline assets.
+    """
+    import urllib.request
+    import shutil
+    
+    # Destination folder in data/youtube_covers
+    dest_dir = os.path.join(get_data_dir(), "youtube_covers")
+    if not os.path.exists(dest_dir):
+        os.makedirs(dest_dir, exist_ok=True)
+        
+    dest_path = os.path.join(dest_dir, f"{video_id}.jpg")
+    
+    if not os.path.exists(dest_path):
+        # Let's download it
+        yt_urls = [
+            f"https://i.ytimg.com/vi/{video_id}/mqdefault.jpg",
+            f"https://i.ytimg.com/vi/{video_id}/default.jpg"
+        ]
+        downloaded = False
+        for url in yt_urls:
+            try:
+                # Set a user-agent to avoid getting blocked
+                req = urllib.request.Request(
+                    url, 
+                    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+                )
+                with urllib.request.urlopen(req, timeout=5) as response, open(dest_path, 'wb') as out_file:
+                    shutil.copyfileobj(response, out_file)
+                downloaded = True
+                logging.info(f"[YT_COVER] Successfully downloaded: {url} -> {dest_path}")
+                break
+            except Exception as e:
+                logging.warning(f"[YT_COVER] Failed to download {url}: {e}")
+                
+        if not downloaded:
+            # Fallback to an empty or default picture if download completely fails
+            raise HTTPException(status_code=404, detail="Could not download YouTube cover")
+            
+    return FileResponse(dest_path, media_type="image/jpeg")
 
 @app.get("/api/local/find_artist_folder")
 async def find_artist_folder(name: str, preferred_root: str = None):

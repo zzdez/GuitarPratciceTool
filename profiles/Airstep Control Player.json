@@ -10,25 +10,25 @@
             "trigger_value": "any",
             "action_type": "internal",
             "action_value": "media_pause",
-            "custom_icon": "\u23ef"
+            "custom_icon": "⏯"
         },
         {
-            "name": "Retour au D\u00e9but",
+            "name": "Retour au Début",
             "midi_cc": 55,
             "midi_channel": 16,
             "trigger_value": "any",
             "action_type": "internal",
             "action_value": "media_stop",
-            "custom_icon": "\u25a0"
+            "custom_icon": "■"
         },
         {
-            "name": "Acc\u00e9l\u00e9rer",
+            "name": "Accélérer",
             "midi_cc": 58,
             "midi_channel": 16,
             "trigger_value": "any",
             "action_type": "internal",
             "action_value": "media_speed_up",
-            "custom_icon": "\u23f1+"
+            "custom_icon": "⏱+"
         },
         {
             "name": "Ralentir",
@@ -37,7 +37,7 @@
             "trigger_value": "any",
             "action_type": "internal",
             "action_value": "media_speed_down",
-            "custom_icon": "\u23f1-"
+            "custom_icon": "⏱-"
         },
         {
             "name": "Avance 10s",
@@ -46,7 +46,7 @@
             "trigger_value": "any",
             "action_type": "internal",
             "action_value": "media_seek_forward",
-            "custom_icon": "\u23e9"
+            "custom_icon": "⏩"
         },
         {
             "name": "Retour 10s",
@@ -55,7 +55,7 @@
             "trigger_value": "any",
             "action_type": "internal",
             "action_value": "media_seek_backward",
-            "custom_icon": "\u23ea"
+            "custom_icon": "⏪"
         },
         {
             "name": "Volume -",
@@ -64,7 +64,7 @@
             "trigger_value": "any",
             "action_type": "internal",
             "action_value": "media_vol_down",
-            "custom_icon": "\ud83d\udd09"
+            "custom_icon": "🔉"
         },
         {
             "name": "Volume +",
@@ -73,7 +73,7 @@
             "trigger_value": "any",
             "action_type": "internal",
             "action_value": "media_vol_up",
-            "custom_icon": "\ud83d\udd0a"
+            "custom_icon": "🔊"
         },
         {
             "name": "Mute",
@@ -82,7 +82,7 @@
             "trigger_value": "any",
             "action_type": "internal",
             "action_value": "media_mute",
-            "custom_icon": "\ud83d\udd07"
+            "custom_icon": "🔇"
         },
         {
             "name": "Pitch -",
@@ -91,7 +91,7 @@
             "trigger_value": "any",
             "action_type": "internal",
             "action_value": "media_pitch_down",
-            "custom_icon": "\u266a-"
+            "custom_icon": "♪-"
         },
         {
             "name": "Pitch +",
@@ -100,7 +100,7 @@
             "trigger_value": "any",
             "action_type": "internal",
             "action_value": "media_pitch_up",
-            "custom_icon": "\u266a+"
+            "custom_icon": "♪+"
         },
         {
             "name": "Boucle ON/OFF",
@@ -109,7 +109,7 @@
             "trigger_value": "any",
             "action_type": "internal",
             "action_value": "media_clear_loop",
-            "custom_icon": "\u2715"
+            "custom_icon": "✕"
         },
         {
             "name": "Boucle A",
@@ -129,5 +129,6 @@
             "action_value": "media_loop_b",
             "custom_icon": "B"
         }
-    ]
+    ],
+    "device_name": "Aucun"
 }

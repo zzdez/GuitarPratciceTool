@@ -1,10 +1,38 @@
 :root {
-    --bg-color: #121212;
-    --card-bg: #1e1e1e;
-    --accent: #bb86fc;
-    --text: #ffffff;
+    --bg-color: #0B0F19;
+    --card-bg: #131B2E;
+    --accent: #3B82F6;
+    --text: #F3F4F6;
     --danger: #cf6679;
     --success: #03dac6;
+}
+
+body.theme-steel_blue {
+    --bg-color: #0B0F19;
+    --card-bg: #131B2E;
+    --accent: #3B82F6;
+    --text: #F3F4F6;
+}
+
+body.theme-amethyst {
+    --bg-color: #0B0F19;
+    --card-bg: #131B2E;
+    --accent: #8B5CF6;
+    --text: #F3F4F6;
+}
+
+body.theme-emerald {
+    --bg-color: #0B0F19;
+    --card-bg: #131B2E;
+    --accent: #10B981;
+    --text: #F3F4F6;
+}
+
+body.theme-amber {
+    --bg-color: #0B0F19;
+    --card-bg: #131B2E;
+    --accent: #F59E0B;
+    --text: #F3F4F6;
 }
 
 body {
@@ -175,7 +203,8 @@ header {
     display: flex;
     flex-direction: column;
     overflow: hidden; /* V60: Scroll Moved to table-wrapper */
-    height: calc(100vh - 76px); /* Fixed Height below header */
+    height: calc(100vh - 82px); /* Fixed Height below header V14 (82px) */
+    box-sizing: border-box;
 }
 
 /* ==========================================
@@ -476,12 +505,13 @@ iframe {
 /* SIDEBAR COMPONENTS */
 .sidebar-section {
     background: #222;
-    padding: 6px;
+    padding: 6px 6px 16px 6px; /* V66: Added bottom safe area to prevent truncation */
     border-radius: 8px;
     display: flex; /* V60 Flex Layout */
     flex-direction: column;
     height: 100%;
     min-height: 0;
+    box-sizing: border-box;
 }
 
 .section-title {
@@ -579,6 +609,17 @@ button:hover {
     border-radius: 0;
     font-size: 0.85em;
     /* Reduced from 0.9em */
+    cursor: grab;
+    user-select: none;
+}
+
+.nav-tabs button:active {
+    cursor: grabbing;
+}
+
+.nav-tabs button.dragging {
+    opacity: 0.4;
+    background: rgba(255, 255, 255, 0.05);
 }
 
 .nav-tabs button.active {
@@ -3260,3 +3301,623 @@ input[type="color"].stem-color-input::-moz-color-swatch {
     outline: none;
     border-bottom: 1px solid var(--accent) !important;
 }
+
+/* ==========================================
+   ERGONOMIE PREMIUM SANS CLÉ API (GLOW & FOCUS)
+   ========================================== */
+#yt-search-input.no-api-active {
+    border: 2px solid var(--accent) !important;
+    box-shadow: 0 0 12px rgba(187, 134, 252, 0.15) !important;
+    font-size: 0.95em !important;
+    padding: 10px 14px !important;
+    border-radius: 6px !important;
+    background: #252525 !important;
+    transition: all 0.3s ease;
+}
+#yt-search-input.no-api-active:focus {
+    border-color: #3498db !important;
+    box-shadow: 0 0 18px rgba(52, 152, 219, 0.3) !important;
+    background: #2a2a2a !important;
+}
+#yt-search-btn.no-api-active {
+    font-size: 1.1em !important;
+    padding: 8px 16px !important;
+    border-radius: 6px !important;
+    background: var(--accent) !important;
+    color: #000 !important;
+    transition: all 0.2s ease;
+}
+#yt-search-btn.no-api-active:hover {
+    transform: scale(1.05);
+    opacity: 0.9;
+}
+
+/* ==========================================
+   MEDIA MODAL HEIGHT & COMPACTNESS (V27.1 / V60+ Unified)
+   ========================================== */
+#media-modal[open], #modal-multitrack[open], #modal-web-link[open] {
+    display: flex !important;
+    flex-direction: column;
+    height: auto !important;
+    min-height: 40vh;
+    max-height: 90vh !important; 
+    width: 95% !important;
+    max-width: 950px !important;
+    overflow: hidden; /* Let modal-body scroll */
+    transition: max-height 0.25s ease-in-out;
+}
+
+#media-modal .modal-body, #modal-multitrack .modal-body, #modal-web-link .modal-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    max-height: none !important; 
+    padding-top: 5px !important;
+}
+
+#media-modal .modal-footer button, #modal-multitrack .modal-footer button, #modal-web-link .modal-footer button {
+    height: 22px !important;
+    font-size: 11px !important;
+    padding: 0 10px !important;
+}
+
+#media-modal .separator {
+    margin: 8px 0 !important; /* Marge du séparateur réduite de 20px à 8px pour économiser ~24px */
+}
+
+/* ==========================================
+   V28: COMPACT ACTION BUTTONS FOR APPLETS
+   ========================================== */
+.btn-primary-add {
+    width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 5px 8px;
+    margin-bottom: 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text, #F3F4F6);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-primary-add i {
+    font-size: 1.1em;
+    color: var(--accent);
+    transition: transform 0.2s ease;
+}
+
+.btn-primary-add:hover {
+    background: var(--accent);
+    color: #000 !important;
+    border-color: var(--accent);
+}
+
+.btn-primary-add:hover i {
+    color: #000 !important;
+    transform: scale(1.15);
+}
+
+/* Grille locale pour l'applet Fichiers Locaux */
+.action-grid-local {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    margin-bottom: 4px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.btn-action-add {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 5px 6px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text, #F3F4F6);
+    cursor: pointer;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    transition: all 0.2s ease;
+}
+
+.btn-action-add i {
+    font-size: 1.05em;
+    color: var(--accent);
+}
+
+.btn-action-add:hover {
+    background: var(--accent);
+    color: #000 !important;
+    border-color: var(--accent);
+}
+
+.btn-action-add:hover i {
+    color: #000 !important;
+}
+
+.btn-action-manage {
+    width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 4px 8px;
+    margin-bottom: 6px;
+    font-size: 0.68rem;
+    font-weight: 500;
+    border-radius: 4px;
+    border: 1px dashed rgba(255, 255, 255, 0.15);
+    background: transparent;
+    color: #aaa;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-action-manage i {
+    font-size: 1.05em;
+}
+
+.btn-action-manage:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+/* ==========================================
+   MASS TREATMENT & BULK DIALOGS (V35)
+   ========================================== */
+.modal-advanced-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    height: 100%;
+    min-height: 0;
+}
+
+.bulk-control-panel {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    box-sizing: border-box;
+}
+
+.bulk-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    width: 100%;
+}
+
+.bulk-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.bulk-field label {
+    font-size: 0.68rem;
+    color: #888;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.bulk-field input, 
+.bulk-field select {
+    background: #1e1e1e;
+    border: 1px solid #333;
+    color: #fff;
+    padding: 5px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    width: 100%;
+    box-sizing: border-box;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.bulk-field input:focus, 
+.bulk-field select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(187, 134, 252, 0.15);
+    outline: none;
+}
+
+.bulk-dest-row {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+}
+
+.bulk-list-container {
+    flex: 1;
+    overflow-y: auto;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    background: #161616;
+    max-height: 260px;
+    min-height: 150px;
+}
+
+.bulk-item-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    transition: background-color 0.2s ease;
+    cursor: pointer;
+    user-select: none;
+}
+
+.bulk-item-row:hover {
+    background-color: rgba(255, 255, 255, 0.02);
+}
+
+.bulk-item-row.selected {
+    background-color: rgba(187, 134, 252, 0.06);
+    border-left: 3px solid var(--accent);
+    padding-left: 7px; /* Compensation pour la bordure gauche */
+}
+
+.bulk-item-row input[type="checkbox"] {
+    cursor: pointer;
+    width: 14px;
+    height: 14px;
+    accent-color: var(--accent);
+    flex: none !important;
+    margin: 0;
+}
+
+.bulk-item-info {
+    flex: 1;
+    min-width: 0; /* Important pour forcer l'ellipse sur les enfants flex */
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.bulk-item-title {
+    font-weight: 600;
+    font-size: 0.82rem;
+    color: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bulk-item-artist {
+    font-size: 0.72rem;
+    color: #aaaaaa;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bulk-item-path {
+    font-family: 'JetBrains Mono', 'Roboto Mono', monospace;
+    font-size: 0.62rem;
+    color: #555555;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    word-break: break-all;
+}
+
+.bulk-item-row.selected .bulk-item-artist {
+    color: #ccc;
+}
+
+.bulk-item-row.selected .bulk-item-path {
+    color: #777;
+}
+
+@keyframes swing-guitar {
+    0% { transform: rotate(-30deg) translateY(-8px); }
+    50% { transform: rotate(-2deg) translateY(12px); }
+    100% { transform: rotate(-30deg) translateY(-8px); }
+}
+
+#placeholder-disc {
+    width: 196px;
+    height: 196px;
+    color: var(--accent);
+    opacity: 0.28;
+    animation: swing-guitar 5s ease-in-out infinite;
+    transform-origin: center;
+    transition: opacity 0.3s ease, filter 0.3s ease;
+}
+
+#media-placeholder:hover #placeholder-disc {
+    opacity: 0.65;
+    filter: drop-shadow(0 0 20px var(--accent));
+}
+
+/* ==========================================
+   SCROLLBAR ULTRA-DISCRÈTE & DÉFILEMENT APPS/SETLISTS
+   ========================================== */
+#apps-container, #setlists-v2-list {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+/* Scrollbar ultra-fine et discrète (Webkit - Chrome/Edge/Safari) */
+.table-wrapper::-webkit-scrollbar,
+#apps-container::-webkit-scrollbar,
+#setlists-v2-list::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+}
+
+.table-wrapper::-webkit-scrollbar-track,
+#apps-container::-webkit-scrollbar-track,
+#setlists-v2-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.table-wrapper::-webkit-scrollbar-thumb,
+#apps-container::-webkit-scrollbar-thumb,
+#setlists-v2-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    transition: background 0.3s ease;
+}
+
+.table-wrapper::-webkit-scrollbar-thumb:hover,
+#apps-container::-webkit-scrollbar-thumb:hover,
+#setlists-v2-list::-webkit-scrollbar-thumb:hover {
+    background: var(--accent);
+}
+
+/* Firefox Support */
+.table-wrapper,
+#apps-container,
+#setlists-v2-list {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
+}
+
+/* ==========================================
+   MODAL PHYSICAL RENAME & STEMS STYLE
+   ========================================== */
+.instrument-badge {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid #444;
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 0.75em;
+    color: #ccc;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.instrument-badge:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+.instrument-badge .btn-del-badge {
+    color: #cf6679;
+    font-weight: bold;
+    cursor: pointer;
+    font-size: 1.1em;
+    padding-left: 2px;
+}
+
+.instrument-badge .btn-del-badge:hover {
+    color: #ff4d6d;
+}
+
+.rename-stem-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 0.85em;
+    transition: background 0.2s ease;
+}
+
+.rename-stem-row:hover {
+    background: rgba(255,255,255,0.04);
+}
+
+.rename-stem-row select {
+    background: #2a2a2a;
+    color: #fff;
+    border: 1px solid #444;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 0.9em;
+    flex: 1;
+    min-width: 120px;
+    cursor: pointer;
+}
+
+.rename-stem-row select:focus {
+    border-color: var(--accent);
+    outline: none;
+}
+
+.rename-stem-row input.custom-inst-input {
+    background: #2a2a2a;
+    color: #fff;
+    border: 1px solid #444;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 0.9em;
+    flex: 1;
+    min-width: 120px;
+}
+
+.rename-stem-row input.custom-inst-input:focus {
+    border-color: var(--accent);
+    outline: none;
+}
+
+.rename-stem-row .stem-result-name {
+    font-family: monospace;
+    color: var(--accent);
+    font-size: 0.9em;
+    word-break: break-all;
+    flex: 1.5;
+    text-align: right;
+}
+
+#rename-stems-rows-container::-webkit-scrollbar,
+#instruments-bag-list::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+}
+
+#rename-stems-rows-container::-webkit-scrollbar-track,
+#instruments-bag-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#rename-stems-rows-container::-webkit-scrollbar-thumb,
+#instruments-bag-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+}
+
+#rename-stems-rows-container::-webkit-scrollbar-thumb:hover,
+#instruments-bag-list::-webkit-scrollbar-thumb:hover {
+    background: var(--accent);
+}
+
+#modal-physical-rename[open] {
+    display: flex;
+    flex-direction: column;
+}
+
+#modal-physical-rename input[type="radio"],
+#modal-physical-rename input[type="checkbox"] {
+    flex: none !important;
+    width: auto !important;
+    height: auto !important;
+    cursor: pointer;
+    margin: 0;
+}
+
+#modal-physical-rename label {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    cursor: pointer;
+    margin: 0;
+}
+
+/* --- BROWSER-STYLE TABS BAR FOR INTERCONNECTION (V60) --- */
+.modal-tabs-bar {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    padding: 0 10px;
+    background: rgba(0,0,0,0.25);
+    border-bottom: 1px solid #333;
+    min-height: 38px;
+    margin: -10px -15px 15px -15px; /* Offset parent modal padding to touch edges */
+    box-sizing: border-box;
+}
+
+.modal-tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+    font-size: 11px;
+    color: #888;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    max-width: 160px;
+    height: 28px;
+    user-select: none;
+    box-sizing: border-box;
+}
+
+.modal-tab:hover {
+    background: #252525;
+    color: #ccc;
+}
+
+.modal-tab.active {
+    background: #1e1e1e; /* Match modal body bg */
+    color: var(--accent);
+    border-color: #333;
+    border-top: 2px solid var(--accent);
+    font-weight: bold;
+    cursor: default;
+    height: 29px; /* Force overlap border-bottom */
+    margin-bottom: -1px;
+}
+
+.modal-tab-close {
+    font-size: 12px;
+    color: #555;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    transition: all 0.2s;
+}
+
+.modal-tab-close:hover {
+    background: rgba(255,255,255,0.08);
+    color: #ff5555;
+}
+
+.modal-tab-add {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.03);
+    color: #666;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s ease;
+    border: 1px solid #333;
+    margin-bottom: 4px;
+    margin-left: 5px;
+}
+
+.modal-tab-add:hover {
+    background: rgba(187, 134, 252, 0.12);
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+

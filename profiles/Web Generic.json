@@ -25,7 +25,7 @@
             "action_value": "right"
         },
         {
-            "name": "Plein \u00c9cran",
+            "name": "Plein Écran",
             "midi_cc": 57,
             "midi_channel": 16,
             "action_type": "hotkey",

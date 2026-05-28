@@ -85,11 +85,11 @@ class ContextMonitor(threading.Thread):
                     active_process = self.action_handler.get_active_process_name().lower()
                     active_title = self.action_handler.get_active_window_title().lower()
 
-                    blacklist_apps = ["python.exe", "airstepsmartcontrol.exe", "airstepstudio.exe"]
-                    # Fix: Allow "Midi-Kbd Control Studio" (Web) but block "Midi-Kbd Control Studio" (Native) if needed, 
+                    blacklist_apps = ["python.exe", "airstepsmartcontrol.exe", "airstepstudio.exe", "guitarpracticetool.exe"]
+                    # Fix: Allow "GuitarPracticeTool" (Web) but block "GuitarPracticeTool" (Native) if needed, 
                     # Actually original was "airstep smart control" (native) vs "airstep studio" (web).
-                    # Now both might be Midi-Kbd Control Studio. Let's make sure the native window is blacklisted.
-                    if (active_process in blacklist_apps) or ("midi-kbd control studio" in active_title and "web" not in active_title.lower() and "youtube" not in active_title.lower() and "audio" not in active_title.lower() and "video" not in active_title.lower() and "generic" not in active_title.lower()):
+                    # Now both might be GuitarPracticeTool. Let's make sure the native window is blacklisted.
+                    if (active_process in blacklist_apps) or ("guitarpracticetool" in active_title and "web" not in active_title.lower() and "youtube" not in active_title.lower() and "audio" not in active_title.lower() and "video" not in active_title.lower() and "generic" not in active_title.lower()):
                         # Ignored self-focus. Keep previous profile.
                         time.sleep(self.interval)
                         continue
