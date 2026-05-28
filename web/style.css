@@ -3338,15 +3338,17 @@ input[type="color"].stem-color-input::-moz-color-swatch {
 #media-modal[open], #modal-multitrack[open], #modal-web-link[open] {
     display: flex !important;
     flex-direction: column;
-    height: 76vh !important;
-    max-height: 76vh !important; 
+    height: auto !important;
+    min-height: 40vh;
+    max-height: 90vh !important; 
     width: 95% !important;
     max-width: 950px !important;
     overflow: hidden; /* Let modal-body scroll */
+    transition: max-height 0.25s ease-in-out;
 }
 
 #media-modal .modal-body, #modal-multitrack .modal-body, #modal-web-link .modal-body {
-    flex: 1;
+    flex: 1 1 auto;
     overflow-y: auto;
     max-height: none !important; 
     padding-top: 5px !important;
