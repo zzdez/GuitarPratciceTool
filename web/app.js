@@ -3532,6 +3532,14 @@ function resetMediaModalUI() {
         modalTitleEl.innerText = t("web.modal_youtube_title", "Éditer Lien YouTube");
         modalTitleEl.setAttribute("data-i18n", "web.modal_youtube_title");
     }
+
+    // Reset Save button action and state
+    const saveBtn = document.getElementById("btn-save-item");
+    if (saveBtn) {
+        saveBtn.onclick = saveItem;
+        saveBtn.disabled = false;
+        saveBtn.classList.remove("disabled");
+    }
 }
 
 // --- MODAL & EDIT LOGIC ---
@@ -3577,6 +3585,9 @@ function openAddModal() {
 
     document.getElementById("dl-progress-bar").style.width = "0%";
     document.getElementById("dl-status").innerText = t("web.status_ready");
+    
+    const dlAddToLib = document.getElementById("dl-add-to-lib");
+    if (dlAddToLib) dlAddToLib.checked = false; // Par défaut décoché
 
     // Reset View: Show Search
     resetSearchMode();
@@ -4041,6 +4052,17 @@ function connectVideoWebSocket() {
                 if (bar) {
                     bar.style.width = "100%";
                     bar.style.background = "#4caf50"; // Green
+                }
+
+                // V62: Remplacer le bouton de sauvegarde par un bouton Close
+                const saveBtn = document.getElementById("btn-save-item");
+                if (saveBtn) {
+                    saveBtn.innerText = typeof t === "function" ? t("web.btn_close", "Fermer") : "Fermer";
+                    saveBtn.disabled = false;
+                    saveBtn.classList.remove("disabled");
+                    saveBtn.onclick = () => {
+                        closeModal();
+                    };
                 }
 
                 // Check Auto Close

@@ -275,8 +275,12 @@ class DownloadService:
 
             if final_filename and os.path.exists(final_filename):
                 # Tagging
-                logging.info(f"Tagging file: {final_filename}")
-                self.metadata_service.write_file_metadata(final_filename, meta)
+                add_to_lib = options.get('add_to_library', True)
+                if add_to_lib:
+                    logging.info(f"Tagging file: {final_filename}")
+                    self.metadata_service.write_file_metadata(final_filename, meta)
+                else:
+                    logging.info(f"[DL] Pure download: skipping metadata tagging and sidecar JSON creation")
 
                 # Extract Chapters if available
                 chapters = info.get('chapters', [])
