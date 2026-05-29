@@ -18,7 +18,7 @@ import logging
 import base64
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Dict
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException, Response
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException, Response, UploadFile, File
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
@@ -4106,6 +4106,76 @@ async def delete_setlist(sl_id: str):
         return {"status": "ok"}
     except Exception as e:
         logging.error(f"[SETLIST_V2] Erreur suppression: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- RECORDINGS ENGINE ---
+@app.post("/api/local/recordings")
+async def save_recording(file: UploadFile = File(...)):
+    """Sauvegarde un enregistrement de session (Jam/Training)."""
+    try:
+        import shutil
+        from utils import get_app_dir, to_portable_path
+        
+        recordings_dir = os.path.join(get_app_dir(), "Medias", "Recordings")
+        os.makedirs(recordings_dir, exist_ok=True)
+        
+        filename = file.filename
+        if not filename:
+            filename = f"Record_{int(time.time())}.wav"
+            
+        file_path = os.path.join(recordings_dir, filename)
+        
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        logging.info(f"[RECORDINGS] Enregistrement sauvegardé : {file_path}")
+        return {"status": "ok", "path": to_portable_path(file_path), "filename": filename}
+    except Exception as e:
+        logging.error(f"[RECORDINGS] Erreur sauvegarde: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/local/add_by_path")
+async def add_local_file_by_path(payload: dict):
+    """Importe directement un fichier local dans la bibliothèque sans boîte de dialogue."""
+    try:
+        from utils import resolve_portable_path, to_portable_path
+        import time
+        
+        path = payload.get("path")
+        if not path:
+             raise HTTPException(status_code=400, detail="Chemin requis")
+             
+        resolved_path = resolve_portable_path(path)
+        if not os.path.exists(resolved_path):
+             raise HTTPException(status_code=404, detail="Fichier introuvable")
+             
+        file_data = metadata_service.scan_file_metadata(resolved_path)
+        file_data["path"] = to_portable_path(resolved_path)
+        file_data["added_at"] = time.time()
+        
+        # Valeurs par défaut intelligentes pour les enregistrements
+        if "Recordings" in resolved_path:
+             file_data["category"] = "Enregistrements"
+             file_data["genre"] = "Jam"
+             if not file_data.get("title") or file_data["title"] == os.path.splitext(os.path.basename(resolved_path))[0]:
+                 # Extraire une date lisible si possible
+                 file_data["title"] = f"Jam - {time.strftime('%d/%m/%Y %H:%M:%S', time.localtime())}"
+        
+        items = []
+        if os.path.exists(LOCAL_LIB_FILE):
+            with open(LOCAL_LIB_FILE, "r", encoding="utf-8") as f:
+                items = json.load(f)
+                
+        existing = next((i for i in items if i["path"] == file_data["path"]), None)
+        if not existing:
+            items.append(file_data)
+            with open(LOCAL_LIB_FILE, "w", encoding="utf-8") as f:
+                json.dump(items, f, indent=4)
+            return {"status": "ok", "message": "Added", "items": items}
+        else:
+            return {"status": "exists", "message": "Already in library"}
+    except Exception as e:
+        logging.error(f"[ADD_BY_PATH] Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Static Files Logic

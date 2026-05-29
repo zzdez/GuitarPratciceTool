@@ -705,7 +705,19 @@
             "lbl_bank_cc": "CC Banque",
             "lbl_bank_offset_short": "Offset Banque",
             "lbl_cc_num": "Numéro CC"
-        }
+        },
+        "btn_record": "Enregistrer la Session",
+        "btn_stop_record": "Arrêter l'Enregistrement",
+        "modal_rec_title": "Fin de l'Enregistrement",
+        "modal_rec_save": "Sauvegarder",
+        "modal_rec_retry": "Recommencer (Jeter)",
+        "modal_rec_listen": "Écouter l'enregistrement",
+        "msg_recording_in_progress": "Enregistrement en cours...",
+        "msg_recording_permission": "L'accès au microphone/carte son est requis !",
+        "msg_recording_success": "Session enregistrée et ajoutée avec succès à la bibliothèque !",
+        "msg_recording_error": "Erreur lors de l'enregistrement : ",
+        "lbl_recording_monitoring": "Niveau d'Entrée Guitare",
+        "lbl_saving_recording": "Sauvegarde de l'enregistrement..."
     },
     "sync": {
         "title": "Synchronisation Cloud",

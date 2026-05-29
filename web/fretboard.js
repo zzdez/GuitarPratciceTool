@@ -536,7 +536,7 @@ function updateFretboardDropdowns() {
     if (tuningSelect) {
         const currentTuning = tuningSelect.value;
         const instKey = fretboardState.instrument;
-        const inst = instrumentDefs[instKey];
+        const inst = instruments[instKey];
         if (inst) {
             tuningSelect.innerHTML = "";
             inst.tunings.forEach(t => {

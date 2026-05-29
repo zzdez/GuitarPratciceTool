@@ -704,7 +704,19 @@
             "lbl_bank_cc": "Bank CC",
             "lbl_bank_offset_short": "Bank Offset",
             "lbl_cc_num": "CC Number"
-        }
+        },
+        "btn_record": "Record Session",
+        "btn_stop_record": "Stop Recording",
+        "modal_rec_title": "End of Recording",
+        "modal_rec_save": "Save",
+        "modal_rec_retry": "Retry (Discard)",
+        "modal_rec_listen": "Listen to recording",
+        "msg_recording_in_progress": "Recording in progress...",
+        "msg_recording_permission": "Microphone/soundcard access is required!",
+        "msg_recording_success": "Session recorded and successfully added to library!",
+        "msg_recording_error": "Error during recording: ",
+        "lbl_recording_monitoring": "Guitar Input Level",
+        "lbl_saving_recording": "Saving recording..."
     },
     "sync": {
         "title": "Cloud Sync",

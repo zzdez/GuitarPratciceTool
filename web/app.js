@@ -1,5 +1,25 @@
 let currentMode = "WIN";
 
+// --- WEB AUDIO API ROBUSTNESS PATCH (V61: Solve MediaElementSourceNode duplication) ---
+(function() {
+    function patchContext(proto) {
+        if (!proto || proto.createMediaElementSource_patched) return;
+        const originalCreate = proto.createMediaElementSource;
+        proto.createMediaElementSource = function(mediaElement) {
+            if (mediaElement._sourceNode) {
+                console.log("[AudioContext Patch] Reusing existing MediaElementSourceNode for", mediaElement);
+                return mediaElement._sourceNode;
+            }
+            const sourceNode = originalCreate.call(this, mediaElement);
+            mediaElement._sourceNode = sourceNode;
+            return sourceNode;
+        };
+        proto.createMediaElementSource_patched = true;
+    }
+    if (window.AudioContext) patchContext(AudioContext.prototype);
+    if (window.webkitAudioContext) patchContext(webkitAudioContext.prototype);
+})();
+
 // Helper global pour extraire l'ID YouTube
 function getYouTubeId(url) {
     if (!url) return null;
@@ -313,6 +333,22 @@ let isPitchEnabled = false;
 let sourceAudio = null; // For WaveSurfer
 let sourceVideo = null; // For HTML5 Video
 
+// --- SESSION RECORDING VARIABLES ---
+let recMediaRecorder = null;
+let recChunks = [];
+let recTimerInterval = null;
+let recTime = 0;
+let recStreamDestination = null;
+let recGuitarSource = null;
+let recBackingSource = null;
+let recAnalyser = null;
+let recCanvasAnimation = null;
+let recBackingGain = null;
+let recGuitarGain = null;
+let currentRecordingBlob = null;
+let isRecordingSession = false;
+
+
 // --- CAPABILITIES ---
 let systemCapabilities = { can_download: false }; // Default safe value
 
@@ -407,8 +443,16 @@ function showToast(message, type = "info") {
 function initAudioContext() {
     logToBackend("[PITCH] initAudioContext triggered");
     if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        logToBackend("[PITCH] AudioContext Created: " + audioCtx.state);
+        if (window.mtAudioCtx) {
+            audioCtx = window.mtAudioCtx;
+            logToBackend("[PITCH] Reusing multitrack AudioContext: " + audioCtx.state);
+        } else {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            logToBackend("[PITCH] AudioContext Created: " + audioCtx.state);
+        }
+    }
+    if (!window.mtAudioCtx) {
+        window.mtAudioCtx = audioCtx;
     }
     if (audioCtx.state === 'suspended') {
         audioCtx.resume().then(() => logToBackend("[PITCH] AudioContext Resumed"));
@@ -524,6 +568,7 @@ function connectPitchEngine() {
             logToBackend("[PITCH] Apply Pitch: " + val);
             pitchShifter.setPitch(val);
         }
+        pitchSource = targetSource; // V9.9 Fix: Assign pitchSource so disconnect works correctly!
 
     } catch (e) {
         logToBackend("[PITCH] Connection Error: " + e);
@@ -541,6 +586,352 @@ function disconnectPitchEngine() {
         }
     }
 }
+
+// --- SESSION RECORDING ENGINE ---
+
+async function startRecordingWorkflow(playerType) {
+    if (currentActivePlayer === 'youtube') {
+        alert("L'enregistrement n'est pas disponible pour les vidéos en streaming YouTube.");
+        return;
+    }
+    
+    try {
+        if (!audioCtx) {
+            initAudioContext();
+        }
+        
+        if (audioCtx.state === 'suspended') {
+            await audioCtx.resume();
+        }
+        
+        // 1. Get Microphone / Soundcard input (optimized for instrument/guitar capture)
+        const stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false
+            }
+        });
+        
+        window.guitarStream = stream;
+        
+        // 2. Setup Recording UI
+        const dialog = document.getElementById("modal-recording");
+        if (dialog) dialog.showModal();
+        
+        document.getElementById("rec-modal-title").innerText = t('web.msg_recording_in_progress') || "Enregistrement en cours...";
+        document.getElementById("rec-status-container").style.display = "flex";
+        document.getElementById("rec-monitoring-container").style.display = "flex";
+        document.getElementById("rec-preview-container").style.display = "none";
+        document.getElementById("rec-saving-indicator").style.display = "none";
+        
+        document.getElementById("btn-rec-stop").style.display = "block";
+        document.getElementById("btn-rec-retry").style.display = "none";
+        document.getElementById("btn-rec-save").style.display = "none";
+        document.getElementById("btn-rec-modal-close").style.display = "none";
+        
+        const previewPlayer = document.getElementById("rec-preview-player");
+        if (previewPlayer) {
+            previewPlayer.src = "";
+            previewPlayer.pause();
+        }
+        
+        // 3. Web Audio Graph Setup
+        recStreamDestination = audioCtx.createMediaStreamDestination();
+        
+        // Guitar Graph
+        recGuitarSource = audioCtx.createMediaStreamSource(stream);
+        recGuitarGain = audioCtx.createGain();
+        recGuitarGain.gain.value = 1.0;
+        
+        recGuitarSource.connect(recGuitarGain);
+        recGuitarGain.connect(recStreamDestination);
+        
+        // Monitor Analyser
+        recAnalyser = audioCtx.createAnalyser();
+        recAnalyser.fftSize = 256;
+        recGuitarSource.connect(recAnalyser);
+        
+        startMonitoringVisualizer();
+        
+        // 4. Backing Track Graph Routing
+        let mediaEl = null;
+        if (currentActivePlayer === 'waveform' && wavesurfer) {
+            mediaEl = wavesurfer.getMediaElement() || wavesurfer.media;
+            if (!mediaEl && wavesurfer.backend) mediaEl = wavesurfer.backend.media;
+        } else if (currentActivePlayer === 'local') {
+            mediaEl = document.getElementById("html5-player");
+        }
+        
+        if (mediaEl) {
+            if (currentActivePlayer === 'waveform' && !sourceAudio) {
+                sourceAudio = audioCtx.createMediaElementSource(mediaEl);
+                sourceAudio.connect(audioCtx.destination);
+            } else if (currentActivePlayer === 'local' && !sourceVideo) {
+                sourceVideo = audioCtx.createMediaElementSource(mediaEl);
+                sourceVideo.connect(audioCtx.destination);
+            }
+            
+            const activeSource = currentActivePlayer === 'waveform' ? sourceAudio : sourceVideo;
+            
+            recBackingGain = audioCtx.createGain();
+            recBackingGain.gain.value = 0.8;
+            
+            activeSource.connect(recBackingGain);
+            recBackingGain.connect(recStreamDestination);
+            
+            pitchSource = activeSource;
+        } else if (currentActivePlayer === 'multitrack' && window.multitrack) {
+            if (window.multitrack.wavesurfers) {
+                recBackingGain = audioCtx.createGain();
+                recBackingGain.gain.value = 0.8;
+                recBackingGain.connect(recStreamDestination);
+                
+                window.multitrack.wavesurfers.forEach(ws => {
+                    let el = null;
+                    if (ws) {
+                        if (typeof ws.getMediaElement === 'function') el = ws.getMediaElement();
+                        if (!(el instanceof HTMLMediaElement) && ws.options && ws.options.media) el = ws.options.media;
+                        if (!(el instanceof HTMLMediaElement) && ws.media instanceof HTMLMediaElement) el = ws.media;
+                        if (!(el instanceof HTMLMediaElement) && ws.container) {
+                            el = ws.container.querySelector('audio') || ws.container.querySelector('video');
+                        }
+                    }
+                    if (el && el instanceof HTMLMediaElement) {
+                        if (!el._sourceNode) {
+                            el._sourceNode = audioCtx.createMediaElementSource(el);
+                            if (el._panner) {
+                                el._sourceNode.connect(el._panner);
+                            } else {
+                                el._sourceNode.connect(audioCtx.destination);
+                            }
+                        }
+                        el._sourceNode.connect(recBackingGain);
+                    }
+                });
+            }
+        }
+        
+        // 5. Start Recording
+        recChunks = [];
+        recMediaRecorder = new MediaRecorder(recStreamDestination.stream, {
+            mimeType: 'audio/webm'
+        });
+        
+        recMediaRecorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) {
+                recChunks.push(e.data);
+            }
+        };
+        
+        recMediaRecorder.onstop = () => {
+            currentRecordingBlob = new Blob(recChunks, { type: 'audio/webm' });
+            const audioURL = URL.createObjectURL(currentRecordingBlob);
+            const previewPlayer = document.getElementById("rec-preview-player");
+            if (previewPlayer) previewPlayer.src = audioURL;
+            
+            document.getElementById("rec-modal-title").innerText = t('web.modal_rec_title') || "Fin de l'Enregistrement";
+            document.getElementById("rec-status-container").style.display = "none";
+            document.getElementById("rec-monitoring-container").style.display = "none";
+            document.getElementById("rec-preview-container").style.display = "flex";
+            
+            document.getElementById("btn-rec-stop").style.display = "none";
+            document.getElementById("btn-rec-retry").style.display = "block";
+            document.getElementById("btn-rec-save").style.display = "block";
+            document.getElementById("btn-rec-modal-close").style.display = "block";
+        };
+        
+        if (currentActivePlayer === 'waveform' && wavesurfer) {
+            wavesurfer.seekTo(0);
+            wavesurfer.play();
+        } else if (currentActivePlayer === 'local') {
+            const vid = document.getElementById("html5-player");
+            if (vid) { vid.currentTime = 0; vid.play(); }
+        } else if (currentActivePlayer === 'multitrack' && window.multitrack) {
+            window.multitrack.seekTo(0);
+            window.multitrack.play();
+        }
+        
+        recMediaRecorder.start();
+        isRecordingSession = true;
+        
+        recTime = 0;
+        document.getElementById("rec-timer").innerText = "00:00";
+        recTimerInterval = setInterval(() => {
+            recTime++;
+            const mins = String(Math.floor(recTime / 60)).padStart(2, '0');
+            const secs = String(recTime % 60).padStart(2, '0');
+            document.getElementById("rec-timer").innerText = `${mins}:${secs}`;
+        }, 1000);
+        
+    } catch (err) {
+        console.error("Recording start failed:", err);
+        alert((t('web.msg_recording_error') || "Erreur d'enregistrement : ") + err.message);
+    }
+}
+
+function startMonitoringVisualizer() {
+    const canvas = document.getElementById("rec-monitoring-canvas");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const bufferLength = recAnalyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    
+    function draw() {
+        if (!recAnalyser) return;
+        recCanvasAnimation = requestAnimationFrame(draw);
+        recAnalyser.getByteTimeDomainData(dataArray);
+        
+        ctx.fillStyle = "#111";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#bb86fc";
+        ctx.beginPath();
+        
+        const sliceWidth = canvas.width * 1.0 / bufferLength;
+        let x = 0;
+        
+        for (let i = 0; i < bufferLength; i++) {
+            const v = dataArray[i] / 128.0;
+            const y = v * canvas.height / 2;
+            
+            if (i === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+            x += sliceWidth;
+        }
+        
+        ctx.lineTo(canvas.width, canvas.height / 2);
+        ctx.stroke();
+    }
+    
+    draw();
+}
+
+function stopMonitoringVisualizer() {
+    if (recCanvasAnimation) {
+        cancelAnimationFrame(recCanvasAnimation);
+        recCanvasAnimation = null;
+    }
+}
+
+function stopRecording() {
+    if (!isRecordingSession) return;
+    
+    if (recMediaRecorder && recMediaRecorder.state !== 'inactive') {
+        recMediaRecorder.stop();
+    }
+    
+    if (recTimerInterval) {
+        clearInterval(recTimerInterval);
+        recTimerInterval = null;
+    }
+    
+    stopMonitoringVisualizer();
+    
+    if (currentActivePlayer === 'waveform' && wavesurfer) {
+        wavesurfer.pause();
+    } else if (currentActivePlayer === 'local') {
+        const vid = document.getElementById("html5-player");
+        if (vid) vid.pause();
+    } else if (currentActivePlayer === 'multitrack' && window.multitrack) {
+        window.multitrack.pause();
+    }
+    
+    if (window.guitarStream) {
+        window.guitarStream.getTracks().forEach(track => track.stop());
+        window.guitarStream = null;
+    }
+    
+    isRecordingSession = false;
+}
+
+function abortRecording() {
+    stopRecording();
+    const dialog = document.getElementById("modal-recording");
+    if (dialog) dialog.close();
+}
+
+function retryRecording() {
+    const previewPlayer = document.getElementById("rec-preview-player");
+    if (previewPlayer) {
+        previewPlayer.pause();
+        previewPlayer.src = "";
+    }
+    
+    const dialog = document.getElementById("modal-recording");
+    if (dialog) dialog.close();
+    
+    setTimeout(() => {
+        const mode = currentActivePlayer === 'multitrack' ? 'multitrack' : (currentActivePlayer === 'waveform' ? 'audio' : 'video');
+        startRecordingWorkflow(mode);
+    }, 200);
+}
+
+async function saveRecording() {
+    if (!currentRecordingBlob) return;
+    
+    document.getElementById("rec-preview-container").style.display = "none";
+    document.getElementById("rec-saving-indicator").style.display = "flex";
+    document.getElementById("btn-rec-retry").disabled = true;
+    document.getElementById("btn-rec-save").disabled = true;
+    document.getElementById("btn-rec-modal-close").style.display = "none";
+    
+    try {
+        const formData = new FormData();
+        const filename = `Jam_${timeFormattedForFile()}.wav`;
+        formData.append("file", currentRecordingBlob, filename);
+        
+        const response = await fetch("/api/local/recordings", {
+            method: "POST",
+            body: formData
+        });
+        
+        if (!response.ok) throw new Error("Upload failed");
+        
+        const result = await response.json();
+        
+        if (result.status === "ok") {
+            const importResponse = await fetch("/api/local/add_by_path", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ path: result.path })
+            });
+            
+            if (importResponse.ok) {
+                await loadLocalFiles();
+                showToast(t('web.msg_recording_success') || "Enregistrement ajouté avec succès !", "success");
+            } else {
+                throw new Error("Library import failed");
+            }
+        } else {
+            throw new Error(result.message || "Unknown server error");
+        }
+    } catch (e) {
+        console.error("Save Recording Error:", e);
+        alert((t('web.msg_recording_error') || "Erreur d'enregistrement : ") + e.message);
+    } finally {
+        document.getElementById("btn-rec-retry").disabled = false;
+        document.getElementById("btn-rec-save").disabled = false;
+        const dialog = document.getElementById("modal-recording");
+        if (dialog) dialog.close();
+    }
+}
+
+function timeFormattedForFile() {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    const h = String(now.getHours()).padStart(2, '0');
+    const min = String(now.getMinutes()).padStart(2, '0');
+    const s = String(now.getSeconds()).padStart(2, '0');
+    return `${y}${m}${d}_${h}${min}${s}`;
+}
+
 
 function updatePitch(val) {
     // UI Sync
@@ -6605,7 +6996,7 @@ async function playLocal(index) {
                     if (confirm(t('web.msg_confirm_delete_stem'))) {
                         try {
                             const resp = await fetch(`/api/local/stem/${window.currentPlayingIndex}/${i}`, { method: 'DELETE' });
-                            if (resp.ok) { await loadLibrary(); playLocal(window.currentPlayingIndex); }
+                            if (resp.ok) { await loadLocalFiles(); playLocal(window.currentPlayingIndex); }
                         } catch (e) { console.error("Delete stem failed:", e); }
                     }
                 };
@@ -6725,8 +7116,15 @@ async function playLocal(index) {
                         mediaElement.preload = "auto";
 
                         if (!window.mtAudioCtx) {
-                            const AudioContext = window.AudioContext || window.webkitAudioContext;
-                            window.mtAudioCtx = new AudioContext();
+                            if (audioCtx) {
+                                window.mtAudioCtx = audioCtx;
+                            } else {
+                                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                                window.mtAudioCtx = new AudioContext();
+                            }
+                        }
+                        if (!audioCtx) {
+                            audioCtx = window.mtAudioCtx;
                         }
 
                         const source = window.mtAudioCtx.createMediaElementSource(mediaElement);

@@ -71,6 +71,7 @@ pyinstaller --noconfirm --onefile --windowed ^
  --hidden-import "uvicorn.lifespan" ^
  --hidden-import "uvicorn.lifespan.on" ^
  --hidden-import "fastapi" ^
+ --hidden-import "multipart" ^
  --hidden-import "websockets" ^
  --hidden-import "requests" ^
  --hidden-import "customtkinter" ^
