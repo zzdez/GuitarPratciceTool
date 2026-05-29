@@ -476,6 +476,7 @@
         "fretboard_flat": "Flat & Dark (Modern)",
         "fretboard_wood": "Realistic (Wood Texture)",
         "fretboard_pos_all": "All Pos.",
+        "fretboard_pos": "Pos ",
         "fretboard_octave_all": "All",
         "fretboard_octave_low": "Octave 1 (Low)",
         "fretboard_octave_high": "Octave 2 (High)",

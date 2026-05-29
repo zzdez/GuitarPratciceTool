@@ -162,7 +162,8 @@ function changeInstrument(instKey) {
 
     // Update Header UI
     document.getElementById("fretboard-instrument-icon").className = "ph " + inst.icon;
-    document.getElementById("fretboard-instrument-label").innerText = inst.name;
+    const instName = window.locales ? window.locales.get(`web.inst_${instKey}`) || inst.name : inst.name;
+    document.getElementById("fretboard-instrument-label").innerText = instName;
     document.getElementById("fretboard-instrument-menu").style.display = "none";
 
     // Update Tunings Dropdown
@@ -258,7 +259,8 @@ function detectCurrentScale() {
             fretboardState.instrument = savedInst;
             const inst = instruments[savedInst];
             document.getElementById("fretboard-instrument-icon").className = "ph " + inst.icon;
-            document.getElementById("fretboard-instrument-label").innerText = inst.name;
+            const instName = window.locales ? window.locales.get(`web.inst_${savedInst}`) || inst.name : inst.name;
+            document.getElementById("fretboard-instrument-label").innerText = instName;
 
             // Re-populate tunings for this instrument
             const tuningSelect = document.getElementById("fretboard-tuning");
@@ -462,7 +464,8 @@ function updatePositionDropdown() {
     for (let i = 1; i <= numPositions; i++) {
         const opt = document.createElement("option");
         opt.value = i;
-        opt.innerText = "Pos " + i;
+        const posPrefix = window.locales ? window.locales.get("web.fretboard_pos") || "Pos " : "Pos ";
+        opt.innerText = posPrefix + i;
         positionSelect.appendChild(opt);
     }
 
