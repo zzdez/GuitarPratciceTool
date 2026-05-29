@@ -173,6 +173,7 @@ class MetadataService:
                 "subtitle_pos_y": sidecar_data.get("subtitle_pos_y", 80),
                 "linked_ids": sidecar_data.get("linked_ids", []),
                 "is_primary": sidecar_data.get("is_primary", False),
+                "cover": sidecar_data.get("cover", ""),
                 "duration": max_duration,
                 "is_multitrack": True,
                 "stems": stems
@@ -270,6 +271,8 @@ class MetadataService:
                         if sidecar_data.get("album"): res["album"] = sidecar_data["album"]
                         if sidecar_data.get("genre"): res["genre"] = sidecar_data["genre"]
                         if sidecar_data.get("year"): res["year"] = sidecar_data["year"]
+                        if sidecar_data.get("cover"): res["cover"] = sidecar_data["cover"]
+                        if sidecar_data.get("cover_url"): res["cover_url"] = sidecar_data["cover_url"]
 
                         # Add Extended metadata that Mutagen doesn't reliably map
                         res["uid"] = sidecar_data.get("uid")
@@ -497,6 +500,38 @@ class MetadataService:
                 if key not in ["cover_data", "stems", "is_multitrack", "duration", "chapters"]:
                     sidecar_data[key] = value
 
+            # --- 3. PREPARE COVER DATA & SAVE SIDECAR IMAGE ---
+            cover_data_bin, mime_type = self._resolve_cover_bin(data.get("cover_data"), local_items)
+            if cover_data_bin:
+                if cover_data_bin == "DELETE":
+                    # Remove all potential image files at destination
+                    for ext_try in [".jpg", ".png", ".webp", ".jpeg"]:
+                        try:
+                            if os.path.exists(path + ext_try):
+                                os.remove(path + ext_try)
+                        except: pass
+                    sidecar_data["cover"] = ""
+                else:
+                    ext_img = ".png" if mime_type == "image/png" else ".jpg"
+                    dest_img = path + ext_img
+                    try:
+                        # Clean other potential extension formats first
+                        for ext_try in [".jpg", ".png", ".webp", ".jpeg"]:
+                            if ext_try != ext_img and os.path.exists(path + ext_try):
+                                try: os.remove(path + ext_try)
+                                except: pass
+                        
+                        with open(dest_img, "wb") as img_f:
+                            img_f.write(cover_data_bin)
+                            img_f.flush()
+                            os.fsync(img_f.fileno())
+                        from utils import to_portable_path
+                        sidecar_data["cover"] = to_portable_path(dest_img)
+                        logging.info(f"Successfully wrote sidecar image cover to {dest_img}")
+                    except Exception as img_err:
+                        logging.error(f"Failed to write sidecar image file: {img_err}")
+
+            # Save the JSON Sidecar (including the updated cover key!)
             try:
                 with open(sidecar_path, "w", encoding="utf-8") as f:
                     json.dump(sidecar_data, f, indent=4)
@@ -504,9 +539,6 @@ class MetadataService:
                     os.fsync(f.fileno())
             except Exception as e:
                 logging.error(f"Error writing sidecar JSON: {e}")
-
-            # --- 3. PREPARE COVER DATA ---
-            cover_data_bin, mime_type = self._resolve_cover_bin(data.get("cover_data"), local_items)
 
             # --- 4. FORMAT SPECIFIC LOGIC (Physical Tags) ---
             ext = os.path.splitext(path)[1].lower()
@@ -724,6 +756,19 @@ class MetadataService:
              except Exception as e:
                  logging.warning(f"Failed local art resolution: {e}")
 
+        # Case B2: lib:index format (direct suggested local cover format)
+        elif cover_source.startswith("lib:"):
+             try:
+                 idx_str = cover_source.split(":")[-1]
+                 idx = int(idx_str)
+                 if local_items and 0 <= idx < len(local_items):
+                     from utils import resolve_portable_path
+                     path = resolve_portable_path(local_items[idx].get("path", ""))
+                     if os.path.exists(path):
+                          return self.get_file_cover(path)
+             except Exception as e:
+                 logging.warning(f"Failed lib: index resolution: {e}")
+
         # Case C: Local API /api/cover?path=...
         elif "/api/cover" in cover_source and "path=" in cover_source:
              try:
@@ -831,7 +876,15 @@ class MetadataService:
                 logging.debug(f"[COVER] Sidecar {sidecar_path} parsing skip: {e}")
 
         ext = os.path.splitext(path)[1].lower()
-        
+        if ext in [".jpg", ".jpeg", ".png", ".webp"]:
+            try:
+                mime = "image/png" if ext == ".png" else "image/webp" if ext == ".webp" else "image/jpeg"
+                with open(path, "rb") as f:
+                    return f.read(), mime
+            except Exception as e:
+                logging.error(f"Error reading raw cover image {path}: {e}")
+                return None, None
+
         try:
             # === MP3 (ID3) ===
             if ext == ".mp3":

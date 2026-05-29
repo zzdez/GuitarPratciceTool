@@ -115,4 +115,3 @@ rmdir /s /q dist
 del *.spec
 
 echo Termine.
-pause

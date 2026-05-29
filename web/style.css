@@ -3350,7 +3350,7 @@ input[type="color"].stem-color-input::-moz-color-swatch {
     height: min(calc(76vh + 155px), 93vh) !important;
     max-height: min(calc(76vh + 155px), 93vh) !important;
     width: 95% !important;
-    max-width: 950px !important;
+    max-width: 1050px !important;
     overflow: hidden; /* Let modal-body scroll */
 }
 
@@ -3841,9 +3841,10 @@ input[type="color"].stem-color-input::-moz-color-swatch {
 /* --- BROWSER-STYLE TABS BAR FOR INTERCONNECTION (V60) --- */
 .modal-tabs-bar {
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-end;
     gap: 4px;
-    padding: 0 10px;
+    padding: 4px 10px 0 10px;
     background: rgba(0,0,0,0.25);
     border-bottom: 1px solid #333;
     min-height: 38px;

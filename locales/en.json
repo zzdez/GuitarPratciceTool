@@ -716,7 +716,11 @@
         "msg_recording_success": "Session recorded and successfully added to library!",
         "msg_recording_error": "Error during recording: ",
         "lbl_recording_monitoring": "Guitar Input Level",
-        "lbl_saving_recording": "Saving recording..."
+        "lbl_saving_recording": "Saving recording...",
+        "tab_recordings": "Recordings",
+        "lbl_rec_mix_backing": "Mix backing track into recording",
+        "btn_start_recording": "START",
+        "lbl_rec_prepare": "Ready to record"
     },
     "sync": {
         "title": "Cloud Sync",

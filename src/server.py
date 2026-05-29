@@ -647,45 +647,45 @@ async def stream_file(request: Request, path: str):
     return FileResponse(decoded_path, media_type=mime_type, filename=os.path.basename(decoded_path))
 
 @app.get("/api/cover")
-async def get_cover_image(path: str):
-    """Alias for streaming specifically covers with optional caching support."""
+async def get_cover(path: str):
+    """
+    Exposes a way to get cover art for a specific file path.
+    Used by the frontend to resolve covers without knowing the library index.
+    Robust extraction for directories (stems/multipistes) and physical media tags.
+    """
     try:
+        if not path:
+            return Response(status_code=400)
+            
         decoded_path = urllib.parse.unquote(path)
         resolved = resolve_portable_path(decoded_path)
-        logging.info(f"[COVER] Requested: {path} -> Decoded: {decoded_path} -> Resolved: {resolved}")
         
         if not os.path.exists(resolved):
-            logging.error(f"[COVER] File not found: {resolved}")
-            raise HTTPException(status_code=404, detail=f"Cover not found: {resolved}")
+            return Response(status_code=404)
+            
+        # Try to extract cover art (from tags or folder.jpg for directory)
+        data, mime = metadata_service.get_file_cover(resolved)
+        if data:
+            return Response(content=data, media_type=mime)
+            
+        # If it is a directory, do not attempt to serve it via FileResponse
+        if os.path.isdir(resolved):
+            return Response(status_code=404)
+            
+        # If it is a file and not an image, we failed to extract and it's not a direct image to serve
         import mimetypes
         mime_type, _ = mimetypes.guess_type(resolved)
-        
-        # V55: If the file is not an image (e.g. .mp3, .m4v or a DIRECTORY), try to extract embedded art
-        if os.path.isdir(resolved) or (mime_type and not mime_type.startswith("image/")):
-            logging.info(f"[COVER] Not an image or is directory ({mime_type}), attempting extraction for: {resolved}")
-
-            try:
-                data, extracted_mime = metadata_service.get_file_cover(resolved)
-                if data:
-                    logging.info(f"[COVER] Successfully extracted art ({extracted_mime}) from {resolved}")
-                    return Response(content=data, media_type=extracted_mime)
-            except Exception as ex:
-                logging.error(f"[COVER] Extraction failed for {resolved}: {ex}")
-
-        # Safety Fallback: Don't attempt to serve a directory via FileResponse
-        if os.path.isdir(resolved):
-            logging.warning(f"[COVER] Path is a directory and no art was extracted: {resolved}")
-            raise HTTPException(status_code=404, detail="No cover found for this directory")
-
-        # Default: serve the file
+        if mime_type and not mime_type.startswith("image/"):
+            return Response(status_code=404)
+            
+        # If it's a direct image file, serve it
         if mime_type is None:
             mime_type = "application/octet-stream"
-            
         return FileResponse(resolved, media_type=mime_type)
-
+        
     except Exception as e:
-        logging.error(f"[COVER] Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.warning(f"API Cover Fetch failed for {path}: {e}")
+        return Response(status_code=404)
 
 
 @app.get("/api/status")
@@ -1523,28 +1523,7 @@ async def get_local_art(index: int):
         logging.error(f"Error fetching art for {path}: {e}")
         return Response(status_code=404)
 
-@app.get("/api/cover")
-async def get_cover(path: str):
-    """
-    Exposes a way to get cover art for a specific file path.
-    Used by the frontend to resolve covers without knowing the library index.
-    """
-    try:
-        if not path:
-             return Response(status_code=400)
-             
-        resolved_path = resolve_portable_path(path)
-        if not os.path.exists(resolved_path):
-             return Response(status_code=404)
-             
-        data, mime = metadata_service.get_file_cover(resolved_path)
-        if data:
-            return Response(content=data, media_type=mime)
-        return Response(status_code=404)
-    except Exception as e:
-        # Log error but return 404 to app.js to avoid 500 console noise
-        logging.warning(f"API Cover Fetch failed for {path}: {e}")
-        return Response(status_code=404)
+
 
 @app.post("/api/local/add")
 async def add_local_file():
@@ -1831,13 +1810,7 @@ async def update_local_file(index: int, item: Dict):
                     except Exception as ex:
                         logging.error(f"Error re-scanning stems after manual relocate: {ex}")
             
-            # 1. Update Database (Priority)
-            with open(LOCAL_LIB_FILE, "w", encoding="utf-8") as f:
-                json.dump(items, f, indent=4)
-                f.flush()
-                os.fsync(f.fileno())
-
-            # 2. Write to disk tags (Physical)
+            # 1. Write to disk tags & sidecars (Physical)
             warning_msg = None
             resolved_path = resolve_portable_path(current["path"])
             ext = os.path.splitext(resolved_path)[1].lower()
@@ -1853,7 +1826,22 @@ async def update_local_file(index: int, item: Dict):
                 except Exception as e:
                     logging.warning(f"Tag Write Warning: {e}")
             
-            # 3. Synchronisation Mesh (Liaisons bidirectionnelles)
+            # 2. Re-scan to get up-to-date metadata and cover paths in memory (V60)
+            try:
+                updated_meta = metadata_service.scan_file_metadata(resolved_path)
+                for k, v in updated_meta.items():
+                    if k not in ["stems", "is_multitrack", "duration", "chapters"]:
+                        current[k] = v
+            except Exception as scan_err:
+                logging.error(f"Failed to re-scan updated metadata: {scan_err}")
+
+            # 3. Update Database (Priority)
+            with open(LOCAL_LIB_FILE, "w", encoding="utf-8") as f:
+                json.dump(items, f, indent=4)
+                f.flush()
+                os.fsync(f.fileno())
+
+            # 4. Synchronisation Mesh (Liaisons bidirectionnelles)
             harmonize_media_mesh(current.get("uid"))
 
             return {
@@ -2460,30 +2448,7 @@ async def save_multitrack_settings(index: int, request: Request):
         print(f"Save Settings Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/local/art/{index}")
-async def get_local_art(index: int):
-    try:
-        items = []
-        if os.path.exists(LOCAL_LIB_FILE):
-             with open(LOCAL_LIB_FILE, "r", encoding="utf-8") as f:
-                 items = json.load(f)
-                 
-        if 0 <= index < len(items):
-            path = items[index]["path"]
-            path = resolve_portable_path(path)
-            # Use Service
-            data, mime = metadata_service.get_file_cover(path)
-            
-            if data and mime:
-                 # Helper response with caching
-                 return Response(content=data, media_type=mime)
-            else:
-                 raise HTTPException(status_code=404, detail="No Art")
-        else:
-             raise HTTPException(status_code=404, detail="Index not found")
-    except Exception as e:
-        print(f"Art Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @app.post("/api/local/edit/{index}")
@@ -4110,10 +4075,11 @@ async def delete_setlist(sl_id: str):
 
 # --- RECORDINGS ENGINE ---
 @app.post("/api/local/recordings")
-async def save_recording(file: UploadFile = File(...)):
-    """Sauvegarde un enregistrement de session (Jam/Training)."""
+async def save_recording(file: UploadFile = File(...), target_format: str = "wav"):
+    """Sauvegarde un enregistrement de session (Jam/Training) avec transcodage réel."""
     try:
         import shutil
+        import subprocess
         from utils import get_app_dir, to_portable_path
         
         recordings_dir = os.path.join(get_app_dir(), "Medias", "Recordings")
@@ -4123,12 +4089,53 @@ async def save_recording(file: UploadFile = File(...)):
         if not filename:
             filename = f"Record_{int(time.time())}.wav"
             
-        file_path = os.path.join(recordings_dir, filename)
-        
-        with open(file_path, "wb") as buffer:
+        temp_path = os.path.join(recordings_dir, f"temp_{int(time.time())}.webm")
+        with open(temp_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        logging.info(f"[RECORDINGS] Enregistrement sauvegardé : {file_path}")
+        final_ext = f".{target_format.lower()}"
+        base_name = os.path.splitext(filename)[0]
+        filename = f"{base_name}{final_ext}"
+        
+        file_path = os.path.join(recordings_dir, filename)
+        
+        # Transcodage intelligent
+        if download_service.ffmpeg_available and download_service.ffmpeg_path:
+            try:
+                if target_format.lower() == "mp3":
+                    cmd = [
+                        download_service.ffmpeg_path, "-y", "-i", temp_path,
+                        "-codec:a", "libmp3lame", "-qscale:a", "2", file_path
+                    ]
+                else: # wav
+                    cmd = [
+                        download_service.ffmpeg_path, "-y", "-i", temp_path,
+                        "-acodec", "pcm_s16le", "-ar", "44100", file_path
+                    ]
+                
+                logging.info(f"[RECORDINGS] Lancement transcodage FFmpeg vers {target_format.upper()} : {' '.join(cmd)}")
+                startupinfo = None
+                if os.name == 'nt':
+                    startupinfo = subprocess.STARTUPINFO()
+                    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                
+                res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, startupinfo=startupinfo)
+                if res.returncode != 0:
+                    logging.error(f"[RECORDINGS] Échec transcodage (code {res.returncode}), utilisation du mode copie brute.")
+                    shutil.copyfile(temp_path, file_path)
+                else:
+                    logging.info(f"[RECORDINGS] Enregistrement transcodé avec succès : {file_path}")
+            except Exception as ex:
+                logging.error(f"[RECORDINGS] Erreur pendant l'invocation FFmpeg : {ex}, repli sur copie brute.")
+                shutil.copyfile(temp_path, file_path)
+        else:
+            logging.warning("[RECORDINGS] FFmpeg absent, sauvegarde brute sans transcodage.")
+            shutil.copyfile(temp_path, file_path)
+            
+        # Nettoyage
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+            
         return {"status": "ok", "path": to_portable_path(file_path), "filename": filename}
     except Exception as e:
         logging.error(f"[RECORDINGS] Erreur sauvegarde: {e}")

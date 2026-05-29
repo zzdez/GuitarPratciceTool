@@ -589,6 +589,33 @@ function disconnectPitchEngine() {
 
 // --- SESSION RECORDING ENGINE ---
 
+function getActiveMediaFormat() {
+    if (window.currentPlayingIndex !== undefined && localFiles[window.currentPlayingIndex]) {
+        const file = localFiles[window.currentPlayingIndex];
+        
+        // 1. Multitrack Stems case
+        if (file.is_multitrack && file.stems && file.stems.length > 0) {
+            const firstStem = file.stems[0];
+            const path = typeof firstStem === 'string' ? firstStem : (firstStem.path || "");
+            if (path) {
+                const ext = path.split('.').pop().toLowerCase();
+                if (['mp3', 'wav'].includes(ext)) {
+                    return ext;
+                }
+            }
+        }
+        
+        // 2. Standard single file case
+        if (file.path) {
+            const ext = file.path.split('.').pop().toLowerCase();
+            if (['mp3', 'wav'].includes(ext)) {
+                return ext;
+            }
+        }
+    }
+    return "wav"; // Default fallback
+}
+
 async function startRecordingWorkflow(playerType) {
     if (currentActivePlayer === 'youtube') {
         alert("L'enregistrement n'est pas disponible pour les vidéos en streaming YouTube.");
@@ -615,20 +642,35 @@ async function startRecordingWorkflow(playerType) {
         
         window.guitarStream = stream;
         
-        // 2. Setup Recording UI
+        // 2. Setup Recording UI (Preparation Mode)
         const dialog = document.getElementById("modal-recording");
         if (dialog) dialog.showModal();
         
-        document.getElementById("rec-modal-title").innerText = t('web.msg_recording_in_progress') || "Enregistrement en cours...";
-        document.getElementById("rec-status-container").style.display = "flex";
+        document.getElementById("rec-modal-title").innerText = t('web.lbl_rec_prepare') || "Prêt à enregistrer";
+        document.getElementById("rec-prepare-container").style.display = "flex";
+        document.getElementById("rec-status-container").style.display = "none";
         document.getElementById("rec-monitoring-container").style.display = "flex";
         document.getElementById("rec-preview-container").style.display = "none";
         document.getElementById("rec-saving-indicator").style.display = "none";
         
-        document.getElementById("btn-rec-stop").style.display = "block";
+        document.getElementById("btn-rec-start").style.display = "block";
+        document.getElementById("btn-rec-stop").style.display = "none";
         document.getElementById("btn-rec-retry").style.display = "none";
         document.getElementById("btn-rec-save").style.display = "none";
-        document.getElementById("btn-rec-modal-close").style.display = "none";
+        document.getElementById("btn-rec-modal-close").style.display = "block";
+        
+        const mixBackingPref = localStorage.getItem("rec_mix_backing") !== "false";
+        document.getElementById("chk-rec-mix-backing").checked = mixBackingPref;
+        
+        // Dynamic Format Label Update
+        const mediaFormat = getActiveMediaFormat();
+        const selFormat = document.getElementById("sel-rec-format");
+        if (selFormat) {
+            const optSame = selFormat.querySelector('option[value="same"]');
+            if (optSame) {
+                optSame.innerText = `Identique au média (${mediaFormat.toUpperCase()})`;
+            }
+        }
         
         const previewPlayer = document.getElementById("rec-preview-player");
         if (previewPlayer) {
@@ -654,7 +696,7 @@ async function startRecordingWorkflow(playerType) {
         
         startMonitoringVisualizer();
         
-        // 4. Backing Track Graph Routing
+        // 4. Backing Track Graph Routing (Not yet connected to destination)
         let mediaEl = null;
         if (currentActivePlayer === 'waveform' && wavesurfer) {
             mediaEl = wavesurfer.getMediaElement() || wavesurfer.media;
@@ -662,6 +704,8 @@ async function startRecordingWorkflow(playerType) {
         } else if (currentActivePlayer === 'local') {
             mediaEl = document.getElementById("html5-player");
         }
+        
+        recBackingGain = null;
         
         if (mediaEl) {
             if (currentActivePlayer === 'waveform' && !sourceAudio) {
@@ -678,14 +722,11 @@ async function startRecordingWorkflow(playerType) {
             recBackingGain.gain.value = 0.8;
             
             activeSource.connect(recBackingGain);
-            recBackingGain.connect(recStreamDestination);
-            
             pitchSource = activeSource;
         } else if (currentActivePlayer === 'multitrack' && window.multitrack) {
             if (window.multitrack.wavesurfers) {
                 recBackingGain = audioCtx.createGain();
                 recBackingGain.gain.value = 0.8;
-                recBackingGain.connect(recStreamDestination);
                 
                 window.multitrack.wavesurfers.forEach(ws => {
                     let el = null;
@@ -712,7 +753,32 @@ async function startRecordingWorkflow(playerType) {
             }
         }
         
-        // 5. Start Recording
+    } catch (err) {
+        console.error("Recording initialization failed:", err);
+        alert((t('web.msg_recording_error') || "Erreur d'enregistrement : ") + err.message);
+    }
+}
+
+async function startRecording() {
+    try {
+        const mixBacking = document.getElementById("chk-rec-mix-backing").checked;
+        localStorage.setItem("rec_mix_backing", mixBacking ? "true" : "false");
+        
+        // Connect Backing Track to recorder if enabled
+        if (mixBacking && recBackingGain) {
+            recBackingGain.connect(recStreamDestination);
+        }
+        
+        // UI Transition to Recording state
+        document.getElementById("rec-modal-title").innerText = t('web.msg_recording_in_progress') || "Enregistrement en cours...";
+        document.getElementById("rec-prepare-container").style.display = "none";
+        document.getElementById("rec-status-container").style.display = "flex";
+        
+        document.getElementById("btn-rec-start").style.display = "none";
+        document.getElementById("btn-rec-stop").style.display = "block";
+        document.getElementById("btn-rec-modal-close").style.display = "none";
+        
+        // Setup MediaRecorder
         recChunks = [];
         recMediaRecorder = new MediaRecorder(recStreamDestination.stream, {
             mimeType: 'audio/webm'
@@ -741,6 +807,7 @@ async function startRecordingWorkflow(playerType) {
             document.getElementById("btn-rec-modal-close").style.display = "block";
         };
         
+        // Start playback
         if (currentActivePlayer === 'waveform' && wavesurfer) {
             wavesurfer.seekTo(0);
             wavesurfer.play();
@@ -881,11 +948,16 @@ async function saveRecording() {
     document.getElementById("btn-rec-modal-close").style.display = "none";
     
     try {
+        let targetFormat = document.getElementById("sel-rec-format")?.value || "wav";
+        if (targetFormat === "same") {
+            targetFormat = getActiveMediaFormat();
+        }
+        
         const formData = new FormData();
-        const filename = `Jam_${timeFormattedForFile()}.wav`;
+        const filename = `Jam_${timeFormattedForFile()}.${targetFormat}`;
         formData.append("file", currentRecordingBlob, filename);
         
-        const response = await fetch("/api/local/recordings", {
+        const response = await fetch(`/api/local/recordings?target_format=${targetFormat}`, {
             method: "POST",
             body: formData
         });
@@ -986,24 +1058,31 @@ function initTabsDragAndDrop() {
     const navTabs = document.querySelector(".nav-tabs");
     if (!navTabs) return;
 
-    // 1. Charger et appliquer l'ordre sauvegardé
+    // 1. Charger et appliquer l'ordre sauvegardé ou par défaut
     const savedOrder = localStorage.getItem("tabs_order");
-    if (savedOrder) {
-        const orderArr = savedOrder.split(",");
-        const buttons = Array.from(navTabs.children);
-        orderArr.forEach(id => {
-            const btn = buttons.find(b => b.id === id);
-            if (btn) {
-                navTabs.appendChild(btn);
-            }
-        });
-    }
+    const defaultOrder = ["tab-local", "tab-setlists", "tab-recordings", "tab-library", "tab-web-links", "tab-apps"];
+    const orderArr = savedOrder ? savedOrder.split(",") : defaultOrder;
+    
+    const buttons = Array.from(navTabs.children);
+    orderArr.forEach(id => {
+        const btn = buttons.find(b => b.id === id);
+        if (btn) {
+            navTabs.appendChild(btn);
+        }
+    });
+    
+    // Au cas où de nouveaux onglets ou des onglets non listés seraient présents
+    buttons.forEach(btn => {
+        if (!orderArr.includes(btn.id)) {
+            navTabs.appendChild(btn);
+        }
+    });
 
     // 2. Événements Drag & Drop
     let dragSrcEl = null;
 
-    const buttons = navTabs.querySelectorAll("button");
-    buttons.forEach(btn => {
+    const currentButtons = navTabs.querySelectorAll("button");
+    currentButtons.forEach(btn => {
         btn.addEventListener("dragstart", (e) => {
             dragSrcEl = btn;
             btn.classList.add("dragging");
@@ -1037,6 +1116,7 @@ function initTabsDragAndDrop() {
         let viewName = "library";
         if (firstTab.id === "tab-library") viewName = "library";
         else if (firstTab.id === "tab-local") viewName = "local";
+        else if (firstTab.id === "tab-recordings") viewName = "recordings";
         else if (firstTab.id === "tab-setlists") viewName = "setlists";
         else if (firstTab.id === "tab-web-links") viewName = "web-links";
         else if (firstTab.id === "tab-apps") viewName = "apps";
@@ -1352,6 +1432,9 @@ function switchView(viewName, forceReload = true) {
     document.getElementById("tab-library").classList.toggle("active", viewName === "library");
     document.getElementById("tab-apps").classList.toggle("active", viewName === "apps");
     document.getElementById("tab-local").classList.toggle("active", viewName === "local");
+    if (document.getElementById("tab-recordings")) {
+        document.getElementById("tab-recordings").classList.toggle("active", viewName === "recordings");
+    }
     document.getElementById("tab-web-links").classList.toggle("active", viewName === "web-links");
     document.getElementById("tab-setlists").classList.toggle("active", viewName === "setlists");
 
@@ -1359,6 +1442,9 @@ function switchView(viewName, forceReload = true) {
     document.getElementById("view-library").style.display = viewName === "library" ? "block" : "none";
     document.getElementById("view-apps").style.display = viewName === "apps" ? "block" : "none";
     document.getElementById("view-local").style.display = viewName === "local" ? "block" : "none";
+    if (document.getElementById("view-recordings")) {
+        document.getElementById("view-recordings").style.display = viewName === "recordings" ? "block" : "none";
+    }
     document.getElementById("view-web-links").style.display = viewName === "web-links" ? "block" : "none";
     document.getElementById("view-setlists").style.display = viewName === "setlists" ? "block" : "none";
 
@@ -1366,6 +1452,8 @@ function switchView(viewName, forceReload = true) {
         if (viewName === "local") {
             loadLocalFiles();
             checkMissingItems();
+        } else if (viewName === "recordings") {
+            loadLocalFiles();
         } else if (viewName === "web-links") {
             loadWebLinks();
         } else if (viewName === "setlists") {
@@ -2446,7 +2534,14 @@ function closeWebLinkModal() {
 function triggerManualCoverUpload() {
     const choiceModal = document.getElementById("modal-cover-choice");
     if (choiceModal) choiceModal.close();
-    document.getElementById('web-link-cover-upload').click();
+    
+    if (lastEditContext === 'library') {
+        const uploadInput = document.getElementById("edit-cover-upload");
+        if (uploadInput) uploadInput.click();
+    } else {
+        const uploadInput = document.getElementById("web-link-cover-upload");
+        if (uploadInput) uploadInput.click();
+    }
 }
 
 function onWebLinkCoverClick() {
@@ -2479,7 +2574,7 @@ function onWebLinkCoverClick() {
                     if (!suggestedCovers.some(c => c.url === coverUrl)) {
                         suggestedCovers.push({
                             url: coverUrl,
-                            rawPath: `lib:${idx}`,
+                            rawPath: `/api/local/art/${idx}`,
                             source: f.artist ? `${f.title} (${f.artist}) [Local]` : `${f.title} [Local]`
                         });
                     }
@@ -2594,9 +2689,12 @@ async function saveWebLink() {
     let coverToSave = window.currentWebLinkCover;
     
     // V55: SECURITY - Never save a directory path as a cover (e.g. Multitrack folders)
-    if (coverToSave && !coverToSave.startsWith("http") && !coverToSave.startsWith("data:")) {
-        console.warn("[SAVE_WEB] Filtered out folder path from cover:", coverToSave);
-        coverToSave = null;
+    if (coverToSave && !coverToSave.startsWith("http") && !coverToSave.startsWith("data:") && !coverToSave.startsWith("/api/")) {
+        const hasImgExt = coverToSave.match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i);
+        if (!hasImgExt) {
+            console.warn("[SAVE_WEB] Filtered out folder path from cover:", coverToSave);
+            coverToSave = null;
+        }
     }
 
     if (!coverToSave) {
@@ -2658,8 +2756,7 @@ async function saveWebLink() {
                 Object.assign(webLinks[currentWebLinkIndex], payload);
             }
 
-            // i18n Fix: The key is flat, not nested under 'web'
-            showToast(t("msg_save_success"), "success");
+            // Removed toast notification to prevent distraction during silent autosaves
             
             const modalEl = document.getElementById("modal-web-link");
             if (modalEl && modalEl.close) modalEl.close();
@@ -4045,6 +4142,16 @@ function resetMediaModalUI() {
     const actionSel = document.querySelector(".actions-selector");
     if (actionSel) actionSel.style.display = "";
 
+    // V60: Rétablir l'affichage de Chaîne et Mode pour la création/modification YouTube
+    const channelField = document.getElementById("edit-channel");
+    if (channelField && channelField.parentElement) {
+        channelField.parentElement.style.display = "block";
+    }
+    const modeField = document.getElementById("edit-mode");
+    if (modeField && modeField.parentElement) {
+        modeField.parentElement.style.display = "block";
+    }
+
     // 4. Reset Linked Items display (V58)
     const linkedDisplay = document.getElementById("edit-linked-items-display");
     if (linkedDisplay) linkedDisplay.innerHTML = "";
@@ -4239,8 +4346,10 @@ function openEditModal(index) {
     // Thumbnail & Aspect Ratio
     const thumbContainer = document.getElementById("preview-thumbnail");
     
-    // V57: Initialize linked IDs
-    currentEditingLinkedIds = track.linked_ids || [];
+    // V57: Initialize linked IDs (only if not navigating between family tabs)
+    if (!window.isNavigatingLinkedMedia) {
+        currentEditingLinkedIds = track.linked_ids || [];
+    }
 
     thumbContainer.classList.remove("wide-art", "square-art");
 
@@ -6082,6 +6191,9 @@ async function loadLocalFiles() {
     setupCustomAutocomplete("web-link-type", "suggestions-type", "type");
 
     renderLocalFiles();
+    if (typeof renderRecordings === "function") {
+        renderRecordings();
+    }
     refreshInterconnections(); // V55: Wake up header UI after loading
 }
 
@@ -6102,7 +6214,7 @@ function renderLocalFiles() {
         // Match against CATEGORY now, not Album (though we could search both?)
         // User requested Category column filter.
         const matchCat = (file.category || "").toLowerCase().includes(fCategory);
-        return matchArtist && matchTitle && matchCat;
+        return matchArtist && matchTitle && matchCat && file.category !== "Enregistrements";
     });
 
     if (!filtered || filtered.length === 0) {
@@ -6229,6 +6341,71 @@ function renderLocalFiles() {
     if (typeof refreshSetlistHighlights === "function") refreshSetlistHighlights();
 }
 
+function renderRecordings() {
+    const tbody = document.getElementById("recordings-body");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+
+    // Filters
+    const fArtist = (document.getElementById("filter-rec-artist")?.value || "").toLowerCase();
+    const fTitle = (document.getElementById("filter-rec-title")?.value || "").toLowerCase();
+
+    const filtered = localFiles.filter(file => {
+        const matchArtist = (file.artist || "").toLowerCase().includes(fArtist);
+        const matchTitle = (file.title || "").toLowerCase().includes(fTitle);
+        return matchArtist && matchTitle && file.category === "Enregistrements";
+    });
+
+    if (!filtered || filtered.length === 0) {
+        tbody.innerHTML = "<tr><td colspan='3' style='text-align:center; padding:20px; color:gray;'>Aucun résultat</td></tr>";
+        return;
+    }
+
+    // Sort by Artist, then Title
+    const sorted = [...filtered].sort((a, b) => {
+        const valA = (a.artist || "").toString().trim();
+        const valB = (b.artist || "").toString().trim();
+        if (valA.toLowerCase() === valB.toLowerCase()) {
+            const tA = (a.title || "").toString().toLowerCase();
+            const tB = (b.title || "").toString().toLowerCase();
+            return tA.localeCompare(tB);
+        }
+        return valA.localeCompare(valB, undefined, { sensitivity: 'base', numeric: true });
+    });
+
+    sorted.forEach((file) => {
+        const realIndex = localFiles.indexOf(file);
+        if (!file.path) {
+            console.warn("[RENDER_RECORDINGS] Missing path for item:", file);
+        }
+
+        const isMissing = file.is_missing === true;
+        let iconHtml = `<i class="ph ph-microphone" style="color:#bb86fc; font-size:1.2em; vertical-align:middle; margin-right:5px;"></i>`;
+        if (isMissing) {
+            iconHtml = `<i class="ph ph-warning-circle" style="color:#ff4444; font-size:1.2em; vertical-align:middle; margin-right:5px;" title="Fichier introuvable"></i>`;
+        }
+
+        const tr = document.createElement("tr");
+        tr.setAttribute('data-index', realIndex);
+        if (isMissing) tr.classList.add('track-missing');
+
+        tr.innerHTML = `
+            <td class="col-artist">${file.artist || ""}</td>
+            <td class="col-title" style="cursor:pointer;" onclick="playMediaByUid('${file.uid}')">
+                ${iconHtml}
+                ${file.title}
+            </td>
+            <td class="col-actions">
+                <button class="btn-action" onclick="openEditLocalModal(${realIndex})">✎</button>
+                <button class="btn-action" onclick="deleteLocalFile(${realIndex})" style="color:#cf6679;">×</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    if (typeof refreshSetlistHighlights === "function") refreshSetlistHighlights();
+}
+
 function resetFilters(mode) {
     if (mode === 'web') {
         document.getElementById("filter-artist").value = "";
@@ -6240,6 +6417,10 @@ function resetFilters(mode) {
         document.getElementById("filter-local-title").value = "";
         document.getElementById("filter-local-album").value = "";
         renderLocalFiles();
+    } else if (mode === 'recordings') {
+        document.getElementById("filter-rec-artist").value = "";
+        document.getElementById("filter-rec-title").value = "";
+        renderRecordings();
     } else if (mode === 'web_links' || mode === 'web-links') {
         document.getElementById("filter-web-artist").value = "";
         document.getElementById("filter-web-title").value = "";
@@ -8577,6 +8758,16 @@ function openEditLocalModal(index) {
     const dlOpt = document.getElementById("dl-options-container");
     if (dlOpt) dlOpt.style.display = "none";
 
+    // Masquer Chaîne et Mode pour tous les fichiers locaux (champs YouTube/Vidéo inutiles)
+    const channelField = document.getElementById("edit-channel");
+    if (channelField && channelField.parentElement) {
+        channelField.parentElement.style.display = "none";
+    }
+    const modeField = document.getElementById("edit-mode");
+    if (modeField && modeField.parentElement) {
+        modeField.parentElement.style.display = "none";
+    }
+
     // Specific local display elements
     document.getElementById("local-path-display").innerText = item.path;
     document.getElementById("yt-local-path-container").style.display = "flex";
@@ -8651,6 +8842,133 @@ function openEditLocalModal(index) {
                                     <div id="btn-edit-delete-cover" class="btn-delete-cover" style="display:none;"
                                          onclick="event.stopPropagation(); removeEditCover();">×</div>`;
     };
+}
+
+function handlePreviewThumbnailClick() {
+    if (lastEditContext !== 'library') return;
+    
+    const title = document.getElementById("edit-title").value;
+    const artist = document.getElementById("edit-artist").value;
+    
+    const cleanTitle = title ? title.trim().toLowerCase() : "";
+    const cleanArtist = artist ? artist.trim().toLowerCase() : "";
+    const suggestedCovers = [];
+    
+    if (cleanTitle) {
+        // 1. Chercher dans les fichiers locaux (sauf celui en cours)
+        if (typeof localFiles !== 'undefined') {
+            localFiles.forEach((f, idx) => {
+                if (idx === editingLocalIndex) return; // Ignorer lui-même
+                const titleMatch = f.title && f.title.trim().toLowerCase() === cleanTitle;
+                const artistMatch = !cleanArtist || (f.artist && f.artist.trim().toLowerCase() === cleanArtist);
+                if (titleMatch && artistMatch) {
+                    const coverUrl = `/api/local/art/${idx}`;
+                    if (!suggestedCovers.some(c => c.url === coverUrl)) {
+                        suggestedCovers.push({
+                            url: coverUrl,
+                            rawPath: `/api/local/art/${idx}`,
+                            source: f.artist ? `${f.title} (${f.artist}) [Local]` : `${f.title} [Local]`
+                        });
+                    }
+                }
+            });
+        }
+        
+        // 2. Chercher dans les liens web
+        if (typeof webLinks !== 'undefined') {
+            webLinks.forEach((w) => {
+                const titleMatch = w.title && w.title.trim().toLowerCase() === cleanTitle;
+                const artistMatch = !cleanArtist || (w.artist && w.artist.trim().toLowerCase() === cleanArtist);
+                if (titleMatch && artistMatch) {
+                    let coverUrl = null;
+                    if (w.cover) {
+                        coverUrl = w.cover.startsWith('http') || w.cover.startsWith('/api/') ? w.cover : `/api/cover?path=${encodeURIComponent(w.cover)}`;
+                    } else {
+                        const ytId = getYouTubeId(w.url);
+                        if (ytId) {
+                            coverUrl = `/api/youtube/cover/${ytId}`;
+                        }
+                    }
+                    if (coverUrl && !suggestedCovers.some(c => c.url === coverUrl)) {
+                        suggestedCovers.push({
+                            url: coverUrl,
+                            rawPath: w.cover || coverUrl,
+                            source: w.artist ? `${w.title} (${w.artist}) [Web]` : `${w.title} [Web]`
+                        });
+                    }
+                }
+            });
+        }
+    }
+    
+    // Si aucune suggestion n'est trouvée, ouvrir directement l'explorateur d'images d'origine
+    if (suggestedCovers.length === 0) {
+        const uploadInput = document.getElementById("edit-cover-upload");
+        if (uploadInput) uploadInput.click();
+        return;
+    }
+    
+    // Sinon, afficher la modale de choix premium
+    const choiceModal = document.getElementById("modal-cover-choice");
+    const suggestionsList = document.getElementById("cover-choice-suggestions-list");
+    
+    if (choiceModal && suggestionsList) {
+        suggestionsList.innerHTML = "";
+        
+        suggestedCovers.forEach(cov => {
+            const wrap = document.createElement("div");
+            wrap.style = "position:relative; width:65px; height:65px; cursor:pointer; border-radius:8px; overflow:hidden; border:2px solid rgba(255,255,255,0.1); transition:all 0.2s ease; background:#222;";
+            wrap.title = `Utiliser l'image de : ${cov.source}`;
+            
+            wrap.onmouseover = () => { wrap.style.borderColor = "var(--accent)"; wrap.style.transform = "scale(1.08)"; };
+            wrap.onmouseout = () => { wrap.style.borderColor = "rgba(255,255,255,0.1)"; wrap.style.transform = "scale(1)"; };
+            
+            wrap.innerHTML = `<img src="${cov.url}" style="width:100%; height:100%; object-fit:cover;">`;
+            
+            wrap.onclick = () => {
+                currentCoverData = cov.rawPath;
+                const thumbContainer = document.getElementById("preview-thumbnail");
+                if (thumbContainer) {
+                    thumbContainer.innerHTML = `<img id="edit-art-img" src="${cov.url}" style="width:100%; height:100%; object-fit:contain;">
+                                                 <div id="btn-edit-delete-cover" class="btn-delete-cover" style="display:flex;"
+                                                      onclick="event.stopPropagation(); removeEditCover();">×</div>`;
+                }
+                choiceModal.close();
+                showToast(t("web.msg_cover_applied") || "Image associée appliquée avec succès !", "success");
+            };
+            
+            suggestionsList.appendChild(wrap);
+        });
+        
+        choiceModal.showModal();
+    }
+}
+
+function handleEditLocalCover(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function (e) {
+            currentCoverData = e.target.result; // Base64
+            
+            const thumbContainer = document.getElementById("preview-thumbnail");
+            if (thumbContainer) {
+                thumbContainer.innerHTML = `<img id="edit-art-img" src="${currentCoverData}" style="width:100%; height:100%; object-fit:contain;">
+                                             <div id="btn-edit-delete-cover" class="btn-delete-cover" style="display:flex;"
+                                                  onclick="event.stopPropagation(); removeEditCover();">×</div>`;
+            }
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+function removeEditCover() {
+    currentCoverData = "DELETE";
+    const thumbContainer = document.getElementById("preview-thumbnail");
+    if (thumbContainer) {
+        thumbContainer.innerHTML = `<span style="font-size:30px;">🎵</span>
+                                    <div id="btn-edit-delete-cover" class="btn-delete-cover" style="display:none;"
+                                         onclick="event.stopPropagation(); removeEditCover();">×</div>`;
+    }
 }
 
 function closeLocalModal() {
@@ -14610,13 +14928,30 @@ function renderModalLinkedItems() {
     });
 }
 
-function openLinkedMedia(uid) {
+async function openLinkedMedia(uid) {
     console.log("[LINK_NAV] Navigation vers UID:", uid);
+    
+    // Sauvegarder automatiquement l'item actuellement édité avant de changer de vue
+    try {
+        if (document.getElementById("media-modal")?.hasAttribute("open")) {
+            if (lastEditContext === 'library') {
+                await saveLocalItem();
+            } else {
+                await saveItem();
+            }
+        } else if (document.getElementById("modal-multitrack")?.hasAttribute("open")) {
+            await saveMultitrackItem();
+        } else if (document.getElementById("modal-web-link")?.hasAttribute("open")) {
+            await saveWebLink();
+        }
+    } catch (e) {
+        console.error("[LINK_NAV] Auto-save during navigation failed:", e);
+    }
     
     // V60: Preserve current session links during tabbed navigation
     window.isNavigatingLinkedMedia = true;
     
-    // Close current modals first to avoid stacking issues or confusion
+    // Close current modals first to avoid stacking issues or confusion (safeguard)
     if (document.getElementById("media-modal")?.hasAttribute("open")) {
         document.getElementById("media-modal").close();
     }

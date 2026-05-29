@@ -717,7 +717,11 @@
         "msg_recording_success": "Session enregistrée et ajoutée avec succès à la bibliothèque !",
         "msg_recording_error": "Erreur lors de l'enregistrement : ",
         "lbl_recording_monitoring": "Niveau d'Entrée Guitare",
-        "lbl_saving_recording": "Sauvegarde de l'enregistrement..."
+        "lbl_saving_recording": "Sauvegarde de l'enregistrement...",
+        "tab_recordings": "Enregistrements",
+        "lbl_rec_mix_backing": "Mixer l'accompagnement (Backing track)",
+        "btn_start_recording": "DÉMARRER",
+        "lbl_rec_prepare": "Prêt à enregistrer"
     },
     "sync": {
         "title": "Synchronisation Cloud",

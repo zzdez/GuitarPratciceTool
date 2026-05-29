@@ -799,6 +799,9 @@
                 <button id="tab-local" draggable="true" onclick="switchView('local')"><i class="ph ph-music-notes"
                         style="font-size:1.1em; vertical-align:middle; margin-right:5px;"></i> <span
                         data-i18n="web.tab_local">Fichiers Locaux</span></button>
+                <button id="tab-recordings" draggable="true" onclick="switchView('recordings')"><i class="ph ph-microphone"
+                        style="font-size:1.1em; vertical-align:middle; margin-right:5px;"></i> <span
+                        data-i18n="web.tab_recordings">Enregistrements</span></button>
                 <button id="tab-setlists" draggable="true" onclick="switchView('setlists')"><i class="ph ph-playlist"
                         style="font-size:1.1em; vertical-align:middle; margin-right:5px;"></i> <span
                         data-i18n="web.tab_setlists">Setlists Live</span></button>
@@ -1033,6 +1036,43 @@
                                 </tr>
                             </thead>
                             <tbody id="local-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW: RECORDINGS (Enregistrements de Session) -->
+            <div id="view-recordings" class="view-container" style="display:none;">
+                <div class="sidebar-section">
+                    <div class="section-title">
+                        <span data-i18n="web.tab_recordings">Enregistrements</span>
+                    </div>
+
+                    <!-- Recordings Filters -->
+                    <div class="search-filters" style="align-items: center;">
+                        <input type="text" id="filter-rec-artist" placeholder="Artiste..." onkeyup="renderRecordings()" style="flex:1;">
+                        <input type="text" id="filter-rec-title" placeholder="Titre/Date..." onkeyup="renderRecordings()" style="flex:1;">
+                        <button class="btn-clear-global" onclick="resetFilters('recordings')" title="Réinitialiser">×</button>
+                    </div>
+
+                    <div class="table-wrapper">
+                        <table id="recordings-table" class="styled-table">
+                            <thead>
+                                <tr>
+                                    <th class="col-artist">
+                                        <div class="th-content">
+                                            <span data-i18n="web.col_artist">Artiste</span>
+                                        </div>
+                                    </th>
+                                    <th class="col-title">
+                                        <div class="th-content">
+                                            <span data-i18n="web.col_title">Titre</span>
+                                        </div>
+                                    </th>
+                                    <th class="col-actions" data-i18n="web.col_actions">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recordings-body"></tbody>
                         </table>
                     </div>
                 </div>
@@ -1470,11 +1510,12 @@
                 </div>
 
                 <!-- Poster (Center) -->
-                <div id="preview-thumbnail" class="art-container wide-art" title="Aperçu Thumbnail">
+                <div id="preview-thumbnail" class="art-container wide-art" title="Cliquer pour changer de vignette" style="cursor:pointer;" onclick="handlePreviewThumbnailClick()">
                     <span style="font-size:40px;">🎵</span>
                     <div id="btn-edit-delete-cover" class="btn-delete-cover" style="display:none;"
                         onclick="event.stopPropagation(); removeEditCover();">×</div>
                 </div>
+                <input type="file" id="edit-cover-upload" accept="image/*" style="display:none" onchange="handleEditLocalCover(this)">
 
                 <!-- Controls Group (Right) -->
                 <div style="display:flex; align-items:center; gap:12px; min-width:140px; justify-content: flex-start;">
@@ -1960,12 +2001,28 @@
     <!-- RECORDING DIALOG (Enregistrement Session) -->
     <dialog id="modal-recording" style="width: 450px;">
         <div class="modal-header">
-            <h3 id="rec-modal-title" data-i18n="web.msg_recording_in_progress">Enregistrement en cours...</h3>
-            <button onclick="abortRecording()" class="btn-close" id="btn-rec-modal-close" style="display:none;">×</button>
+            <h3 id="rec-modal-title" data-i18n="web.lbl_rec_prepare">Prêt à enregistrer</h3>
+            <button onclick="abortRecording()" class="btn-close" id="btn-rec-modal-close">×</button>
         </div>
         <div class="modal-body" style="display:flex; flex-direction:column; align-items:center; gap:20px; padding: 20px 10px;">
-            <!-- PULSING DOT & TIMER -->
-            <div id="rec-status-container" style="display:flex; align-items:center; gap:12px;">
+            <!-- PREPARATION CONTROLS (Visible before starting) -->
+            <div id="rec-prepare-container" style="display:flex; flex-direction:column; gap:15px; width:100%; align-items:center; background:#1a1a1a; border:1px solid #333; border-radius:6px; padding:15px; box-sizing:border-box;">
+                <div style="display:flex; align-items:center; gap:10px; width:100%; justify-content:center;">
+                    <input type="checkbox" id="chk-rec-mix-backing" checked style="cursor:pointer; width:18px; height:18px; accent-color:var(--accent);">
+                    <label for="chk-rec-mix-backing" style="font-size:0.95em; color:#fff; cursor:pointer;" data-i18n="web.lbl_rec_mix_backing">Mixer l'accompagnement (Backing track)</label>
+                </div>
+                <div style="display:flex; align-items:center; gap:10px; width:100%; justify-content:center; margin-top:5px;">
+                    <span style="font-size:0.9em; color:#aaa;" data-i18n="web.lbl_rec_format">Format de sortie :</span>
+                    <select id="sel-rec-format" style="background:#222; color:#fff; border:1px solid #444; border-radius:4px; padding:5px 10px; cursor:pointer; outline:none; font-size:0.9em; min-width:180px;">
+                        <option value="wav">WAV (Haute Qualité)</option>
+                        <option value="mp3">MP3 (Format standard)</option>
+                        <option value="same" selected data-i18n="web.opt_rec_format_same">Identique au média</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- PULSING DOT & TIMER (Hidden during preparation) -->
+            <div id="rec-status-container" style="display:none; align-items:center; gap:12px;">
                 <div id="rec-pulsing-dot" style="width:14px; height:14px; background:#ff4444; border-radius:50%; box-shadow:0 0 10px #ff4444; animation: pulse 1s infinite alternate;"></div>
                 <span id="rec-timer" style="font-size:2.5em; font-weight:bold; font-family:monospace; color:#fff;">00:00</span>
             </div>
@@ -1988,8 +2045,11 @@
             </div>
         </div>
         <div class="modal-footer" style="display:flex; justify-content:center; gap:15px; padding-top: 15px; width:100%; box-sizing:border-box;">
+            <!-- Start button -->
+            <button class="btn-primary" id="btn-rec-start" onclick="startRecording()" style="background:var(--accent); border-color:var(--accent); color:#000; font-weight:bold; padding: 10px 24px;" data-i18n="web.btn_start_recording">DÉMARRER</button>
+
             <!-- Recording Controls -->
-            <button class="btn-primary" id="btn-rec-stop" onclick="stopRecording()" style="background:#ff4444; border-color:#ff4444; font-weight:bold; padding: 10px 24px;" data-i18n="web.btn_stop_record">Arrêter</button>
+            <button class="btn-primary" id="btn-rec-stop" onclick="stopRecording()" style="display:none; background:#ff4444; border-color:#ff4444; font-weight:bold; padding: 10px 24px;" data-i18n="web.btn_stop_record">Arrêter</button>
             
             <!-- Post-Recording Actions -->
             <button class="btn-text" id="btn-rec-retry" onclick="retryRecording()" style="display:none;" data-i18n="web.modal_rec_retry">Recommencer</button>
