@@ -3755,6 +3755,10 @@ async def update_web_link(index: int, item: Dict):
                 links = json.load(f)
         
         if 0 <= index < len(links):
+            # Preserver ou generer l'UID stable (V61)
+            if not item.get("uid"):
+                import uuid
+                item["uid"] = links[index].get("uid") or f"web_{uuid.uuid4().hex[:8]}"
             links[index] = item
             
             # On sauvegarde AVANT la synchro

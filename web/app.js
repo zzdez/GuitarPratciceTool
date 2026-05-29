@@ -2713,6 +2713,7 @@ async function saveWebLink() {
     logToBackend(`[SAVE_WEB] User clicked Save. Linked_ids count: ${currentEditingLinkedIds.length}`);
 
     const payload = {
+        uid: (currentWebLinkIndex !== -1 && webLinks[currentWebLinkIndex]) ? webLinks[currentWebLinkIndex].uid : null,
         title: document.getElementById("web-link-title").value,
         artist: document.getElementById("web-link-artist").value,
         url: document.getElementById("web-link-url").value,
@@ -5083,6 +5084,7 @@ async function saveItem() {
     }
 
     const payload = {
+        uid: (editingIndex !== null && webLinks[editingIndex]) ? webLinks[editingIndex].uid : null,
         title: title,
         url: url,
         category: category,
@@ -9078,6 +9080,7 @@ async function saveMultitrackItem() {
     if (editingLocalIndex === null) return;
 
     const payload = {
+        uid: (editingLocalIndex !== null && localFiles[editingLocalIndex]) ? localFiles[editingLocalIndex].uid : null,
         title: document.getElementById("mt-title").value,
         artist: document.getElementById("mt-artist").value,
         album: document.getElementById("mt-album").value,
@@ -9157,6 +9160,7 @@ async function saveLocalItem() {
     if (editingLocalIndex === null) return;
 
     const payload = {
+        uid: (editingLocalIndex !== null && localFiles[editingLocalIndex]) ? localFiles[editingLocalIndex].uid : null,
         title: document.getElementById("edit-title").value,
         artist: document.getElementById("edit-artist").value,
         album: (editingLocalIndex !== null && localFiles[editingLocalIndex]) ? localFiles[editingLocalIndex].album : "", // Keep album if existing
