@@ -1,6 +1,37 @@
 // Fretboard Logic
 const stringTunes = ["E", "A", "D", "G", "B", "E"];
 const baseNotes = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+const frNotesMap = {
+    "C": "Do", "C#": "Do#", "D": "Ré", "D#": "Ré#", "E": "Mi", 
+    "F": "Fa", "F#": "Fa#", "G": "Sol", "G#": "Sol#", "A": "La", 
+    "A#": "La#", "B": "Si"
+};
+
+const frNotesMapFlat = {
+    "C#": "Réb", "D#": "Mib", "F#": "Solb", "G#": "Lab", "A#": "Sib"
+};
+
+function formatNoteDisplay(noteStr, includeFlat = false) {
+    const isFr = (typeof currentSettings !== 'undefined' && currentSettings.notation === "fr");
+    if (!isFr) {
+        if (includeFlat && frNotesMapFlat[noteStr]) {
+            const flatEn = noteStr.charAt(0) === 'C' ? 'Db' : noteStr.charAt(0) === 'D' ? 'Eb' : noteStr.charAt(0) === 'F' ? 'Gb' : noteStr.charAt(0) === 'G' ? 'Ab' : 'Bb';
+            return `${noteStr} / ${flatEn}`;
+        }
+        return noteStr;
+    }
+    const frNote = frNotesMap[noteStr] || noteStr;
+    if (includeFlat && frNotesMapFlat[noteStr]) {
+        return `${frNote} / ${frNotesMapFlat[noteStr]}`;
+    }
+    return frNote;
+}
+
+function formatTuningNotes(notesArray) {
+    if (!notesArray) return "";
+    return notesArray.map(n => formatNoteDisplay(n, false)).join(" ");
+}
 const scaleFormulas = {
     major: [0, 2, 4, 5, 7, 9, 11],
     minor: [0, 2, 3, 5, 7, 8, 10],
@@ -174,7 +205,9 @@ function changeInstrument(instKey) {
         const opt = document.createElement("option");
         opt.value = t;
         opt.setAttribute("data-i18n", `web.tuning_${t}`);
-        opt.innerText = t; // Will be localized
+        const baseName = window.locales ? window.locales.get(`web.tuning_${t}`) || t : t;
+        const tuningNotes = tuningPresets[t] ? ` (${formatTuningNotes(tuningPresets[t])})` : "";
+        opt.innerText = baseName + tuningNotes;
         tuningSelect.appendChild(opt);
     });
 
@@ -269,7 +302,9 @@ function detectCurrentScale() {
                 const opt = document.createElement("option");
                 opt.value = t;
                 opt.setAttribute("data-i18n", `web.tuning_${t}`);
-                opt.innerText = t;
+                const baseName = window.locales ? window.locales.get(`web.tuning_${t}`) || t : t;
+                const tuningNotes = tuningPresets[t] ? ` (${formatTuningNotes(tuningPresets[t])})` : "";
+                opt.innerText = baseName + tuningNotes;
                 tuningSelect.appendChild(opt);
             });
         }
@@ -482,6 +517,68 @@ function updatePositionDropdown() {
     }
 }
 
+
+function updateFretboardDropdowns() {
+    const keySelect = document.getElementById("fretboard-key");
+    if (keySelect) {
+        const currentVal = keySelect.value;
+        keySelect.innerHTML = "";
+        baseNotes.forEach(note => {
+            const opt = document.createElement("option");
+            opt.value = note;
+            opt.innerText = formatNoteDisplay(note, true);
+            keySelect.appendChild(opt);
+        });
+        keySelect.value = currentVal;
+    }
+
+    const tuningSelect = document.getElementById("fretboard-tuning");
+    if (tuningSelect) {
+        const currentTuning = tuningSelect.value;
+        const instKey = fretboardState.instrument;
+        const inst = instrumentDefs[instKey];
+        if (inst) {
+            tuningSelect.innerHTML = "";
+            inst.tunings.forEach(t => {
+                const opt = document.createElement("option");
+                opt.value = t;
+                opt.setAttribute("data-i18n", `web.tuning_${t}`);
+                const baseName = window.locales ? window.locales.get(`web.tuning_${t}`) || t : t;
+                const tuningNotes = tuningPresets[t] ? ` (${formatTuningNotes(tuningPresets[t])})` : "";
+                opt.innerText = baseName + tuningNotes;
+                tuningSelect.appendChild(opt);
+            });
+            tuningSelect.value = currentTuning;
+        }
+    }
+
+    // Sync the quick toggle button text
+    const btn = document.getElementById("btn-quick-notation");
+    if (btn && typeof currentSettings !== 'undefined') {
+        btn.innerText = currentSettings.notation === "fr" ? "DoRé" : "ABC";
+    }
+}
+
+function toggleQuickNotation(e) {
+    if (e) e.stopPropagation();
+    if (typeof currentSettings === 'undefined' || !currentSettings) return;
+    
+    currentSettings.notation = currentSettings.notation === "fr" ? "en" : "fr";
+    
+    // Save settings implicitly
+    fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notation: currentSettings.notation })
+    }).catch(console.error);
+    
+    // Update the main settings modal dropdown so it stays in sync
+    const notationDropdown = document.getElementById("setting-notation");
+    if (notationDropdown) notationDropdown.value = currentSettings.notation;
+    
+    updateFretboardDropdowns();
+    renderFretboard();
+}
 
 function renderFretboard(silentSave = false) {
     fretboardState.key = document.getElementById("fretboard-key").value;

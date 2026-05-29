@@ -3030,6 +3030,11 @@ async function loadSettings() {
                     toggleTheaterMode(true);
                 }, 100);
             }
+
+            // Apply notation UI for fretboard if loaded
+            if (typeof updateFretboardDropdowns === 'function') {
+                updateFretboardDropdowns();
+            }
         }
     } catch (e) {
         console.error("Settings Load Error", e);
@@ -3090,6 +3095,9 @@ async function openSettingsModal() {
         const apCb = document.getElementById("setting-autoplay");
         if (apCb) apCb.checked = currentSettings.autoplay !== false; // Default to true
 
+        const notationDropdown = document.getElementById("setting-notation");
+        if (notationDropdown) notationDropdown.value = currentSettings.notation || "en";
+
         const arCb = document.getElementById("setting-autoreplay");
         if (arCb) arCb.checked = currentSettings.autoreplay === true; // Default to false
 
@@ -3143,6 +3151,26 @@ async function changeLanguage() {
 
     // Dynamically apply
     await loadTranslations(newLang);
+}
+
+async function changeNotation() {
+    const selector = document.getElementById("setting-notation");
+    if (!selector) return;
+    const newNotation = selector.value;
+    if (currentSettings) currentSettings.notation = newNotation;
+    await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notation: newNotation })
+    });
+    
+    // Live update the fretboard UI if active
+    if (typeof updateFretboardDropdowns === "function") {
+        updateFretboardDropdowns();
+    }
+    if (typeof renderFretboard === "function") {
+        renderFretboard();
+    }
 }
 
 function applyWebTheme(theme) {
@@ -3278,6 +3306,9 @@ async function saveSettings() {
 
     const getsongKey = document.getElementById("setting-getsong-api-key");
     if (getsongKey) currentSettings.getsong_api_key = getsongKey.value;
+
+    const notationDropdown = document.getElementById("setting-notation");
+    if (notationDropdown) currentSettings.notation = notationDropdown.value;
 
     const apCb = document.getElementById("setting-autoplay");
     if (apCb) currentSettings.autoplay = apCb.checked;

@@ -2074,6 +2074,13 @@
                             </select>
                         </div>
                         <div class="col">
+                            <label data-i18n="web.lbl_notation_choice">Notation Musicale</label>
+                            <select id="setting-notation" onchange="changeNotation()">
+                                <option value="en" data-i18n="web.notation_en">Anglaise (A, B, C...)</option>
+                                <option value="fr" data-i18n="web.notation_fr">Française (Do, Ré, Mi...)</option>
+                            </select>
+                        </div>
+                        <div class="col">
                             <label data-i18n="web.lbl_theme_choice">Thème Visuel</label>
                             <select id="setting-theme" onchange="changeWebTheme()">
                                 <option value="steel_blue" data-i18n="web.theme_steel_blue">Steel Blue</option>
@@ -2519,6 +2526,10 @@
                         <!-- Navigation Next -->
                         <button class="btn-icon" id="fret-train-next" onclick="fretboardNavPosition(1)" title="Position Suivante" style="font-size:1em; color:#bbb; padding:0; height:18px;">
                             <i class="ph ph-skip-forward"></i>
+                        </button>
+                        <!-- Quick Notation Toggle -->
+                        <button class="btn-icon" id="btn-quick-notation" onclick="toggleQuickNotation(event)" title="Changer de notation musicale" style="font-size:0.7em; color:#aaa; border:1px solid #444; background:#222; border-radius:3px; padding:0 4px; height:18px; line-height:16px; margin-right:4px; margin-left:4px;">
+                            ABC
                         </button>
                         <!-- Active Toggle -->
                         <label class="modern-switch" style="font-size:0.75em; display:flex; align-items:center; cursor:pointer;">
