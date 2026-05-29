@@ -1437,6 +1437,7 @@ class SyncManager:
 
     def _perform_deep_merge(self, downloaded_json_path: str, local_json_path: str):
         """Merges remote shared data into local library without destroying private items."""
+        rel_path = os.path.relpath(local_json_path, self.local_dir).replace('\\', '/')
         with open(local_json_path, 'r', encoding='utf-8') as f:
             local_data = json.load(f)
         with open(downloaded_json_path, 'r', encoding='utf-8') as f:
