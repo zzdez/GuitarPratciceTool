@@ -84,6 +84,9 @@ function getMediaIconClass(uid, item) {
         const type = (typeof getLocalType === 'function') ? getLocalType(item) : 'audio';
         if (type === 'video')      return "ph ph-film-strip";
         if (type === 'multitrack') return "ph ph-stack-simple";
+        if (item.category === 'Recordings' || item.category === 'Enregistrements' || item.category === 'Enregistrement') {
+            return "ph ph-microphone";
+        }
         return "ph ph-music-notes";
     } else if (uid.startsWith('web')) {
         const canonical = resolveCanonicalType(item.type, item.url);
