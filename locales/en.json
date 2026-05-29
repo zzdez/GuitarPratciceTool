@@ -720,7 +720,12 @@
         "tab_recordings": "Recordings",
         "lbl_rec_mix_backing": "Mix backing track into recording",
         "btn_start_recording": "START",
-        "lbl_rec_prepare": "Ready to record"
+        "lbl_rec_prepare": "Ready to record",
+        "btn_rec_arm": "Arm Recording",
+        "btn_count_in_toggle": "Quick Count-in",
+        "msg_recording_armed": "Recording armed. Start playback to begin!",
+        "msg_recording_disarmed": "Recording disarmed.",
+        "msg_recording_not_available_yt": "Recording is not available for streaming YouTube videos."
     },
     "sync": {
         "title": "Cloud Sync",

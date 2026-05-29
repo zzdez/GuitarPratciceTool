@@ -3960,4 +3960,32 @@ input[type="color"].stem-color-input::-moz-color-swatch {
     color: var(--accent);
 }
 
+/* --- ARMED RECORDING & COUNT-IN STYLES --- */
+.control-btn.record-arm.active {
+    color: #ff4444 !important;
+    filter: drop-shadow(0 0 5px rgba(255, 68, 68, 0.6)) !important;
+}
+
+.control-btn.record-arm.recording {
+    color: #ff0000 !important;
+    filter: drop-shadow(0 0 8px rgba(255, 0, 0, 0.8)) !important;
+    animation: armed-record-pulse 1s infinite alternate;
+}
+
+@keyframes armed-record-pulse {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(1.15);
+        opacity: 0.7;
+    }
+}
+
+.control-btn.count-in.active {
+    color: #bb86fc !important;
+    filter: drop-shadow(0 0 5px rgba(187, 134, 252, 0.6)) !important;
+}
+
 

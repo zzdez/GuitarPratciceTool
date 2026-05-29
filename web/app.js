@@ -619,6 +619,235 @@ function getActiveMediaFormat() {
     return "wav"; // Default fallback
 }
 
+// --- ARMED RECORDING & QUICK COUNT-IN SYSTEM ---
+window.isRecordingArmed = false;
+window.isArmedRecordingActive = false;
+
+async function toggleRecordArming() {
+    if (currentActivePlayer === 'youtube') {
+        alert(t('web.msg_recording_not_available_yt') || "L'enregistrement n'est pas disponible pour les vidéos en streaming YouTube.");
+        return;
+    }
+
+    if (window.isRecordingArmed) {
+        // Disarm
+        if (window.guitarStream) {
+            window.guitarStream.getTracks().forEach(track => track.stop());
+            window.guitarStream = null;
+        }
+        window.isRecordingArmed = false;
+        document.querySelectorAll('.control-btn.record-arm').forEach(btn => {
+            btn.classList.remove('active', 'recording');
+        });
+        console.log("[ARMED RECORDING] Disarmed.");
+        showToast(t('web.msg_recording_disarmed') || "Enregistrement désarmé.", "info");
+    } else {
+        // Arm
+        try {
+            if (!audioCtx) {
+                initAudioContext();
+            }
+            if (audioCtx.state === 'suspended') {
+                await audioCtx.resume();
+            }
+
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: false,
+                    noiseSuppression: false,
+                    autoGainControl: false
+                }
+            });
+            window.guitarStream = stream;
+
+            // Setup audio graph
+            recStreamDestination = audioCtx.createMediaStreamDestination();
+            recGuitarSource = audioCtx.createMediaStreamSource(stream);
+            recGuitarGain = audioCtx.createGain();
+            recGuitarGain.gain.value = 1.0;
+            recGuitarSource.connect(recGuitarGain);
+            recGuitarGain.connect(recStreamDestination);
+
+            recAnalyser = audioCtx.createAnalyser();
+            recAnalyser.fftSize = 256;
+            recGuitarSource.connect(recAnalyser);
+            startMonitoringVisualizer();
+
+            // Connect backing track logic
+            let mediaEl = null;
+            if (currentActivePlayer === 'waveform' && wavesurfer) {
+                mediaEl = wavesurfer.getMediaElement() || wavesurfer.media;
+                if (!mediaEl && wavesurfer.backend) mediaEl = wavesurfer.backend.media;
+            } else if (currentActivePlayer === 'local') {
+                mediaEl = document.getElementById("html5-player");
+            }
+
+            recBackingGain = null;
+            if (mediaEl) {
+                if (currentActivePlayer === 'waveform' && !sourceAudio) {
+                    sourceAudio = audioCtx.createMediaElementSource(mediaEl);
+                    sourceAudio.connect(audioCtx.destination);
+                } else if (currentActivePlayer === 'local' && !sourceVideo) {
+                    sourceVideo = audioCtx.createMediaElementSource(mediaEl);
+                    sourceVideo.connect(audioCtx.destination);
+                }
+                const activeSource = currentActivePlayer === 'waveform' ? sourceAudio : sourceVideo;
+                recBackingGain = audioCtx.createGain();
+                recBackingGain.gain.value = 0.8;
+                activeSource.connect(recBackingGain);
+                pitchSource = activeSource;
+            } else if (currentActivePlayer === 'multitrack' && window.multitrack) {
+                if (window.multitrack.wavesurfers) {
+                    recBackingGain = audioCtx.createGain();
+                    recBackingGain.gain.value = 0.8;
+                    window.multitrack.wavesurfers.forEach(ws => {
+                        let el = null;
+                        if (ws) {
+                            if (typeof ws.getMediaElement === 'function') el = ws.getMediaElement();
+                            if (!(el instanceof HTMLMediaElement) && ws.options && ws.options.media) el = ws.options.media;
+                            if (!(el instanceof HTMLMediaElement) && ws.media instanceof HTMLMediaElement) el = ws.media;
+                            if (!(el instanceof HTMLMediaElement) && ws.container) {
+                                el = ws.container.querySelector('audio') || ws.container.querySelector('video');
+                            }
+                        }
+                        if (el && el instanceof HTMLMediaElement) {
+                            if (!el._sourceNode) {
+                                el._sourceNode = audioCtx.createMediaElementSource(el);
+                                if (el._panner) {
+                                    el._sourceNode.connect(el._panner);
+                                } else {
+                                    el._sourceNode.connect(audioCtx.destination);
+                                }
+                            }
+                            el._sourceNode.connect(recBackingGain);
+                        }
+                    });
+                }
+            }
+
+            window.isRecordingArmed = true;
+            document.querySelectorAll('.control-btn.record-arm').forEach(btn => {
+                btn.classList.add('active');
+            });
+            console.log("[ARMED RECORDING] Armed successfully.");
+            showToast(t('web.msg_recording_armed') || "Enregistrement armé. Lancez la lecture pour démarrer !", "success");
+        } catch (err) {
+            console.error("Armed recording initialization failed:", err);
+            alert((t('web.msg_recording_error') || "Erreur d'enregistrement : ") + err.message);
+        }
+    }
+}
+
+async function startArmedRecording() {
+    try {
+        if (!recStreamDestination) {
+            console.error("Armed recording started but stream destination is null");
+            return;
+        }
+
+        const mixBacking = localStorage.getItem("rec_mix_backing") !== "false";
+        if (mixBacking && recBackingGain) {
+            try { recBackingGain.disconnect(recStreamDestination); } catch(e) {}
+            recBackingGain.connect(recStreamDestination);
+        }
+
+        // Setup MediaRecorder
+        recChunks = [];
+        recMediaRecorder = new MediaRecorder(recStreamDestination.stream, {
+            mimeType: 'audio/webm'
+        });
+
+        recMediaRecorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) {
+                recChunks.push(e.data);
+            }
+        };
+
+        recMediaRecorder.onstop = () => {
+            currentRecordingBlob = new Blob(recChunks, { type: 'audio/webm' });
+            const audioURL = URL.createObjectURL(currentRecordingBlob);
+            const previewPlayer = document.getElementById("rec-preview-player");
+            if (previewPlayer) previewPlayer.src = audioURL;
+
+            // Open the recording modal directly in save/preview mode!
+            const dialog = document.getElementById("modal-recording");
+            if (dialog) {
+                dialog.showModal();
+                document.getElementById("rec-modal-title").innerText = t('web.modal_rec_title') || "Fin de l'Enregistrement";
+                document.getElementById("rec-prepare-container").style.display = "none";
+                document.getElementById("rec-status-container").style.display = "none";
+                document.getElementById("rec-monitoring-container").style.display = "none";
+                document.getElementById("rec-preview-container").style.display = "flex";
+
+                document.getElementById("btn-rec-start").style.display = "none";
+                document.getElementById("btn-rec-stop").style.display = "none";
+                document.getElementById("btn-rec-retry").style.display = "block";
+                document.getElementById("btn-rec-save").style.display = "block";
+                document.getElementById("btn-rec-modal-close").style.display = "block";
+            }
+        };
+
+        recMediaRecorder.start();
+        isRecordingSession = true;
+        window.isArmedRecordingActive = true;
+
+        // Visual feedback: add recording class to all arm buttons
+        document.querySelectorAll('.control-btn.record-arm').forEach(btn => {
+            btn.classList.add('recording');
+        });
+
+        recTime = 0;
+        recTimerInterval = setInterval(() => {
+            recTime++;
+        }, 1000);
+
+    } catch (err) {
+        console.error("Armed recording start failed:", err);
+        alert((t('web.msg_recording_error') || "Erreur d'enregistrement : ") + err.message);
+    }
+}
+
+function stopArmedRecording() {
+    if (recTimerInterval) {
+        clearInterval(recTimerInterval);
+        recTimerInterval = null;
+    }
+    if (recMediaRecorder && recMediaRecorder.state !== 'inactive') {
+        recMediaRecorder.stop();
+    }
+    isRecordingSession = false;
+    window.isArmedRecordingActive = false;
+    window.isRecordingArmed = false;
+
+    // Reset UI of armed buttons
+    document.querySelectorAll('.control-btn.record-arm').forEach(btn => {
+        btn.classList.remove('active', 'recording');
+    });
+}
+
+function toggleCountIn() {
+    if (!window.metronome) return;
+    const newState = !window.metronome.isCountInActive;
+    if (typeof toggleCountInOptions === 'function') {
+        toggleCountInOptions(newState);
+    } else {
+        window.metronome.isCountInActive = newState;
+    }
+    updateCountInButtonsState();
+}
+
+function updateCountInButtonsState() {
+    if (!window.metronome) return;
+    const isActive = window.metronome.isCountInActive;
+    document.querySelectorAll('.control-btn.count-in').forEach(btn => {
+        if (isActive) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+}
+
 async function startRecordingWorkflow(playerType) {
     if (currentActivePlayer === 'youtube') {
         alert("L'enregistrement n'est pas disponible pour les vidéos en streaming YouTube.");
@@ -9384,6 +9613,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
         });
     }
+
+    // Synchronize quick count-in buttons state
+    updateCountInButtonsState();
 });
 
 function handleLocalCover(input) {
@@ -10022,9 +10254,19 @@ function updatePlayPauseIcon(type, isPlaying) {
     if (isPlaying) {
         icon.classList.remove('ph-play-circle');
         icon.classList.add('ph-pause-circle');
+
+        // --- ARMED RECORDING TRIGGER ---
+        if (window.isRecordingArmed && !window.isArmedRecordingActive) {
+            startArmedRecording();
+        }
     } else {
         icon.classList.remove('ph-pause-circle');
         icon.classList.add('ph-play-circle');
+
+        // --- ARMED RECORDING TRIGGER ---
+        if (window.isArmedRecordingActive) {
+            stopArmedRecording();
+        }
     }
 
     // -- METRONOME SYNC --

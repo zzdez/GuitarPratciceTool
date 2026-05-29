@@ -721,7 +721,12 @@
         "tab_recordings": "Enregistrements",
         "lbl_rec_mix_backing": "Mixer l'accompagnement (Backing track)",
         "btn_start_recording": "DÉMARRER",
-        "lbl_rec_prepare": "Prêt à enregistrer"
+        "lbl_rec_prepare": "Prêt à enregistrer",
+        "btn_rec_arm": "Armer l'Enregistrement",
+        "btn_count_in_toggle": "Décompte rapide",
+        "msg_recording_armed": "Enregistrement armé. Lancez la lecture pour démarrer !",
+        "msg_recording_disarmed": "Enregistrement désarmé.",
+        "msg_recording_not_available_yt": "L'enregistrement n'est pas disponible pour les vidéos en streaming YouTube."
     },
     "sync": {
         "title": "Synchronisation Cloud",

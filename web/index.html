@@ -328,6 +328,16 @@
                             <i class="ph ph-microphone"></i>
                         </button>
 
+                        <!-- Recording Arm Button -->
+                        <button class="control-btn record-arm" id="btn-audio-record-arm" onclick="toggleRecordArming()" title="Armer l'Enregistrement" data-i18n-title="web.btn_rec_arm" style="font-size: 1.2rem; margin-left:5px; color:#aaa;">
+                            <i class="ph ph-circle"></i>
+                        </button>
+
+                        <!-- Count-in Toggle Button -->
+                        <button class="control-btn count-in" id="btn-audio-count-in-toggle" onclick="toggleCountIn()" title="Décompte rapide" data-i18n-title="web.btn_count_in_toggle" style="font-size: 1.2rem; margin-left:5px; color:#aaa;">
+                            <i class="ph ph-timer"></i>
+                        </button>
+
                         <!-- Pitch Control (Compact) -->
                         <div class="pitch-pill"
                             style="display:flex; align-items:center; gap:6px; background:#222; border-radius:15px; padding:2px 10px; border:1px solid #333;">
@@ -482,6 +492,16 @@
                         <!-- Recording Button -->
                         <button class="control-btn" id="btn-multitrack-record" onclick="startRecordingWorkflow('multitrack')" title="Enregistrer Session" data-i18n-title="web.btn_record" style="font-size: 1.2rem; margin-left:10px; color:#ff4444;">
                             <i class="ph ph-microphone"></i>
+                        </button>
+
+                        <!-- Recording Arm Button -->
+                        <button class="control-btn record-arm" id="btn-multitrack-record-arm" onclick="toggleRecordArming()" title="Armer l'Enregistrement" data-i18n-title="web.btn_rec_arm" style="font-size: 1.2rem; margin-left:5px; color:#aaa;">
+                            <i class="ph ph-circle"></i>
+                        </button>
+
+                        <!-- Count-in Toggle Button -->
+                        <button class="control-btn count-in" id="btn-multitrack-count-in-toggle" onclick="toggleCountIn()" title="Décompte rapide" data-i18n-title="web.btn_count_in_toggle" style="font-size: 1.2rem; margin-left:5px; color:#aaa;">
+                            <i class="ph ph-timer"></i>
                         </button>
 
                         <!-- Master Volume Control -->
@@ -669,6 +689,16 @@
                     <!-- Recording Button -->
                     <button class="control-btn" id="btn-video-record" onclick="startRecordingWorkflow('video')" title="Enregistrer Session" data-i18n-title="web.btn_record" style="font-size: 1.2rem; margin-left:10px; color:#ff4444;">
                         <i class="ph ph-microphone"></i>
+                    </button>
+
+                    <!-- Recording Arm Button -->
+                    <button class="control-btn record-arm" id="btn-video-record-arm" onclick="toggleRecordArming()" title="Armer l'Enregistrement" data-i18n-title="web.btn_rec_arm" style="font-size: 1.2rem; margin-left:5px; color:#aaa;">
+                        <i class="ph ph-circle"></i>
+                    </button>
+
+                    <!-- Count-in Toggle Button -->
+                    <button class="control-btn count-in" id="btn-video-count-in-toggle" onclick="toggleCountIn()" title="Décompte rapide" data-i18n-title="web.btn_count_in_toggle" style="font-size: 1.2rem; margin-left:5px; color:#aaa;">
+                        <i class="ph ph-timer"></i>
                     </button>
 
                     <!-- Subtitle Toggle Area -->
