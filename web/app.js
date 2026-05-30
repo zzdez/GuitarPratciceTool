@@ -1003,13 +1003,31 @@ async function toggleRecordArming() {
                         if (el && el instanceof HTMLMediaElement) {
                             if (!el._sourceNode) {
                                 el._sourceNode = audioCtx.createMediaElementSource(el);
-                                if (el._panner) {
-                                    el._sourceNode.connect(el._panner);
-                                } else {
-                                    el._sourceNode.connect(audioCtx.destination);
-                                }
                             }
-                            el._sourceNode.connect(recBackingGain);
+                            
+                            // Création résiliente de sécurité du GainNode et du PannerNode de stem s'ils n'existent pas
+                            if (!el._gainNode) {
+                                el._gainNode = audioCtx.createGain();
+                                el._gainNode.gain.setValueAtTime(el.muted ? 0 : el.volume, audioCtx.currentTime);
+                                el.addEventListener('volumechange', () => {
+                                    const vol = el.muted ? 0 : el.volume;
+                                    if (el._gainNode) {
+                                        el._gainNode.gain.setValueAtTime(vol, audioCtx.currentTime);
+                                    }
+                                });
+                                el._sourceNode.connect(el._gainNode);
+                            }
+                            
+                            if (!el._panner) {
+                                el._panner = audioCtx.createStereoPanner();
+                                el._panner.pan.value = 0;
+                                el._gainNode.connect(el._panner);
+                                el._panner.connect(audioCtx.destination);
+                            }
+                            
+                            // Connecter la sortie finale (le panner) au gain d'enregistrement pour inclure balance + volume
+                            try { el._panner.disconnect(recBackingGain); } catch(e) {}
+                            el._panner.connect(recBackingGain);
                         }
                     });
                 }
@@ -1308,13 +1326,31 @@ async function startRecordingWorkflow(playerType) {
                     if (el && el instanceof HTMLMediaElement) {
                         if (!el._sourceNode) {
                             el._sourceNode = audioCtx.createMediaElementSource(el);
-                            if (el._panner) {
-                                el._sourceNode.connect(el._panner);
-                            } else {
-                                el._sourceNode.connect(audioCtx.destination);
-                            }
                         }
-                        el._sourceNode.connect(recBackingGain);
+                        
+                        // Création résiliente de sécurité du GainNode et du PannerNode de stem s'ils n'existent pas
+                        if (!el._gainNode) {
+                            el._gainNode = audioCtx.createGain();
+                            el._gainNode.gain.setValueAtTime(el.muted ? 0 : el.volume, audioCtx.currentTime);
+                            el.addEventListener('volumechange', () => {
+                                const vol = el.muted ? 0 : el.volume;
+                                if (el._gainNode) {
+                                    el._gainNode.gain.setValueAtTime(vol, audioCtx.currentTime);
+                                }
+                            });
+                            el._sourceNode.connect(el._gainNode);
+                        }
+                        
+                        if (!el._panner) {
+                            el._panner = audioCtx.createStereoPanner();
+                            el._panner.pan.value = 0;
+                            el._gainNode.connect(el._panner);
+                            el._panner.connect(audioCtx.destination);
+                        }
+                        
+                        // Connecter la sortie finale (le panner) au gain d'enregistrement pour inclure balance + volume
+                        try { el._panner.disconnect(recBackingGain); } catch(e) {}
+                        el._panner.connect(recBackingGain);
                     }
                 });
             }
@@ -7883,12 +7919,27 @@ async function playLocal(index) {
                         }
 
                         const source = window.mtAudioCtx.createMediaElementSource(mediaElement);
+                        const gainNode = window.mtAudioCtx.createGain();
+                        gainNode.gain.setValueAtTime(mediaElement.muted ? 0 : mediaElement.volume, window.mtAudioCtx.currentTime);
+                        
                         const panner = window.mtAudioCtx.createStereoPanner();
                         panner.pan.value = 0;
-                        source.connect(panner);
+                        
+                        source.connect(gainNode);
+                        gainNode.connect(panner);
                         panner.connect(window.mtAudioCtx.destination);
 
+                        mediaElement._sourceNode = source;
+                        mediaElement._gainNode = gainNode;
                         mediaElement._panner = panner;
+
+                        // Synchronisation dynamique du volume en temps réel (prend en compte Mute/Solo et les réglages de sliders)
+                        mediaElement.addEventListener('volumechange', () => {
+                            const vol = mediaElement.muted ? 0 : mediaElement.volume;
+                            if (mediaElement._gainNode) {
+                                mediaElement._gainNode.gain.setValueAtTime(vol, window.mtAudioCtx.currentTime);
+                            }
+                        });
                     }
                 } catch (e) {
                     if (e.name === 'AbortError') throw e;
