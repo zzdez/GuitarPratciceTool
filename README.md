@@ -68,6 +68,12 @@ Elle permet de contrôler des médias (YouTube, MP3, Vidéos Locales) et d'autre
     - **Timeline Marker :** Posez des drapeaux pour programmer des avertisseurs visuels HUD avant les couplets.
     - **Global Override :** Mutez l'intégralité des bips d'un clic sur la Cloche sans perdre vos calibrations.
     - **Repères Visuels Timeline :** Affichage automatique de légers traits jaunes permettant de situer instantanément les zones clés.
+*   **Enregistrement Guitare & Multi-Canaux Avancé (Nouveau !) :**
+    - **Compensation de Latence Dynamique (DelayNode) :** Alignement temporel parfait à la milliseconde près entre votre jeu de guitare (capturé en direct avec monitoring sans latence) et l'accompagnement (backing track) sur le fichier enregistré final.
+    - **Routage Multi-Canaux & Détection Hardware Réelle :** Détection dynamique des 4 canaux physiques de votre carte son. Résolution du bug de downmix automatique de Chrome (via l'interrogation directe de la piste média) permettant d'isoler et d'enregistrer de la pure stéréo native (USB 1-2) ou du mono (Gauche, Droite, USB 3, USB 4) sans interférences.
+    - **Gain d'Entrée Instrument :** Fader interactif de 0% à 200% pour ajuster finement le volume de capture de votre instrument.
+    - **Sélecteur et Canaux à Chaud :** Changement de périphérique audio d'entrée et de routage des canaux en temps réel directement dans la fenêtre de préparation de prise de son sans rechargement de page.
+    - **Moteur d'Enregistrement ASIO Natif (En préparation) :** Fondations techniques en place (modules Python `sounddevice` et `soundfile` installés) pour proposer prochainement un double moteur d'enregistrement en tâche de fond (ASIO professionnel Windows) afin de bypasser totalement les limitations des navigateurs Web.
 *   **Système d'Entraînement Avancé (A-B Looping & Speed Trainer) :**
     - **Boucles Multiples :** Définissez, nommez et sauvegardez plusieurs boucles (Points A & B) pour chaque morceau, incluant **désormais un support total et visuel pour les vidéos YouTube en streaming**.
     - **Mode Séquentiel Intelligent :** Activez "Boucle Unique" pour répéter la section, ou "Boucle Séquentielle" pour passer automatiquement à la suite d'accords suivante une fois le solo maîtrisé.

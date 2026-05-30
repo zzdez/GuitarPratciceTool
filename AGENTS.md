@@ -771,3 +771,14 @@ Le système d'entraînement du manche (`fretboard.js`) a subi une refonte mathé
     - **Single Source of Truth** : Centralisation du nettoyage d'état dans `clearSetlistOrchestrator()`. Cette fonction garantit désormais le reset complet des timers, du mode Live, et de la synchronisation UI (boutons, classes CSS) pour éviter toute dérive d'état entre les modes.
     - **Auto-Sync UI** : Mise à jour immédiate de l'état visuel du bouton "Live Mode" lors de l'activation/désactivation automatique ou manuelle de l'orchestrateur.
 *   **Traductions & UX** : Support bilingue intégral pour les nouveaux contrôles et harmonisation des icônes Phosphor (`ph-skip-back` / `ph-skip-forward`).
+
+### 54. Évolution V11 (V11.1 - V11.2) : Enregistrement Stéréo Chrome & Support ASIO/WASAPI Backend
+*   **Compensation de Latence Dynamique (`app.js`) :**
+    - **DelayNode Réactif** : Raccordement d'un `DelayNode` configurable (0-300 ms) sur le flux de la piste d'accompagnement (Backing track) à destination de l'enregistreur (`recStreamDestination`), tandis que le monitoring physique reste synchrone et à latence nulle.
+    - **Bouton d'Option Mix Backing** : Isolation propre du signal guitare brut si l'option "Mixer l'accompagnement" est désactivée (déconnexion complète du nœud `recBackingGain`).
+*   **Détection Hardware & Routage Multi-Canaux (`app.js`) :**
+    - **Résolution du Bug de Downmix Chromium** : L'API standard de capture audio (`getUserMedia`) interroge désormais les propriétés matérielles de la piste média sous-jacente (`tracks[0].getSettings().channelCount`) au lieu de la propriété par défaut `.channelCount` du nœud de capture de Chrome (qui est figée à 2 par la norme W3C).
+    - **Routage Absolu Sans Perte** : Détection exacte des **4 canaux physiques** de la carte son (comme le *Fender Tone Master Pro*). Le séparateur de canaux (`ChannelSplitterNode`) est dimensionné à sa juste taille (4 canaux), empêchant Windows d'appliquer son algorithme de downmix automatique (qui fusionnait USB 1/2 avec USB 3/4 et polluait le mix avec des signaux de DI asymétriques).
+    - **Interface Universelle de Canaux** : Les options de canaux s'adaptent de façon bilingue : **Canal 1 (Gauche)**, **Canal 2 (Droite)** et **Stéréo 1-2** capturent désormais le flux stéréo purement traité (Wet) de manière isolée sans aucune fuite DI (sous réserve que l'utilisateur ait coupé/mis en sourdine les canaux secondaires USB 3/4 sur son mixeur matériel).
+*   **Briques de Base pour le Moteur ASIO Backend (En préparation) :**
+    - **Installation des Dépendances** : Intégration et validation dans l'environnement virtuel des bibliothèques Python `sounddevice` (pour la capture WASAPI/ASIO natif Windows sans restriction), `soundfile` (écriture audio professionnelle) et `numpy`. Ce double moteur d'avenir offrira aux utilisateurs le choix entre l'enregistrement Web standard ou l'ASIO natif via le backend pour n'importe quelle interface audio externe.
