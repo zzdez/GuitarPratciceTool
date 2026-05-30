@@ -348,6 +348,7 @@ let recAnalyser = null;
 let recCanvasAnimation = null;
 let recBackingGain = null;
 let recGuitarGain = null;
+let recGuitarPanner = null;
 let currentRecordingBlob = null;
 let isRecordingSession = false;
 
@@ -892,6 +893,25 @@ function handleAudioInputLatencyChange(latencyMs) {
     }
 }
 
+function handleAudioInputPanChange(panVal) {
+    localStorage.setItem("rec_pan", panVal);
+    const pctLabel = document.getElementById("lbl-rec-pan-val");
+    if (pctLabel) {
+        const val = parseFloat(panVal);
+        if (val === 0) {
+            pctLabel.innerText = t('web.opt_rec_pan_center') || "Centre";
+        } else if (val < 0) {
+            pctLabel.innerText = `G ${Math.abs(Math.round(val * 100))}%`;
+        } else {
+            pctLabel.innerText = `D ${Math.round(val * 100)}%`;
+        }
+    }
+    
+    if (recGuitarPanner) {
+        recGuitarPanner.pan.setValueAtTime(parseFloat(panVal), audioCtx.currentTime);
+    }
+}
+
 async function toggleRecordArming() {
     if (currentActivePlayer === 'youtube') {
         alert(t('web.msg_recording_not_available_yt') || "L'enregistrement n'est pas disponible pour les vidéos en streaming YouTube.");
@@ -956,7 +976,13 @@ async function toggleRecordArming() {
             // Channel routing
             reconnectGuitarChannels();
             
-            recGuitarGain.connect(recStreamDestination);
+            // Création du StereoPannerNode pour la balance de la guitare
+            recGuitarPanner = audioCtx.createStereoPanner();
+            const savedPan = localStorage.getItem("rec_pan") || "0.0";
+            recGuitarPanner.pan.setValueAtTime(parseFloat(savedPan), audioCtx.currentTime);
+            
+            recGuitarGain.connect(recGuitarPanner);
+            recGuitarPanner.connect(recStreamDestination);
 
             recAnalyser = audioCtx.createAnalyser();
             recAnalyser.fftSize = 256;
@@ -1108,6 +1134,9 @@ async function startArmedRecording() {
             btn.classList.add('recording');
         });
 
+        // Ajouter la forme d'onde dynamique Reaper-style sur le multipiste si applicable
+        addDynamicRecTrackIfNeeded();
+
         recTime = 0;
         recTimerInterval = setInterval(() => {
             recTime++;
@@ -1166,6 +1195,8 @@ async function startRecordingWorkflow(playerType) {
         return;
     }
     
+    removeDynamicRecTrack(); // Nettoyage de sécurité
+    
     try {
         if (!audioCtx) {
             initAudioContext();
@@ -1179,6 +1210,7 @@ async function startRecordingWorkflow(playerType) {
         const deviceId = localStorage.getItem("rec_device_id") || "";
         const savedGain = localStorage.getItem("rec_gain") || "100";
         const savedLatency = localStorage.getItem("rec_latency") || "0";
+        const savedPan = localStorage.getItem("rec_pan") || "0.0";
         const savedChannel = localStorage.getItem("rec_channel") || "3"; // Default 3 for processed Tone Master Pro
         
         // S'assurer qu'un canal par défaut soit bien écrit
@@ -1226,6 +1258,20 @@ async function startRecordingWorkflow(playerType) {
         const gainValLbl = document.getElementById("lbl-rec-gain-val");
         if (gainValLbl) gainValLbl.innerText = `${savedGain}%`;
 
+        const panRange = document.getElementById("rng-rec-pan");
+        if (panRange) panRange.value = savedPan;
+        const panValLbl = document.getElementById("lbl-rec-pan-val");
+        if (panValLbl) {
+            const val = parseFloat(savedPan);
+            if (val === 0) {
+                panValLbl.innerText = t('web.opt_rec_pan_center') || "Centre";
+            } else if (val < 0) {
+                panValLbl.innerText = `G ${Math.abs(Math.round(val * 100))}%`;
+            } else {
+                panValLbl.innerText = `D ${Math.round(val * 100)}%`;
+            }
+        }
+
         const latencyRange = document.getElementById("rng-rec-latency");
         if (latencyRange) latencyRange.value = savedLatency;
         const latencyValLbl = document.getElementById("lbl-rec-latency-val");
@@ -1272,7 +1318,12 @@ async function startRecordingWorkflow(playerType) {
         // Apply channel routing
         reconnectGuitarChannels();
         
-        recGuitarGain.connect(recStreamDestination);
+        // Création du StereoPannerNode pour la balance de la guitare
+        recGuitarPanner = audioCtx.createStereoPanner();
+        recGuitarPanner.pan.setValueAtTime(parseFloat(savedPan), audioCtx.currentTime);
+        
+        recGuitarGain.connect(recGuitarPanner);
+        recGuitarPanner.connect(recStreamDestination);
         
         // Monitor Analyser
         recAnalyser = audioCtx.createAnalyser();
@@ -1430,6 +1481,9 @@ async function startRecording() {
         recMediaRecorder.start();
         isRecordingSession = true;
         
+        // Ajouter la forme d'onde dynamique Reaper-style sur le multipiste si applicable
+        addDynamicRecTrackIfNeeded();
+        
         recTime = 0;
         document.getElementById("rec-timer").innerText = "00:00";
         recTimerInterval = setInterval(() => {
@@ -1443,6 +1497,87 @@ async function startRecording() {
         console.error("Recording start failed:", err);
         alert((t('web.msg_recording_error') || "Erreur d'enregistrement : ") + err.message);
     }
+function addDynamicRecTrackIfNeeded() {
+    if (currentActivePlayer === 'multitrack' && window.multitrack) {
+        removeDynamicRecTrack();
+        
+        const trackHeaders = document.getElementById("multitrack-headers");
+        if (trackHeaders) {
+            const recHeader = document.createElement("div");
+            recHeader.className = "track-header dynamic-rec-track";
+            recHeader.id = "mt-header-rec";
+            recHeader.style.borderLeft = "4px solid #FF4444";
+            recHeader.style.setProperty('border-top', '1px solid #FF4444', 'important');
+            recHeader.style.setProperty('border-bottom', '1px solid #FF4444', 'important');
+            recHeader.style.borderRight = "1px solid #333";
+            recHeader.style.setProperty('border-right', '1px solid #333', 'important');
+            recHeader.style.boxSizing = "border-box";
+            recHeader.style.height = "73px";
+            
+            recHeader.innerHTML = `
+                <div class="track-title-row" style="display:flex; align-items:center; justify-content:space-between; width:100%; margin-bottom: 2px;">
+                    <span class="track-title" style="color:#FF4444; font-weight:bold; display:flex; align-items:center; gap:5px; font-size: 0.85em;">
+                        <span class="rec-blink-dot" style="width:8px; height:8px; background:#FF4444; border-radius:50%; display:inline-block; animation: pulse 1s infinite alternate;"></span>
+                        🔴 ${t('web.tab_recordings') || "Enregistrement"}
+                    </span>
+                </div>
+                <div style="font-size:0.75em; color:#888; margin-top:5px; display:flex; align-items:center; gap:5px;">
+                    <i class="ph ph-waveform" style="color:#FF4444;"></i>
+                    <span>Guitar Input Active</span>
+                </div>
+                <div style="width:100%; background:#222; height:4px; border-radius:2px; margin-top:8px; overflow:hidden;">
+                    <div id="mt-rec-vu" style="width:0%; height:100%; background:#FF4444; transition: width 0.1s ease;"></div>
+                </div>
+            `;
+            trackHeaders.appendChild(recHeader);
+        }
+        
+        const waveformsContainer = document.getElementById("multitrack-waveforms");
+        if (waveformsContainer) {
+            const recWaveform = document.createElement("div");
+            recWaveform.className = "dynamic-rec-track";
+            recWaveform.id = "mt-waveform-rec";
+            recWaveform.style.height = "70px";
+            recWaveform.style.width = "100%";
+            recWaveform.style.background = "#1a1a1a";
+            recWaveform.style.setProperty('border-top', '1px solid #FF4444', 'important');
+            recWaveform.style.setProperty('border-bottom', '1px solid #FF4444', 'important');
+            recWaveform.style.boxSizing = "border-box";
+            recWaveform.style.position = "relative";
+            
+            const recCanvas = document.createElement("canvas");
+            recCanvas.id = "mt-canvas-rec";
+            recCanvas.style.width = "100%";
+            recCanvas.style.height = "100%";
+            recCanvas.style.display = "block";
+            
+            recWaveform.appendChild(recCanvas);
+            waveformsContainer.appendChild(recWaveform);
+            
+            recCanvas.width = recCanvas.offsetWidth || waveformsContainer.offsetWidth || 800;
+            recCanvas.height = 70;
+            
+            clearAndPrepMtCanvas(recCanvas);
+        }
+    }
+}
+
+function clearAndPrepMtCanvas(canvas) {
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#1e1e1e";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Ligne centrale du DAW
+    ctx.strokeStyle = "#2d2d2d";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, canvas.height / 2);
+    ctx.lineTo(canvas.width, canvas.height / 2);
+    ctx.stroke();
+}
+
+function removeDynamicRecTrack() {
+    document.querySelectorAll(".dynamic-rec-track").forEach(el => el.remove());
 }
 
 function startMonitoringVisualizer() {
@@ -1457,6 +1592,7 @@ function startMonitoringVisualizer() {
         recCanvasAnimation = requestAnimationFrame(draw);
         recAnalyser.getByteTimeDomainData(dataArray);
         
+        // 1. Dessin sur le canvas de monitoring classique de la modale
         ctx.fillStyle = "#111";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         
@@ -1466,10 +1602,14 @@ function startMonitoringVisualizer() {
         
         const sliceWidth = canvas.width * 1.0 / bufferLength;
         let x = 0;
+        let sumSquares = 0; // Pour le calcul du volume efficace (VU-mètre)
         
         for (let i = 0; i < bufferLength; i++) {
             const v = dataArray[i] / 128.0;
             const y = v * canvas.height / 2;
+            
+            const normalized = (dataArray[i] - 128) / 128;
+            sumSquares += normalized * normalized;
             
             if (i === 0) {
                 ctx.moveTo(x, y);
@@ -1481,6 +1621,56 @@ function startMonitoringVisualizer() {
         
         ctx.lineTo(canvas.width, canvas.height / 2);
         ctx.stroke();
+        
+        // Calcul RMS & mise à jour du mini VU-mètre dans le header d'enregistrement du multipiste
+        const rms = Math.sqrt(sumSquares / bufferLength);
+        const vuWidth = Math.min(100, Math.round(rms * 250)); // Multiplié pour la réactivité visuelle
+        const vuEl = document.getElementById("mt-rec-vu");
+        if (vuEl) {
+            vuEl.style.width = `${vuWidth}%`;
+        }
+        
+        // 2. Dessin en temps réel sur la piste d'enregistrement multitrack (DAW Reaper style)
+        const mtCanvas = document.getElementById("mt-canvas-rec");
+        if (mtCanvas && currentActivePlayer === 'multitrack' && window.multitrack) {
+            const ws = window.multitrack.wavesurfers[0];
+            if (ws) {
+                const currentTime = ws.getCurrentTime();
+                const duration = window.multitrack.maxDuration || 1;
+                const ratio = currentTime / duration;
+                
+                // Adapter dynamiquement la largeur interne du canvas si nécessaire sans effacer
+                if (mtCanvas.width !== mtCanvas.offsetWidth && mtCanvas.offsetWidth > 0) {
+                    mtCanvas.width = mtCanvas.offsetWidth;
+                    clearAndPrepMtCanvas(mtCanvas);
+                }
+                
+                // Position X correspondante sur le canvas
+                const targetX = ratio * mtCanvas.width;
+                
+                // Calcul de l'amplitude min/max sur ce buffer
+                let min = 1.0;
+                let max = -1.0;
+                for (let i = 0; i < bufferLength; i++) {
+                    const val = (dataArray[i] - 128) / 128;
+                    if (val < min) min = val;
+                    if (val > max) max = val;
+                }
+                
+                const mtCtx = mtCanvas.getContext("2d");
+                const centerY = mtCanvas.height / 2;
+                const y1 = centerY + min * (mtCanvas.height * 0.45); // la forme d'onde prend max 90% de la hauteur
+                const y2 = centerY + max * (mtCanvas.height * 0.45);
+                
+                // Dessiner le pic vertical
+                mtCtx.strokeStyle = "#FF4444"; // Rouge Reaper
+                mtCtx.lineWidth = 2.5;
+                mtCtx.beginPath();
+                mtCtx.moveTo(targetX, y1);
+                mtCtx.lineTo(targetX, y2);
+                mtCtx.stroke();
+            }
+        }
     }
     
     draw();
@@ -1526,11 +1716,13 @@ function stopRecording() {
 
 function abortRecording() {
     stopRecording();
+    removeDynamicRecTrack();
     const dialog = document.getElementById("modal-recording");
     if (dialog) dialog.close();
 }
 
 function retryRecording() {
+    removeDynamicRecTrack();
     const previewPlayer = document.getElementById("rec-preview-player");
     if (previewPlayer) {
         previewPlayer.pause();
@@ -1596,6 +1788,7 @@ async function saveRecording() {
     } finally {
         document.getElementById("btn-rec-retry").disabled = false;
         document.getElementById("btn-rec-save").disabled = false;
+        removeDynamicRecTrack();
         const dialog = document.getElementById("modal-recording");
         if (dialog) dialog.close();
     }

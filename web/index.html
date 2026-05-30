@@ -2082,6 +2082,13 @@
                     </div>
                     <div style="display:flex; flex-direction:column; gap:4px; width:100%;">
                         <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                            <span style="font-size:0.9em; color:#aaa;" data-i18n="web.lbl_rec_pan">Balance Guitare :</span>
+                            <span id="lbl-rec-pan-val" style="font-size:0.9em; color:var(--accent); font-weight:bold; font-family:monospace;">Centre</span>
+                        </div>
+                        <input type="range" id="rng-rec-pan" min="-1.0" max="1.0" step="0.1" value="0.0" style="width:100%; accent-color:var(--accent); cursor:pointer;" oninput="handleAudioInputPanChange(this.value)">
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:4px; width:100%;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
                             <span style="font-size:0.9em; color:#aaa;" data-i18n="web.lbl_rec_latency">Compensation Latence :</span>
                             <span id="lbl-rec-latency-val" style="font-size:0.9em; color:var(--accent); font-weight:bold; font-family:monospace;">0 ms</span>
                         </div>

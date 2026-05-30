@@ -737,7 +737,9 @@
         "opt_rec_stereo_1_2": "Stéréo 1-2",
         "opt_rec_stereo_3_4": "Stéréo 3-4",
         "lbl_rec_gain": "Gain d'Entrée :",
-        "lbl_rec_latency": "Compensation Latence :"
+        "lbl_rec_latency": "Compensation Latence :",
+        "lbl_rec_pan": "Balance Guitare :",
+        "opt_rec_pan_center": "Centre"
     },
     "sync": {
         "title": "Synchronisation Cloud",

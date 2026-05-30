@@ -736,7 +736,9 @@
         "opt_rec_stereo_1_2": "Stereo 1-2",
         "opt_rec_stereo_3_4": "Stereo 3-4",
         "lbl_rec_gain": "Input Gain:",
-        "lbl_rec_latency": "Latency Compensation:"
+        "lbl_rec_latency": "Latency Compensation:",
+        "lbl_rec_pan": "Guitar Pan:",
+        "opt_rec_pan_center": "Center"
     },
     "sync": {
         "title": "Cloud Sync",
