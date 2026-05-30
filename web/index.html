@@ -2049,6 +2049,45 @@
                         <option value="same" selected data-i18n="web.opt_rec_format_same">Identique au média</option>
                     </select>
                 </div>
+
+                <!-- NEW V2: Audio Inputs and Channel Routing Section -->
+                <div style="display:flex; flex-direction:column; gap:10px; width:100%; margin-top:10px; border-top:1px solid #333; padding-top:12px; box-sizing:border-box;">
+                    <div style="display:flex; align-items:center; gap:10px; width:100%;">
+                        <span style="font-size:0.9em; color:#aaa; min-width:115px;" data-i18n="web.lbl_rec_device">Entrée Audio :</span>
+                        <select id="sel-rec-device" style="background:#222; color:#fff; border:1px solid #444; border-radius:4px; padding:6px 10px; cursor:pointer; outline:none; font-size:0.9em; flex:1;" onchange="handleAudioInputDeviceChange(this.value)">
+                            <option value="" data-i18n="web.opt_default_device">Périphérique par défaut</option>
+                        </select>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:10px; width:100%;">
+                        <span style="font-size:0.9em; color:#aaa; min-width:115px;" data-i18n="web.lbl_rec_channel">Canal Guitare :</span>
+                        <select id="sel-rec-channel" style="background:#222; color:#fff; border:1px solid #444; border-radius:4px; padding:6px 10px; cursor:pointer; outline:none; font-size:0.9em; flex:1;" onchange="handleAudioInputChannelChange(this.value)">
+                            <option value="1" data-i18n="web.opt_rec_ch1">Canal 1 (DI / Gauche)</option>
+                            <option value="2" data-i18n="web.opt_rec_ch2">Canal 2 (DI / Droite)</option>
+                            <option value="3" data-i18n="web.opt_rec_ch3">Canal 3 (Clean/Effets G)</option>
+                            <option value="4" data-i18n="web.opt_rec_ch4">Canal 4 (Effets D)</option>
+                            <option value="stereo-1-2" data-i18n="web.opt_rec_stereo_1_2">Stéréo 1-2</option>
+                            <option value="stereo-3-4" data-i18n="web.opt_rec_stereo_3_4">Stéréo 3-4</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- NEW V2: Gain & Latency Compensation Sliders -->
+                <div style="display:flex; flex-direction:column; gap:12px; width:100%; margin-top:10px; border-top:1px solid #333; padding-top:12px; box-sizing:border-box;">
+                    <div style="display:flex; flex-direction:column; gap:4px; width:100%;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                            <span style="font-size:0.9em; color:#aaa;" data-i18n="web.lbl_rec_gain">Gain d'Entrée :</span>
+                            <span id="lbl-rec-gain-val" style="font-size:0.9em; color:var(--accent); font-weight:bold; font-family:monospace;">100%</span>
+                        </div>
+                        <input type="range" id="rng-rec-gain" min="0" max="200" value="100" style="width:100%; accent-color:var(--accent); cursor:pointer;" oninput="handleAudioInputGainChange(this.value)">
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:4px; width:100%;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                            <span style="font-size:0.9em; color:#aaa;" data-i18n="web.lbl_rec_latency">Compensation Latence :</span>
+                            <span id="lbl-rec-latency-val" style="font-size:0.9em; color:var(--accent); font-weight:bold; font-family:monospace;">0 ms</span>
+                        </div>
+                        <input type="range" id="rng-rec-latency" min="0" max="300" step="5" value="0" style="width:100%; accent-color:var(--accent); cursor:pointer;" oninput="handleAudioInputLatencyChange(this.value)">
+                    </div>
+                </div>
             </div>
 
             <!-- PULSING DOT & TIMER (Hidden during preparation) -->

@@ -725,7 +725,18 @@
         "btn_count_in_toggle": "Quick Count-in",
         "msg_recording_armed": "Recording armed. Start playback to begin!",
         "msg_recording_disarmed": "Recording disarmed.",
-        "msg_recording_not_available_yt": "Recording is not available for streaming YouTube videos."
+        "msg_recording_not_available_yt": "Recording is not available for streaming YouTube videos.",
+        "lbl_rec_device": "Audio Input:",
+        "opt_default_device": "Default Device",
+        "lbl_rec_channel": "Guitar Channel:",
+        "opt_rec_ch1": "Channel 1 (Left)",
+        "opt_rec_ch2": "Channel 2 (Right)",
+        "opt_rec_ch3": "Channel 3 (USB 3)",
+        "opt_rec_ch4": "Channel 4 (USB 4)",
+        "opt_rec_stereo_1_2": "Stereo 1-2",
+        "opt_rec_stereo_3_4": "Stereo 3-4",
+        "lbl_rec_gain": "Input Gain:",
+        "lbl_rec_latency": "Latency Compensation:"
     },
     "sync": {
         "title": "Cloud Sync",

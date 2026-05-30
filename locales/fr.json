@@ -726,7 +726,18 @@
         "btn_count_in_toggle": "Décompte rapide",
         "msg_recording_armed": "Enregistrement armé. Lancez la lecture pour démarrer !",
         "msg_recording_disarmed": "Enregistrement désarmé.",
-        "msg_recording_not_available_yt": "L'enregistrement n'est pas disponible pour les vidéos en streaming YouTube."
+        "msg_recording_not_available_yt": "L'enregistrement n'est pas disponible pour les vidéos en streaming YouTube.",
+        "lbl_rec_device": "Entrée Audio :",
+        "opt_default_device": "Périphérique par défaut",
+        "lbl_rec_channel": "Canal Guitare :",
+        "opt_rec_ch1": "Canal 1 (Gauche)",
+        "opt_rec_ch2": "Canal 2 (Droite)",
+        "opt_rec_ch3": "Canal 3 (USB 3)",
+        "opt_rec_ch4": "Canal 4 (USB 4)",
+        "opt_rec_stereo_1_2": "Stéréo 1-2",
+        "opt_rec_stereo_3_4": "Stéréo 3-4",
+        "lbl_rec_gain": "Gain d'Entrée :",
+        "lbl_rec_latency": "Compensation Latence :"
     },
     "sync": {
         "title": "Synchronisation Cloud",

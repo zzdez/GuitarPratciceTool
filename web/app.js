@@ -623,6 +623,275 @@ function getActiveMediaFormat() {
 window.isRecordingArmed = false;
 window.isArmedRecordingActive = false;
 
+// NEW V2: Audio recording variables
+let recDelayNode = null;
+let recChannelSplitter = null;
+let recChannelMerger = null;
+let recInputDevices = [];
+
+async function loadAudioInputDevices() {
+    try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        recInputDevices = devices.filter(d => d.kind === 'audioinput');
+        
+        const select = document.getElementById("sel-rec-device");
+        if (select) {
+            select.innerHTML = "";
+            
+            // Option de périphérique par défaut
+            const optDefault = document.createElement("option");
+            optDefault.value = "";
+            optDefault.setAttribute("data-i18n", "web.opt_default_device");
+            optDefault.innerText = t('web.opt_default_device') || "Périphérique par défaut";
+            select.appendChild(optDefault);
+
+            recInputDevices.forEach(d => {
+                const opt = document.createElement("option");
+                opt.value = d.deviceId;
+                opt.innerText = d.label || `Entrée Audio (${d.deviceId.slice(0, 5)}...)`;
+                select.appendChild(opt);
+            });
+
+            const savedDevice = localStorage.getItem("rec_device_id") || "";
+            if (savedDevice && recInputDevices.some(d => d.deviceId === savedDevice)) {
+                select.value = savedDevice;
+            } else {
+                select.value = "";
+            }
+        }
+    } catch (err) {
+        console.error("[REC] loadAudioInputDevices failed:", err);
+    }
+}
+
+async function restartGuitarStream() {
+    try {
+        console.log("[REC] restartGuitarStream triggering...");
+        if (window.guitarStream) {
+            window.guitarStream.getTracks().forEach(track => track.stop());
+            window.guitarStream = null;
+        }
+
+        const deviceId = localStorage.getItem("rec_device_id") || "";
+        const constraints = {
+            audio: {
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false,
+                channelCount: { min: 1, ideal: 4 }
+            }
+        };
+        if (deviceId) {
+            constraints.audio.deviceId = { exact: deviceId };
+        }
+
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        window.guitarStream = stream;
+
+        if (recGuitarSource) {
+            try { recGuitarSource.disconnect(); } catch(e) {}
+        }
+
+        recGuitarSource = audioCtx.createMediaStreamSource(stream);
+
+        // Raccorder le visualiseur
+        if (recAnalyser) {
+            try { recAnalyser.disconnect(); } catch(e) {}
+            recGuitarSource.connect(recAnalyser);
+        }
+
+        // Reconnecter les canaux
+        reconnectGuitarChannels();
+        console.log("[REC] restartGuitarStream successful.");
+    } catch (err) {
+        console.error("[REC] restartGuitarStream failed:", err);
+        showToast((t('web.msg_recording_error') || "Erreur d'enregistrement : ") + err.message, "error");
+    }
+}
+
+function updateChannelSelectorOptions(streamChannels) {
+    const select = document.getElementById("sel-rec-channel");
+    if (!select) return;
+    
+    // Désactiver temporairement le onchange pour éviter les boucles d'appels
+    const originalOnChange = select.onchange;
+    select.onchange = null;
+
+    const savedChannel = localStorage.getItem("rec_channel") || "1";
+    select.innerHTML = "";
+    
+    if (streamChannels === 1) {
+        const opt = document.createElement("option");
+        opt.value = "1";
+        opt.innerText = t('web.opt_rec_ch1') || "Canal 1 (Gauche)";
+        select.appendChild(opt);
+    } else if (streamChannels === 2) {
+        const opt1 = document.createElement("option");
+        opt1.value = "1";
+        opt1.innerText = t('web.opt_rec_ch1') || "Canal 1 (Gauche)";
+        select.appendChild(opt1);
+        
+        const opt2 = document.createElement("option");
+        opt2.value = "2";
+        opt2.innerText = t('web.opt_rec_ch2') || "Canal 2 (Droite)";
+        select.appendChild(opt2);
+        
+        const optStereo = document.createElement("option");
+        optStereo.value = "stereo-1-2";
+        optStereo.innerText = t('web.opt_rec_stereo_1_2') || "Stéréo 1-2";
+        select.appendChild(optStereo);
+    } else {
+        // 4 canaux ou plus
+        const opt1 = document.createElement("option");
+        opt1.value = "1";
+        opt1.innerText = t('web.opt_rec_ch1') || "Canal 1 (Gauche)";
+        select.appendChild(opt1);
+        
+        const opt2 = document.createElement("option");
+        opt2.value = "2";
+        opt2.innerText = t('web.opt_rec_ch2') || "Canal 2 (Droite)";
+        select.appendChild(opt2);
+        
+        const opt3 = document.createElement("option");
+        opt3.value = "3";
+        opt3.innerText = t('web.opt_rec_ch3') || "Canal 3 (USB 3)";
+        select.appendChild(opt3);
+        
+        const opt4 = document.createElement("option");
+        opt4.value = "4";
+        opt4.innerText = t('web.opt_rec_ch4') || "Canal 4 (USB 4)";
+        select.appendChild(opt4);
+        
+        const optStereo12 = document.createElement("option");
+        optStereo12.value = "stereo-1-2";
+        optStereo12.innerText = t('web.opt_rec_stereo_1_2') || "Stéréo 1-2";
+        select.appendChild(optStereo12);
+        
+        const optStereo34 = document.createElement("option");
+        optStereo34.value = "stereo-3-4";
+        optStereo34.innerText = t('web.opt_rec_stereo_3_4') || "Stéréo 3-4";
+        select.appendChild(optStereo34);
+    }
+    
+    // Tenter de restaurer la sélection
+    if (savedChannel === "stereo-3-4" && streamChannels < 4) {
+        select.value = "stereo-1-2";
+    } else if ((savedChannel === "3" || savedChannel === "4") && streamChannels < parseInt(savedChannel)) {
+        select.value = "1";
+    } else {
+        // Vérifier si la valeur existe dans les options
+        let exists = false;
+        for (let i = 0; i < select.options.length; i++) {
+            if (select.options[i].value === savedChannel) {
+                exists = true;
+                break;
+            }
+        }
+        select.value = exists ? savedChannel : select.options[0].value;
+    }
+    
+    localStorage.setItem("rec_channel", select.value);
+    
+    // Rétablir le onchange
+    select.onchange = originalOnChange;
+}
+
+function reconnectGuitarChannels() {
+    if (!recGuitarSource || !audioCtx) return;
+
+    // Déconnexions de sécurité pour éviter les noeuds fantômes
+    try { recGuitarSource.disconnect(recGuitarGain); } catch(e) {}
+    if (recChannelSplitter) {
+        try { recChannelSplitter.disconnect(); } catch(e) {}
+    }
+    if (recChannelMerger) {
+        try { recChannelMerger.disconnect(); } catch(e) {}
+    }
+
+    let streamChannels = 1;
+    if (window.guitarStream) {
+        const tracks = window.guitarStream.getAudioTracks();
+        if (tracks && tracks[0]) {
+            const settings = tracks[0].getSettings();
+            if (settings && settings.channelCount) {
+                streamChannels = settings.channelCount;
+            }
+        }
+    }
+    
+    // Mettre à jour l'UI dynamiquement en fonction des canaux réels
+    updateChannelSelectorOptions(streamChannels);
+    
+    const channelSelection = localStorage.getItem("rec_channel") || "1";
+    console.log(`[REC] reconnectGuitarChannels: Stream has ${streamChannels} channels, selection is: ${channelSelection}`);
+
+    if (streamChannels >= 2) {
+        recChannelSplitter = audioCtx.createChannelSplitter(streamChannels);
+        recChannelMerger = audioCtx.createChannelMerger(2); // Sortie stéréo vers le gain
+        
+        recGuitarSource.connect(recChannelSplitter);
+
+        if (channelSelection === "stereo-1-2") {
+            recChannelSplitter.connect(recChannelMerger, 0, 0);
+            recChannelSplitter.connect(recChannelMerger, 1, 1);
+        } else if (channelSelection === "stereo-3-4" && streamChannels >= 4) {
+            recChannelSplitter.connect(recChannelMerger, 2, 0);
+            recChannelSplitter.connect(recChannelMerger, 3, 1);
+        } else {
+            // Sélection mono
+            let sourceIndex = 0; // Canal 1 par défaut
+            if (channelSelection === "2") {
+                sourceIndex = 1;
+            } else if (channelSelection === "3" && streamChannels >= 3) {
+                sourceIndex = 2;
+            } else if (channelSelection === "4" && streamChannels >= 4) {
+                sourceIndex = 3;
+            }
+            
+            // Envoyer le canal mono sur les deux entrées gauche et droite (dual-mono)
+            recChannelSplitter.connect(recChannelMerger, sourceIndex, 0);
+            recChannelSplitter.connect(recChannelMerger, sourceIndex, 1);
+        }
+
+        recChannelMerger.connect(recGuitarGain);
+    } else {
+        // Cas mono simple : connecter directement
+        recGuitarSource.connect(recGuitarGain);
+    }
+}
+
+async function handleAudioInputDeviceChange(deviceId) {
+    localStorage.setItem("rec_device_id", deviceId);
+    if (window.guitarStream) {
+        await restartGuitarStream();
+    }
+}
+
+function handleAudioInputChannelChange(channel) {
+    localStorage.setItem("rec_channel", channel);
+    reconnectGuitarChannels();
+}
+
+function handleAudioInputGainChange(gainVal) {
+    localStorage.setItem("rec_gain", gainVal);
+    const pctLabel = document.getElementById("lbl-rec-gain-val");
+    if (pctLabel) pctLabel.innerText = `${gainVal}%`;
+    
+    if (recGuitarGain) {
+        recGuitarGain.gain.setValueAtTime(parseFloat(gainVal) / 100, audioCtx.currentTime);
+    }
+}
+
+function handleAudioInputLatencyChange(latencyMs) {
+    localStorage.setItem("rec_latency", latencyMs);
+    const msLabel = document.getElementById("lbl-rec-latency-val");
+    if (msLabel) msLabel.innerText = `${latencyMs} ms`;
+    
+    if (recDelayNode) {
+        recDelayNode.delayTime.setValueAtTime(parseFloat(latencyMs) / 1000, audioCtx.currentTime);
+    }
+}
+
 async function toggleRecordArming() {
     if (currentActivePlayer === 'youtube') {
         alert(t('web.msg_recording_not_available_yt') || "L'enregistrement n'est pas disponible pour les vidéos en streaming YouTube.");
@@ -651,21 +920,42 @@ async function toggleRecordArming() {
                 await audioCtx.resume();
             }
 
-            const stream = await navigator.mediaDevices.getUserMedia({
+            const deviceId = localStorage.getItem("rec_device_id") || "";
+            const constraints = {
                 audio: {
                     echoCancellation: false,
                     noiseSuppression: false,
-                    autoGainControl: false
+                    autoGainControl: false,
+                    channelCount: { min: 1, ideal: 4 }
                 }
-            });
+            };
+            if (deviceId) {
+                constraints.audio.deviceId = { exact: deviceId };
+            }
+
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
             window.guitarStream = stream;
 
             // Setup audio graph
             recStreamDestination = audioCtx.createMediaStreamDestination();
+            
+            // Connect Delay Node for Backing track
+            if (!recDelayNode) {
+                recDelayNode = audioCtx.createDelay(1.0);
+            }
+            const savedLatency = localStorage.getItem("rec_latency") || "0";
+            recDelayNode.delayTime.setValueAtTime(parseFloat(savedLatency) / 1000, audioCtx.currentTime);
+            try { recDelayNode.disconnect(); } catch(e) {}
+            recDelayNode.connect(recStreamDestination);
+
             recGuitarSource = audioCtx.createMediaStreamSource(stream);
             recGuitarGain = audioCtx.createGain();
-            recGuitarGain.gain.value = 1.0;
-            recGuitarSource.connect(recGuitarGain);
+            const savedGain = localStorage.getItem("rec_gain") || "100";
+            recGuitarGain.gain.setValueAtTime(parseFloat(savedGain) / 100, audioCtx.currentTime);
+            
+            // Channel routing
+            reconnectGuitarChannels();
+            
             recGuitarGain.connect(recStreamDestination);
 
             recAnalyser = audioCtx.createAnalyser();
@@ -748,7 +1038,11 @@ async function startArmedRecording() {
         const mixBacking = localStorage.getItem("rec_mix_backing") !== "false";
         if (mixBacking && recBackingGain) {
             try { recBackingGain.disconnect(recStreamDestination); } catch(e) {}
-            recBackingGain.connect(recStreamDestination);
+            try { recBackingGain.disconnect(recDelayNode); } catch(e) {}
+            recBackingGain.connect(recDelayNode);
+        } else if (recBackingGain) {
+            try { recBackingGain.disconnect(recStreamDestination); } catch(e) {}
+            try { recBackingGain.disconnect(recDelayNode); } catch(e) {}
         }
 
         // Setup MediaRecorder
@@ -863,15 +1157,29 @@ async function startRecordingWorkflow(playerType) {
             await audioCtx.resume();
         }
         
+        // NEW V2: Retrieve input configurations from localStorage
+        const deviceId = localStorage.getItem("rec_device_id") || "";
+        const savedGain = localStorage.getItem("rec_gain") || "100";
+        const savedLatency = localStorage.getItem("rec_latency") || "0";
+        const savedChannel = localStorage.getItem("rec_channel") || "3"; // Default 3 for processed Tone Master Pro
+        
+        // S'assurer qu'un canal par défaut soit bien écrit
+        localStorage.setItem("rec_channel", savedChannel);
+
         // 1. Get Microphone / Soundcard input (optimized for instrument/guitar capture)
-        const stream = await navigator.mediaDevices.getUserMedia({
+        const constraints = {
             audio: {
                 echoCancellation: false,
                 noiseSuppression: false,
-                autoGainControl: false
+                autoGainControl: false,
+                channelCount: { min: 1, ideal: 4 }
             }
-        });
+        };
+        if (deviceId) {
+            constraints.audio.deviceId = { exact: deviceId };
+        }
         
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
         window.guitarStream = stream;
         
         // 2. Setup Recording UI (Preparation Mode)
@@ -894,6 +1202,23 @@ async function startRecordingWorkflow(playerType) {
         const mixBackingPref = localStorage.getItem("rec_mix_backing") !== "false";
         document.getElementById("chk-rec-mix-backing").checked = mixBackingPref;
         
+        // NEW V2: Update sliders and select menus inside preparation UI
+        const gainRange = document.getElementById("rng-rec-gain");
+        if (gainRange) gainRange.value = savedGain;
+        const gainValLbl = document.getElementById("lbl-rec-gain-val");
+        if (gainValLbl) gainValLbl.innerText = `${savedGain}%`;
+
+        const latencyRange = document.getElementById("rng-rec-latency");
+        if (latencyRange) latencyRange.value = savedLatency;
+        const latencyValLbl = document.getElementById("lbl-rec-latency-val");
+        if (latencyValLbl) latencyValLbl.innerText = `${savedLatency} ms`;
+
+        const channelSelect = document.getElementById("sel-rec-channel");
+        if (channelSelect) channelSelect.value = savedChannel;
+
+        // Populate audio devices menu
+        await loadAudioInputDevices();
+        
         // Dynamic Format Label Update
         const mediaFormat = getActiveMediaFormat();
         const selFormat = document.getElementById("sel-rec-format");
@@ -913,12 +1238,22 @@ async function startRecordingWorkflow(playerType) {
         // 3. Web Audio Graph Setup
         recStreamDestination = audioCtx.createMediaStreamDestination();
         
+        // Setup backing track DelayNode
+        if (!recDelayNode) {
+            recDelayNode = audioCtx.createDelay(1.0);
+        }
+        recDelayNode.delayTime.setValueAtTime(parseFloat(savedLatency) / 1000, audioCtx.currentTime);
+        try { recDelayNode.disconnect(); } catch(e) {}
+        recDelayNode.connect(recStreamDestination);
+
         // Guitar Graph
         recGuitarSource = audioCtx.createMediaStreamSource(stream);
         recGuitarGain = audioCtx.createGain();
-        recGuitarGain.gain.value = 1.0;
+        recGuitarGain.gain.setValueAtTime(parseFloat(savedGain) / 100, audioCtx.currentTime);
         
-        recGuitarSource.connect(recGuitarGain);
+        // Apply channel routing
+        reconnectGuitarChannels();
+        
         recGuitarGain.connect(recStreamDestination);
         
         // Monitor Analyser
@@ -996,9 +1331,14 @@ async function startRecording() {
         const mixBacking = document.getElementById("chk-rec-mix-backing").checked;
         localStorage.setItem("rec_mix_backing", mixBacking ? "true" : "false");
         
-        // Connect Backing Track to recorder if enabled
+        // Connect Backing Track to recorder DelayNode if enabled
         if (mixBacking && recBackingGain) {
-            recBackingGain.connect(recStreamDestination);
+            try { recBackingGain.disconnect(recStreamDestination); } catch(e) {}
+            try { recBackingGain.disconnect(recDelayNode); } catch(e) {}
+            recBackingGain.connect(recDelayNode);
+        } else if (recBackingGain) {
+            try { recBackingGain.disconnect(recStreamDestination); } catch(e) {}
+            try { recBackingGain.disconnect(recDelayNode); } catch(e) {}
         }
         
         // UI Transition to Recording state
