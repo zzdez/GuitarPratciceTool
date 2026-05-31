@@ -4082,9 +4082,10 @@ async def delete_setlist(sl_id: str):
 async def save_recording(
     file: UploadFile = File(...), 
     target_format: str = "wav",
-    parent_multitrack_path: str = None
+    parent_multitrack_path: str = None,
+    latency_ms: float = 0.0
 ):
-    """Sauvegarde un enregistrement de session (Jam/Training) avec transcodage réel."""
+    """Sauvegarde un enregistrement de session (Jam/Training) avec transcodage réel et compensation de latence."""
     try:
         import shutil
         import subprocess
@@ -4118,17 +4119,28 @@ async def save_recording(
         
         file_path = os.path.join(target_dir, filename)
         
+        # Argument de compensation de latence physique par troncature (en secondes)
+        latency_args = []
+        if latency_ms > 0:
+            ff_latency = latency_ms / 1000.0
+            latency_args = ["-ss", f"{ff_latency:.3f}"]
+            logging.info(f"[RECORDINGS] FFmpeg appliquera un décalage physique de latence de -{latency_ms}ms (-{ff_latency:.3f}s)")
+        
         # Transcodage intelligent
         if download_service.ffmpeg_available and download_service.ffmpeg_path:
             try:
                 if target_format.lower() == "mp3":
                     cmd = [
-                        download_service.ffmpeg_path, "-y", "-i", temp_path,
+                        download_service.ffmpeg_path, "-y",
+                        "-i", temp_path
+                    ] + latency_args + [
                         "-codec:a", "libmp3lame", "-qscale:a", "2", file_path
                     ]
                 else: # wav
                     cmd = [
-                        download_service.ffmpeg_path, "-y", "-i", temp_path,
+                        download_service.ffmpeg_path, "-y",
+                        "-i", temp_path
+                    ] + latency_args + [
                         "-acodec", "pcm_s16le", "-ar", "44100", file_path
                     ]
                 

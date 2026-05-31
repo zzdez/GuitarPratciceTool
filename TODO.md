@@ -17,8 +17,10 @@ Objectif : Transformer la bibliothèque en un système auto-organisé par artist
 - [ ] Sélection multiple pour déplacer/copier des blocs de médias vers de nouvelles arborescences.
 - [ ] Intégrer les sécurités anti-conflit (WinError 183) développées dans la session précédente.
 
-### 🎤 4. Enregistrement Audio Professionnel (Moteur ASIO/WASAPI Backend)
+### 📂 4. Enregistrement Audio Professionnel (Moteur ASIO/WASAPI Backend)
 - [x] Intégrer les bases d'enregistrement stéréo multi-canaux (WASAPI Chrome) avec correction de latence (DelayNode) et contrôle du gain d'entrée.
+- [x] Implémenter l'enregistrement multipiste interactif (DAW-style) avec piste temporaire à 3 états, sliders volume/balance d'entrée/relecture et VU-mètre RMS.
+- [x] Corriger les dérives de latence physique (FFmpeg Output Seeking sur WebM) et de relecture asynchrone (verrou de seek 500ms) pour assurer une synchronisation irréprochable.
 - [ ] Développer le moteur d'enregistrement natif dans le Backend Python (en s'appuyant sur `sounddevice`, `soundfile` et `numpy` déjà installés).
 - [ ] Permettre à l'utilisateur de choisir son moteur dans l'interface :
   - **Moteur Web (WASAPI standard)** : Simple, direct via le navigateur (avec notre correctif de canaux et le fader matériel du TMP).
@@ -27,4 +29,4 @@ Objectif : Transformer la bibliothèque en un système auto-organisé par artist
 - [ ] Gérer l'alignement à la milliseconde et le mixage automatique du backing track côté serveur (Python) pour une précision temporelle absolue.
 
 ---
-*Fin de Session V12 : Enregistrement stéréo Chrome corrigé (Downmix résolu via getSettings) et bases ASIO backend installées.*
+*Fin de Session V12.1 : Enregistrement multipiste DAW-style complété avec mixage en direct et compensation de latence physique (FFmpeg Output Seeking) et virtuelle (debounce asynchrone) de haute précision.*

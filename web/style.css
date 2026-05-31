@@ -2117,9 +2117,9 @@ dialog::backdrop {
 .track-header {
     width: 200px;
     /* Increased to accommodate reorder buttons */
-    height: 73px;
+    height: 70px;
     margin-bottom: 1px;
-    /* 70px stem + 2px offset */
+    /* 70px stem + 1px offset/margin */
     background: #2a2a2a;
     border-right: 1px solid #333 !important;
     border-bottom: 1px solid #333;

@@ -1545,6 +1545,8 @@ async function startRecording() {
 
 function removeDynamicRecTrack() {
     document.querySelectorAll(".dynamic-rec-track").forEach(el => el.remove());
+    const spacer = document.getElementById("mt-spacer-rec");
+    if (spacer) spacer.remove();
     stopMonitoringVisualizer();
 }
 
@@ -1572,13 +1574,28 @@ function addDynamicRecTrackIfNeeded(forceState) {
     const trackHeaders = document.getElementById("multitrack-headers");
     const waveformsContainer = document.getElementById("multitrack-waveforms");
     
-    if (!recHeader && trackHeaders) {
-        recHeader = document.createElement("div");
-        recHeader.className = "track-header dynamic-rec-track";
-        recHeader.id = "mt-header-rec";
-        recHeader.style.boxSizing = "border-box";
-        recHeader.style.height = "73px";
-        trackHeaders.appendChild(recHeader);
+    if (trackHeaders) {
+        let recSpacer = document.getElementById("mt-spacer-rec");
+        if (!recSpacer) {
+            recSpacer = document.createElement("div");
+            recSpacer.id = "mt-spacer-rec";
+            recSpacer.className = "dynamic-rec-track";
+            recSpacer.style.height = "20px";
+            recSpacer.style.width = "100%";
+            recSpacer.style.boxSizing = "border-box";
+            recSpacer.style.borderTop = "1px solid #333";
+            recSpacer.style.background = "transparent";
+            trackHeaders.appendChild(recSpacer);
+        }
+        
+        if (!recHeader) {
+            recHeader = document.createElement("div");
+            recHeader.className = "track-header dynamic-rec-track";
+            recHeader.id = "mt-header-rec";
+            recHeader.style.boxSizing = "border-box";
+            recHeader.style.height = "70px";
+            trackHeaders.appendChild(recHeader);
+        }
     }
     
     if (!recWaveform && waveformsContainer) {
@@ -2084,7 +2101,8 @@ async function saveRecording() {
         const filename = `Jam_${timeFormattedForFile()}.${targetFormat}`;
         formData.append("file", currentRecordingBlob, filename);
         
-        let url = `/api/local/recordings?target_format=${targetFormat}`;
+        const savedLatency = localStorage.getItem("rec_latency") || "0";
+        let url = `/api/local/recordings?target_format=${targetFormat}&latency_ms=${parseFloat(savedLatency)}`;
         if (isStemAddition && currentItem && currentItem.path) {
             url += `&parent_multitrack_path=${encodeURIComponent(currentItem.path)}`;
         }
@@ -8592,12 +8610,17 @@ async function playLocal(index) {
             updatePlayPauseUI();
             saveMultitrackSettings(file);
 
-            // Synchroniser le démarrage de la guitare enregistrée
+            // Synchroniser le démarrage de la guitare enregistrée avec compensation de la latence d'enregistrement
             if (window.guitarPlaybackElement) {
                 const ws = window.multitrack.wavesurfers[0];
                 if (ws) {
-                    window.guitarPlaybackElement.currentTime = ws.getCurrentTime();
+                    const latencySeconds = (parseFloat(localStorage.getItem("rec_latency")) || 0) / 1000;
+                    window.guitarPlaybackElement.currentTime = ws.getCurrentTime() + latencySeconds;
+                    window.guitarLastSeekTime = Date.now();
                 }
+                const rateStr = document.getElementById("btn-multitrack-speed")?.innerText.replace("x", "") || "1.0";
+                const rate = parseFloat(rateStr) || 1.0;
+                window.guitarPlaybackElement.playbackRate = rate;
                 window.guitarPlaybackElement.play().catch(e => {});
             }
 
@@ -11678,18 +11701,25 @@ setInterval(() => {
                     window.guitarPlaybackElement.playbackRate = rate;
                 }
                 
+                // Récupérer la latence d'enregistrement configurée pour compenser le décalage à la lecture
+                const latencySeconds = (parseFloat(localStorage.getItem("rec_latency")) || 0) / 1000;
+                
                 // Synchroniser play/pause
                 if (isMtPlaying && window.guitarPlaybackElement.paused) {
-                    window.guitarPlaybackElement.currentTime = mtTime;
+                    window.guitarPlaybackElement.currentTime = mtTime + latencySeconds;
+                    window.guitarLastSeekTime = Date.now();
                     window.guitarPlaybackElement.play().catch(e => {});
                 } else if (!isMtPlaying && !window.guitarPlaybackElement.paused) {
                     window.guitarPlaybackElement.pause();
                 }
                 
-                // Synchroniser le temps s'il y a un décalage > 80ms
-                const diff = Math.abs(window.guitarPlaybackElement.currentTime - mtTime);
-                if (diff > 0.08) {
-                    window.guitarPlaybackElement.currentTime = mtTime;
+                // Synchroniser le temps s'il y a un décalage > 80ms (comparé au temps compensé)
+                if (Date.now() - (window.guitarLastSeekTime || 0) > 500) {
+                    const diff = Math.abs((window.guitarPlaybackElement.currentTime - latencySeconds) - mtTime);
+                    if (diff > 0.08) {
+                        window.guitarPlaybackElement.currentTime = mtTime + latencySeconds;
+                        window.guitarLastSeekTime = Date.now();
+                    }
                 }
             }
         } else {
