@@ -2112,6 +2112,19 @@
             <!-- PLAYBACK PREVIEW (Hidden during recording) -->
             <div id="rec-preview-container" style="display:none; width:100%; flex-direction:column; gap:10px; align-items:center;">
                 <audio id="rec-preview-player" controls style="width:100%; background:#222; border-radius:4px;"></audio>
+                
+                <!-- Destination choice for multitrack -->
+                <div id="rec-destination-choice" style="display:none; flex-direction:column; gap:8px; width:100%; border-top:1px solid #333; padding-top:12px; margin-top:10px;">
+                    <span style="font-size:0.9em; color:#aaa; font-weight:bold; text-align:left; width:100%;">Où souhaitez-vous sauvegarder cet enregistrement ?</span>
+                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:#eee; font-size:0.85em; margin:0; text-align:left; width:100%;">
+                        <input type="radio" name="rec-dest" id="rad-rec-dest-stems" checked style="width:16px; height:16px; accent-color:var(--accent);">
+                        <span>📁 Ajouter en tant que nouveau Stem au projet multipiste actuel</span>
+                    </label>
+                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:#eee; font-size:0.85em; margin:0; text-align:left; width:100%;">
+                        <input type="radio" name="rec-dest" id="rad-rec-dest-recordings" style="width:16px; height:16px; accent-color:var(--accent);">
+                        <span>🎧 Uniquement dans la liste générale des enregistrements (Applet)</span>
+                    </label>
+                </div>
             </div>
 
             <!-- SAVING INDICATOR -->

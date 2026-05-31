@@ -4079,16 +4079,31 @@ async def delete_setlist(sl_id: str):
 
 # --- RECORDINGS ENGINE ---
 @app.post("/api/local/recordings")
-async def save_recording(file: UploadFile = File(...), target_format: str = "wav"):
+async def save_recording(
+    file: UploadFile = File(...), 
+    target_format: str = "wav",
+    parent_multitrack_path: str = None
+):
     """Sauvegarde un enregistrement de session (Jam/Training) avec transcodage réel."""
     try:
         import shutil
         import subprocess
-        from utils import get_app_dir, to_portable_path
+        from utils import get_app_dir, to_portable_path, resolve_portable_path
         
+        # Répertoire de stockage par défaut
         recordings_dir = os.path.join(get_app_dir(), "Medias", "Recordings")
         os.makedirs(recordings_dir, exist_ok=True)
         
+        # Si parent_multitrack_path est fourni et valide, on cible ce dossier
+        is_stem_addition = False
+        target_dir = recordings_dir
+        if parent_multitrack_path:
+            resolved_parent = resolve_portable_path(parent_multitrack_path)
+            if resolved_parent and os.path.exists(resolved_parent) and os.path.isdir(resolved_parent):
+                target_dir = resolved_parent
+                is_stem_addition = True
+                logging.info(f"[RECORDINGS] Cible de sauvegarde multipiste détectée : {target_dir}")
+                
         filename = file.filename
         if not filename:
             filename = f"Record_{int(time.time())}.wav"
@@ -4101,7 +4116,7 @@ async def save_recording(file: UploadFile = File(...), target_format: str = "wav
         base_name = os.path.splitext(filename)[0]
         filename = f"{base_name}{final_ext}"
         
-        file_path = os.path.join(recordings_dir, filename)
+        file_path = os.path.join(target_dir, filename)
         
         # Transcodage intelligent
         if download_service.ffmpeg_available and download_service.ffmpeg_path:
@@ -4140,7 +4155,56 @@ async def save_recording(file: UploadFile = File(...), target_format: str = "wav
         if os.path.exists(temp_path):
             os.remove(temp_path)
             
-        return {"status": "ok", "path": to_portable_path(file_path), "filename": filename}
+        portable_path = to_portable_path(file_path)
+        
+        # Si c'est un ajout de stem à un multipiste, on met à jour la bibliothèque
+        if is_stem_addition:
+            try:
+                # Charger la bibliothèque
+                if os.path.exists(LOCAL_LIB_FILE):
+                    with open(LOCAL_LIB_FILE, "r", encoding="utf-8") as f:
+                        items = json.load(f)
+                    
+                    # Trouver le morceau parent par son chemin portable
+                    parent_portable = to_portable_path(resolved_parent)
+                    found = False
+                    for item in items:
+                        if item.get("path") == parent_portable:
+                            if "stems" not in item:
+                                item["stems"] = []
+                            # Ajouter le stem s'il n'est pas déjà présent
+                            if portable_path not in item["stems"]:
+                                item["stems"].append(portable_path)
+                            found = True
+                            break
+                    
+                    if found:
+                        with open(LOCAL_LIB_FILE, "w", encoding="utf-8") as f:
+                            json.dump(items, f, indent=4)
+                        logging.info(f"[RECORDINGS] Stem {portable_path} ajouté avec succès au morceau parent {parent_portable}")
+                        
+                        # Mettre aussi à jour airstep_meta.json s'il existe dans le dossier stems
+                        meta_path = os.path.join(resolved_parent, "airstep_meta.json")
+                        if os.path.exists(meta_path):
+                            try:
+                                with open(meta_path, "r", encoding="utf-8") as mf:
+                                    meta_data = json.load(mf)
+                                if "stems" not in meta_data:
+                                    meta_data["stems"] = []
+                                if portable_path not in meta_data["stems"]:
+                                    meta_data["stems"].append(portable_path)
+                                with open(meta_path, "w", encoding="utf-8") as mf:
+                                    json.dump(meta_data, mf, indent=4)
+                            except Exception as me:
+                                logging.error(f"[RECORDINGS] Échec écriture airstep_meta.json : {me}")
+                                
+                        # Recharger la bibliothèque côté manager
+                        if library_manager:
+                            library_manager.load_library()
+            except Exception as le:
+                logging.error(f"[RECORDINGS] Erreur lors de l'ajout du stem à la bibliothèque : {le}")
+                
+        return {"status": "ok", "path": portable_path, "filename": filename, "is_stem_addition": is_stem_addition}
     except Exception as e:
         logging.error(f"[RECORDINGS] Erreur sauvegarde: {e}")
         raise HTTPException(status_code=500, detail=str(e))

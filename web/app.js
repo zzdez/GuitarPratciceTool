@@ -683,11 +683,32 @@ async function restartGuitarStream() {
             }
         };
         if (deviceId) {
-            constraints.audio.deviceId = { exact: deviceId };
+            constraints.audio.deviceId = { ideal: deviceId };
         }
 
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        let stream = null;
+        try {
+            stream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (mediaErr) {
+            console.warn("[REC] restartGuitarStream advanced constraints failed, falling back to basic audio source:", mediaErr);
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            } catch (basicErr) {
+                console.error("[REC] restartGuitarStream failed completely. No input device active:", basicErr);
+                showToast("Aucun périphérique d'entrée audio fonctionnel n'a été détecté. Veuillez brancher votre carte son ou micro.", "error");
+                localStorage.removeItem("rec_device_id");
+                return;
+            }
+        }
         window.guitarStream = stream;
+
+        // Initialize AudioContext if not active
+        if (!audioCtx) {
+            initAudioContext();
+        }
+        if (audioCtx.state === 'suspended') {
+            await audioCtx.resume();
+        }
 
         if (recGuitarSource) {
             try { recGuitarSource.disconnect(); } catch(e) {}
@@ -699,6 +720,11 @@ async function restartGuitarStream() {
         if (recAnalyser) {
             try { recAnalyser.disconnect(); } catch(e) {}
             recGuitarSource.connect(recAnalyser);
+        } else {
+            recAnalyser = audioCtx.createAnalyser();
+            recAnalyser.fftSize = 256;
+            recGuitarSource.connect(recAnalyser);
+            startMonitoringVisualizer();
         }
 
         // Reconnecter les canaux
@@ -863,9 +889,7 @@ function reconnectGuitarChannels() {
 
 async function handleAudioInputDeviceChange(deviceId) {
     localStorage.setItem("rec_device_id", deviceId);
-    if (window.guitarStream) {
-        await restartGuitarStream();
-    }
+    await restartGuitarStream();
 }
 
 function handleAudioInputChannelChange(channel) {
@@ -918,6 +942,16 @@ async function toggleRecordArming() {
         return;
     }
 
+    if (isRecordingSession) {
+        // Si l'enregistrement tourne en arrière-plan, recliquer sur le bouton l'arrête proprement !
+        if (window.isArmedRecordingActive) {
+            stopArmedRecording();
+        } else {
+            stopRecording();
+        }
+        return;
+    }
+
     if (window.isRecordingArmed) {
         // Disarm
         if (window.guitarStream) {
@@ -928,6 +962,7 @@ async function toggleRecordArming() {
         document.querySelectorAll('.control-btn.record-arm').forEach(btn => {
             btn.classList.remove('active', 'recording');
         });
+        removeDynamicRecTrack();
         console.log("[ARMED RECORDING] Disarmed.");
         showToast(t('web.msg_recording_disarmed') || "Enregistrement désarmé.", "info");
     } else {
@@ -950,10 +985,24 @@ async function toggleRecordArming() {
                 }
             };
             if (deviceId) {
-                constraints.audio.deviceId = { exact: deviceId };
+                constraints.audio.deviceId = { ideal: deviceId };
             }
 
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            let stream = null;
+            try {
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+            } catch (mediaErr) {
+                console.warn("[ARMED RECORDING] Advanced constraints failed, falling back to basic audio source:", mediaErr);
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                } catch (basicErr) {
+                    console.error("[ARMED RECORDING] All capture attempts failed:", basicErr);
+                    localStorage.removeItem("rec_device_id");
+                    showToast("Aucun périphérique d'entrée audio fonctionnel détecté. Configuration ouverte...", "error");
+                    openRecordingSettingsDirectly();
+                    return;
+                }
+            }
             window.guitarStream = stream;
 
             // Setup audio graph
@@ -1063,11 +1112,14 @@ async function toggleRecordArming() {
             document.querySelectorAll('.control-btn.record-arm').forEach(btn => {
                 btn.classList.add('active');
             });
+            addDynamicRecTrackIfNeeded('armed');
             console.log("[ARMED RECORDING] Armed successfully.");
             showToast(t('web.msg_recording_armed') || "Enregistrement armé. Lancez la lecture pour démarrer !", "success");
         } catch (err) {
             console.error("Armed recording initialization failed:", err);
-            alert((t('web.msg_recording_error') || "Erreur d'enregistrement : ") + err.message);
+            localStorage.removeItem("rec_device_id");
+            showToast("Aucun périphérique d'entrée audio fonctionnel détecté. Configuration ouverte...", "error");
+            openRecordingSettingsDirectly();
         }
     }
 }
@@ -1102,27 +1154,8 @@ async function startArmedRecording() {
         };
 
         recMediaRecorder.onstop = () => {
-            currentRecordingBlob = new Blob(recChunks, { type: 'audio/webm' });
-            const audioURL = URL.createObjectURL(currentRecordingBlob);
-            const previewPlayer = document.getElementById("rec-preview-player");
-            if (previewPlayer) previewPlayer.src = audioURL;
-
-            // Open the recording modal directly in save/preview mode!
-            const dialog = document.getElementById("modal-recording");
-            if (dialog) {
-                dialog.showModal();
-                document.getElementById("rec-modal-title").innerText = t('web.modal_rec_title') || "Fin de l'Enregistrement";
-                document.getElementById("rec-prepare-container").style.display = "none";
-                document.getElementById("rec-status-container").style.display = "none";
-                document.getElementById("rec-monitoring-container").style.display = "none";
-                document.getElementById("rec-preview-container").style.display = "flex";
-
-                document.getElementById("btn-rec-start").style.display = "none";
-                document.getElementById("btn-rec-stop").style.display = "none";
-                document.getElementById("btn-rec-retry").style.display = "block";
-                document.getElementById("btn-rec-save").style.display = "block";
-                document.getElementById("btn-rec-modal-close").style.display = "block";
-            }
+            const blob = new Blob(recChunks, { type: 'audio/webm' });
+            handleRecordingStop(blob);
         };
 
         recMediaRecorder.start();
@@ -1135,7 +1168,7 @@ async function startArmedRecording() {
         });
 
         // Ajouter la forme d'onde dynamique Reaper-style sur le multipiste si applicable
-        addDynamicRecTrackIfNeeded();
+        addDynamicRecTrackIfNeeded('recording');
 
         recTime = 0;
         recTimerInterval = setInterval(() => {
@@ -1226,10 +1259,24 @@ async function startRecordingWorkflow(playerType) {
             }
         };
         if (deviceId) {
-            constraints.audio.deviceId = { exact: deviceId };
+            constraints.audio.deviceId = { ideal: deviceId };
         }
         
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        let stream = null;
+        try {
+            stream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (mediaErr) {
+            console.warn("[RECORDING] Advanced constraints failed, falling back to basic audio source:", mediaErr);
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            } catch (basicErr) {
+                console.error("[RECORDING] All capture attempts failed:", basicErr);
+                localStorage.removeItem("rec_device_id");
+                showToast("Aucun périphérique d'entrée audio fonctionnel détecté. Configuration ouverte...", "error");
+                openRecordingSettingsDirectly();
+                return;
+            }
+        }
         window.guitarStream = stream;
         
         // 2. Setup Recording UI (Preparation Mode)
@@ -1409,7 +1456,9 @@ async function startRecordingWorkflow(playerType) {
         
     } catch (err) {
         console.error("Recording initialization failed:", err);
-        alert((t('web.msg_recording_error') || "Erreur d'enregistrement : ") + err.message);
+        localStorage.removeItem("rec_device_id");
+        showToast("Aucun périphérique d'entrée audio fonctionnel détecté. Configuration ouverte...", "error");
+        openRecordingSettingsDirectly();
     }
 }
 
@@ -1450,20 +1499,8 @@ async function startRecording() {
         };
         
         recMediaRecorder.onstop = () => {
-            currentRecordingBlob = new Blob(recChunks, { type: 'audio/webm' });
-            const audioURL = URL.createObjectURL(currentRecordingBlob);
-            const previewPlayer = document.getElementById("rec-preview-player");
-            if (previewPlayer) previewPlayer.src = audioURL;
-            
-            document.getElementById("rec-modal-title").innerText = t('web.modal_rec_title') || "Fin de l'Enregistrement";
-            document.getElementById("rec-status-container").style.display = "none";
-            document.getElementById("rec-monitoring-container").style.display = "none";
-            document.getElementById("rec-preview-container").style.display = "flex";
-            
-            document.getElementById("btn-rec-stop").style.display = "none";
-            document.getElementById("btn-rec-retry").style.display = "block";
-            document.getElementById("btn-rec-save").style.display = "block";
-            document.getElementById("btn-rec-modal-close").style.display = "block";
+            const blob = new Blob(recChunks, { type: 'audio/webm' });
+            handleRecordingStop(blob);
         };
         
         // Start playback
@@ -1482,7 +1519,14 @@ async function startRecording() {
         isRecordingSession = true;
         
         // Ajouter la forme d'onde dynamique Reaper-style sur le multipiste si applicable
-        addDynamicRecTrackIfNeeded();
+        addDynamicRecTrackIfNeeded('recording');
+        
+        // Si multipiste, on ferme la modale d'enregistrement pour laisser voir la piste DAW en action !
+        const dialog = document.getElementById("modal-recording");
+        if (dialog && currentActivePlayer === 'multitrack') {
+            dialog.close();
+            showToast(t('web.msg_recording_in_progress') || "Enregistrement en cours... Utilisez les contrôles principaux ou la touche Espace pour l'arrêter.", "info");
+        }
         
         recTime = 0;
         document.getElementById("rec-timer").innerText = "00:00";
@@ -1497,69 +1541,291 @@ async function startRecording() {
         console.error("Recording start failed:", err);
         alert((t('web.msg_recording_error') || "Erreur d'enregistrement : ") + err.message);
     }
-function addDynamicRecTrackIfNeeded() {
-    if (currentActivePlayer === 'multitrack' && window.multitrack) {
+}
+
+function removeDynamicRecTrack() {
+    document.querySelectorAll(".dynamic-rec-track").forEach(el => el.remove());
+    stopMonitoringVisualizer();
+}
+
+function addDynamicRecTrackIfNeeded(forceState) {
+    if (currentActivePlayer !== 'multitrack' || !window.multitrack) return;
+    
+    // Déterminer l'état
+    let state = 'armed';
+    if (forceState) {
+        state = forceState;
+    } else if (isRecordingSession) {
+        state = 'recording';
+    } else if (window.isRecordingArmed) {
+        state = 'armed';
+    } else if (window.guitarPlaybackElement) {
+        state = 'playback';
+    } else {
         removeDynamicRecTrack();
-        
-        const trackHeaders = document.getElementById("multitrack-headers");
-        if (trackHeaders) {
-            const recHeader = document.createElement("div");
-            recHeader.className = "track-header dynamic-rec-track";
-            recHeader.id = "mt-header-rec";
-            recHeader.style.borderLeft = "4px solid #FF4444";
-            recHeader.style.setProperty('border-top', '1px solid #FF4444', 'important');
-            recHeader.style.setProperty('border-bottom', '1px solid #FF4444', 'important');
-            recHeader.style.borderRight = "1px solid #333";
-            recHeader.style.setProperty('border-right', '1px solid #333', 'important');
-            recHeader.style.boxSizing = "border-box";
-            recHeader.style.height = "73px";
-            
-            recHeader.innerHTML = `
-                <div class="track-title-row" style="display:flex; align-items:center; justify-content:space-between; width:100%; margin-bottom: 2px;">
-                    <span class="track-title" style="color:#FF4444; font-weight:bold; display:flex; align-items:center; gap:5px; font-size: 0.85em;">
-                        <span class="rec-blink-dot" style="width:8px; height:8px; background:#FF4444; border-radius:50%; display:inline-block; animation: pulse 1s infinite alternate;"></span>
-                        🔴 ${t('web.tab_recordings') || "Enregistrement"}
-                    </span>
-                </div>
-                <div style="font-size:0.75em; color:#888; margin-top:5px; display:flex; align-items:center; gap:5px;">
-                    <i class="ph ph-waveform" style="color:#FF4444;"></i>
-                    <span>Guitar Input Active</span>
-                </div>
-                <div style="width:100%; background:#222; height:4px; border-radius:2px; margin-top:8px; overflow:hidden;">
-                    <div id="mt-rec-vu" style="width:0%; height:100%; background:#FF4444; transition: width 0.1s ease;"></div>
-                </div>
-            `;
-            trackHeaders.appendChild(recHeader);
-        }
-        
-        const waveformsContainer = document.getElementById("multitrack-waveforms");
-        if (waveformsContainer) {
-            const recWaveform = document.createElement("div");
-            recWaveform.className = "dynamic-rec-track";
-            recWaveform.id = "mt-waveform-rec";
-            recWaveform.style.height = "70px";
-            recWaveform.style.width = "100%";
-            recWaveform.style.background = "#1a1a1a";
-            recWaveform.style.setProperty('border-top', '1px solid #FF4444', 'important');
-            recWaveform.style.setProperty('border-bottom', '1px solid #FF4444', 'important');
-            recWaveform.style.boxSizing = "border-box";
-            recWaveform.style.position = "relative";
-            
-            const recCanvas = document.createElement("canvas");
-            recCanvas.id = "mt-canvas-rec";
-            recCanvas.style.width = "100%";
-            recCanvas.style.height = "100%";
-            recCanvas.style.display = "block";
-            
-            recWaveform.appendChild(recCanvas);
-            waveformsContainer.appendChild(recWaveform);
-            
-            recCanvas.width = recCanvas.offsetWidth || waveformsContainer.offsetWidth || 800;
-            recCanvas.height = 70;
-            
-            clearAndPrepMtCanvas(recCanvas);
-        }
+        return;
     }
+    
+    // Si la piste n'existe pas encore, on la crée
+    let recHeader = document.getElementById("mt-header-rec");
+    let recWaveform = document.getElementById("mt-waveform-rec");
+    const trackHeaders = document.getElementById("multitrack-headers");
+    const waveformsContainer = document.getElementById("multitrack-waveforms");
+    
+    if (!recHeader && trackHeaders) {
+        recHeader = document.createElement("div");
+        recHeader.className = "track-header dynamic-rec-track";
+        recHeader.id = "mt-header-rec";
+        recHeader.style.boxSizing = "border-box";
+        recHeader.style.height = "73px";
+        trackHeaders.appendChild(recHeader);
+    }
+    
+    if (!recWaveform && waveformsContainer) {
+        recWaveform = document.createElement("div");
+        recWaveform.className = "dynamic-rec-track";
+        recWaveform.id = "mt-waveform-rec";
+        recWaveform.style.height = "70px";
+        recWaveform.style.width = "100%";
+        recWaveform.style.boxSizing = "border-box";
+        recWaveform.style.position = "relative";
+        
+        const recCanvas = document.createElement("canvas");
+        recCanvas.id = "mt-canvas-rec";
+        recCanvas.style.width = "100%";
+        recCanvas.style.height = "100%";
+        recCanvas.style.display = "block";
+        
+        recWaveform.appendChild(recCanvas);
+        waveformsContainer.appendChild(recWaveform);
+        
+        recCanvas.width = recCanvas.offsetWidth || waveformsContainer.offsetWidth || 800;
+        recCanvas.height = 70;
+        clearAndPrepMtCanvas(recCanvas);
+    }
+    
+    if (!recHeader) return;
+    
+    // Mettre à jour les bordures selon l'état pour un look ultra premium
+    let borderColor = "#e0a800"; // Jaune pour l'armement
+    if (state === 'recording') borderColor = "#FF4444"; // Rouge pour l'enregistrement
+    if (state === 'playback') borderColor = "#28a745"; // Vert pour la lecture
+    
+    recHeader.style.borderLeft = `4px solid ${borderColor}`;
+    recHeader.style.setProperty('border-top', `1px solid ${borderColor}`, 'important');
+    recHeader.style.setProperty('border-bottom', `1px solid ${borderColor}`, 'important');
+    recHeader.style.setProperty('border-right', '1px solid #333', 'important');
+    
+    if (recWaveform) {
+        recWaveform.style.setProperty('border-top', `1px solid ${borderColor}`, 'important');
+        recWaveform.style.setProperty('border-bottom', `1px solid ${borderColor}`, 'important');
+        recWaveform.style.background = state === 'playback' ? "#142517" : "#1a1a1a";
+    }
+    
+    // Contenu interne selon l'état
+    if (state === 'armed') {
+        const savedGain = localStorage.getItem("rec_gain") || "100";
+        const savedPan = localStorage.getItem("rec_pan") || "0.0";
+        
+        recHeader.innerHTML = `
+            <div class="track-title-row" style="display:flex; align-items:center; justify-content:space-between; width:100%; margin-bottom: 2px;">
+                <span class="track-title" style="color:#e0a800; font-weight:bold; display:flex; align-items:center; gap:5px; font-size: 0.8em;">
+                    <span style="width:8px; height:8px; background:#e0a800; border-radius:50%; display:inline-block; animation: pulse 1s infinite alternate;"></span>
+                    🟡 ARMÉ
+                </span>
+            </div>
+            
+            <!-- Contrôles de Mixage d'Entrée -->
+            <div class="stem-controls" style="display:flex; flex-direction:column; gap:2px; margin-top:2px;">
+                <!-- Volume -->
+                <div style="display:flex; align-items:center; gap:5px; width:100%;">
+                    <i class="ph ph-speaker-high" style="color:#e0a800; font-size:10px;"></i>
+                    <input type="range" id="rng-rec-dyn-vol" min="0" max="200" value="${savedGain}" style="flex:1; height:3px; accent-color:#e0a800; background:#333;" oninput="handleDynRecVolumeChange(this.value)">
+                    <span id="lbl-rec-dyn-vol" style="font-size:9px; color:#aaa; width:22px; text-align:right;">${savedGain}%</span>
+                </div>
+                <!-- Panoramique -->
+                <div style="display:flex; align-items:center; gap:5px; width:100%;">
+                    <i class="ph ph-arrows-left-right" style="color:#e0a800; font-size:10px;"></i>
+                    <input type="range" id="rng-rec-dyn-pan" min="-1" max="1" step="0.1" value="${savedPan}" style="flex:1; height:3px; accent-color:#e0a800; background:#333;" oninput="handleDynRecPanChange(this.value)">
+                    <span id="lbl-rec-dyn-pan" style="font-size:9px; color:#aaa; width:22px; text-align:right;">${formatPanVal(savedPan)}</span>
+                </div>
+            </div>
+            
+            <div style="width:100%; background:#222; height:4px; border-radius:2px; margin-top:3px; overflow:hidden;">
+                <div id="mt-rec-vu" style="width:0%; height:100%; background:#e0a800; transition: width 0.1s ease;"></div>
+            </div>
+        `;
+    } else if (state === 'recording') {
+        const savedGain = localStorage.getItem("rec_gain") || "100";
+        const savedPan = localStorage.getItem("rec_pan") || "0.0";
+        
+        recHeader.innerHTML = `
+            <div class="track-title-row" style="display:flex; align-items:center; justify-content:space-between; width:100%; margin-bottom: 2px;">
+                <span class="track-title" style="color:#FF4444; font-weight:bold; display:flex; align-items:center; gap:5px; font-size: 0.8em;">
+                    <span class="rec-blink-dot" style="width:8px; height:8px; background:#FF4444; border-radius:50%; display:inline-block; animation: pulse 1s infinite alternate;"></span>
+                    🔴 REC...
+                </span>
+            </div>
+            
+            <!-- Contrôles en cours de prise -->
+            <div class="stem-controls" style="display:flex; flex-direction:column; gap:2px; margin-top:2px;">
+                <!-- Volume -->
+                <div style="display:flex; align-items:center; gap:5px; width:100%;">
+                    <i class="ph ph-speaker-high" style="color:#FF4444; font-size:10px;"></i>
+                    <input type="range" id="rng-rec-dyn-vol" min="0" max="200" value="${savedGain}" style="flex:1; height:3px; accent-color:#FF4444; background:#333;" oninput="handleDynRecVolumeChange(this.value)">
+                    <span id="lbl-rec-dyn-vol" style="font-size:9px; color:#aaa; width:22px; text-align:right;">${savedGain}%</span>
+                </div>
+                <!-- Panoramique -->
+                <div style="display:flex; align-items:center; gap:5px; width:100%;">
+                    <i class="ph ph-arrows-left-right" style="color:#FF4444; font-size:10px;"></i>
+                    <input type="range" id="rng-rec-dyn-pan" min="-1" max="1" step="0.1" value="${savedPan}" style="flex:1; height:3px; accent-color:#FF4444; background:#333;" oninput="handleDynRecPanChange(this.value)">
+                    <span id="lbl-rec-dyn-pan" style="font-size:9px; color:#aaa; width:22px; text-align:right;">${formatPanVal(savedPan)}</span>
+                </div>
+            </div>
+            
+            <div style="width:100%; background:#222; height:4px; border-radius:2px; margin-top:3px; overflow:hidden;">
+                <div id="mt-rec-vu" style="width:0%; height:100%; background:#FF4444; transition: width 0.1s ease;"></div>
+            </div>
+        `;
+    } else if (state === 'playback') {
+        const currentPlaybackVol = window.guitarPlaybackGainNode ? Math.round(window.guitarPlaybackGainNode.gain.value * 100) : 100;
+        const currentPlaybackPan = window.guitarPlaybackPanNode ? window.guitarPlaybackPanNode.pan.value : 0;
+        
+        recHeader.innerHTML = `
+            <div class="track-title-row" style="display:flex; align-items:center; justify-content:space-between; width:100%; margin-bottom: 2px;">
+                <span class="track-title" style="color:#28a745; font-weight:bold; display:flex; align-items:center; gap:5px; font-size: 0.8em;">
+                    🟢 Guitare Prise
+                </span>
+                
+                <!-- Boutons d'Action intégrés sur l'en-tête -->
+                <div style="display:flex; gap:3px;">
+                    <button class="control-btn" onclick="saveDynRecTrack()" title="💾 Sauvegarder la prise" style="padding:2px 4px; font-size:10px; background:#28a745; border:none; color:white; border-radius:3px; cursor:pointer; height:18px; display:flex; align-items:center; justify-content:center;">
+                        <i class="ph ph-floppy-disk" style="font-size:11px;"></i>
+                    </button>
+                    <button class="control-btn" onclick="discardDynRecTrack()" title="❌ Supprimer la prise" style="padding:2px 4px; font-size:10px; background:#dc3545; border:none; color:white; border-radius:3px; cursor:pointer; height:18px; display:flex; align-items:center; justify-content:center;">
+                        <i class="ph ph-trash" style="font-size:11px;"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Contrôles de Mixage de Lecture -->
+            <div class="stem-controls" style="display:flex; flex-direction:column; gap:2px; margin-top:4px;">
+                <!-- Volume -->
+                <div style="display:flex; align-items:center; gap:5px; width:100%;">
+                    <i class="ph ph-speaker-high" style="color:#28a745; font-size:10px;"></i>
+                    <input type="range" id="rng-rec-play-vol" min="0" max="200" value="${currentPlaybackVol}" style="flex:1; height:3px; accent-color:#28a745; background:#333;" oninput="handlePlayRecVolumeChange(this.value)">
+                    <span id="lbl-rec-play-vol" style="font-size:9px; color:#aaa; width:22px; text-align:right;">${currentPlaybackVol}%</span>
+                </div>
+                <!-- Panoramique -->
+                <div style="display:flex; align-items:center; gap:5px; width:100%;">
+                    <i class="ph ph-arrows-left-right" style="color:#28a745; font-size:10px;"></i>
+                    <input type="range" id="rng-rec-play-pan" min="-1" max="1" step="0.1" value="${currentPlaybackPan}" style="flex:1; height:3px; accent-color:#28a745; background:#333;" oninput="handlePlayRecPanChange(this.value)">
+                    <span id="lbl-rec-play-pan" style="font-size:9px; color:#aaa; width:22px; text-align:right;">${formatPanVal(currentPlaybackPan)}</span>
+                </div>
+            </div>
+        `;
+    }
+}
+
+function handleDynRecVolumeChange(val) {
+    localStorage.setItem("rec_gain", val);
+    const label = document.getElementById("lbl-rec-dyn-vol");
+    if (label) label.innerText = val + "%";
+    
+    // Mettre à jour le gain Web Audio d'entrée si existant
+    if (recGuitarGain && audioCtx) {
+        recGuitarGain.gain.setValueAtTime(parseFloat(val) / 100, audioCtx.currentTime);
+    }
+}
+
+function handleDynRecPanChange(val) {
+    localStorage.setItem("rec_pan", val);
+    const label = document.getElementById("lbl-rec-dyn-pan");
+    if (label) label.innerText = formatPanVal(val);
+    
+    // Mettre à jour le panner Web Audio d'entrée si existant
+    if (recGuitarPanner && audioCtx) {
+        recGuitarPanner.pan.setValueAtTime(parseFloat(val), audioCtx.currentTime);
+    }
+}
+
+function formatPanVal(val) {
+    const v = parseFloat(val);
+    if (v === 0) return "C";
+    if (v < 0) return "G" + Math.round(Math.abs(v) * 100);
+    return "D" + Math.round(v * 100);
+}
+
+function handlePlayRecVolumeChange(val) {
+    const label = document.getElementById("lbl-rec-play-vol");
+    if (label) label.innerText = val + "%";
+    
+    if (window.guitarPlaybackGainNode && audioCtx) {
+        window.guitarPlaybackGainNode.gain.setValueAtTime(parseFloat(val) / 100, audioCtx.currentTime);
+    }
+}
+
+function handlePlayRecPanChange(val) {
+    const label = document.getElementById("lbl-rec-play-pan");
+    if (label) label.innerText = formatPanVal(val);
+    
+    if (window.guitarPlaybackPanNode && audioCtx) {
+        window.guitarPlaybackPanNode.pan.setValueAtTime(parseFloat(val), audioCtx.currentTime);
+    }
+}
+
+function saveDynRecTrack() {
+    const dialog = document.getElementById("modal-recording");
+    if (dialog) {
+        dialog.showModal();
+        document.getElementById("rec-modal-title").innerText = t('web.modal_rec_title') || "Fin de l'Enregistrement";
+        document.getElementById("rec-prepare-container").style.display = "none";
+        document.getElementById("rec-status-container").style.display = "none";
+        document.getElementById("rec-monitoring-container").style.display = "none";
+        document.getElementById("rec-preview-container").style.display = "flex";
+
+        const destChoice = document.getElementById("rec-destination-choice");
+        if (destChoice) {
+            destChoice.style.display = (currentActivePlayer === 'multitrack') ? "flex" : "none";
+        }
+
+        document.getElementById("btn-rec-start").style.display = "none";
+        document.getElementById("btn-rec-stop").style.display = "none";
+        document.getElementById("btn-rec-retry").style.display = "block";
+        document.getElementById("btn-rec-save").style.display = "block";
+        document.getElementById("btn-rec-modal-close").style.display = "block";
+    }
+}
+
+function discardDynRecTrack() {
+    if (confirm("Voulez-vous vraiment supprimer cette prise ?")) {
+        removeDynamicRecTrack();
+        if (window.guitarPlaybackElement) {
+            try { window.guitarPlaybackElement.pause(); } catch(e) {}
+            window.guitarPlaybackElement = null;
+        }
+        showToast("Enregistrement supprimé.", "info");
+    }
+}
+
+function openRecordingSettingsDirectly() {
+    const dialog = document.getElementById("modal-recording");
+    if (dialog) dialog.showModal();
+    
+    document.getElementById("rec-modal-title").innerText = t('web.lbl_rec_prepare') || "Configuration de l'entrée";
+    document.getElementById("rec-prepare-container").style.display = "flex";
+    document.getElementById("rec-status-container").style.display = "none";
+    document.getElementById("rec-monitoring-container").style.display = "flex";
+    document.getElementById("rec-preview-container").style.display = "none";
+    document.getElementById("rec-saving-indicator").style.display = "none";
+    
+    document.getElementById("btn-rec-start").style.display = "block";
+    document.getElementById("btn-rec-stop").style.display = "none";
+    document.getElementById("btn-rec-retry").style.display = "none";
+    document.getElementById("btn-rec-save").style.display = "none";
+    document.getElementById("btn-rec-modal-close").style.display = "block";
+    
+    loadAudioInputDevices();
 }
 
 function clearAndPrepMtCanvas(canvas) {
@@ -1576,8 +1842,66 @@ function clearAndPrepMtCanvas(canvas) {
     ctx.stroke();
 }
 
-function removeDynamicRecTrack() {
-    document.querySelectorAll(".dynamic-rec-track").forEach(el => el.remove());
+function handleRecordingStop(blob) {
+    currentRecordingBlob = blob;
+    const audioURL = URL.createObjectURL(currentRecordingBlob);
+    
+    // Configurer le preview player de la modale de sauvegarde
+    const previewPlayer = document.getElementById("rec-preview-player");
+    if (previewPlayer) previewPlayer.src = audioURL;
+    
+    if (currentActivePlayer === 'multitrack' && window.multitrack) {
+        // Mode DAW : Pas de modale, mais conversion du stem en piste de lecture verte !
+        if (window.guitarPlaybackElement) {
+            try { window.guitarPlaybackElement.pause(); } catch(e) {}
+        }
+        window.guitarPlaybackElement = new Audio(audioURL);
+        
+        try {
+            if (audioCtx) {
+                window.guitarPlaybackSource = audioCtx.createMediaElementSource(window.guitarPlaybackElement);
+                window.guitarPlaybackGainNode = audioCtx.createGain();
+                window.guitarPlaybackPanNode = audioCtx.createStereoPanner();
+                
+                const savedGain = localStorage.getItem("rec_gain") || "100";
+                const savedPan = localStorage.getItem("rec_pan") || "0.0";
+                window.guitarPlaybackGainNode.gain.setValueAtTime(parseFloat(savedGain) / 100, audioCtx.currentTime);
+                window.guitarPlaybackPanNode.pan.setValueAtTime(parseFloat(savedPan), audioCtx.currentTime);
+                
+                // Correct WebAudio route: Source -> Gain -> Pan -> Destination
+                window.guitarPlaybackSource.connect(window.guitarPlaybackGainNode);
+                window.guitarPlaybackGainNode.connect(window.guitarPlaybackPanNode);
+                window.guitarPlaybackPanNode.connect(audioCtx.destination);
+            }
+        } catch(e) {
+            console.warn("[DAW PLAYBACK] Web Audio routing failed, playing directly:", e);
+        }
+        
+        // Mettre à jour l'UI avec l'état 'playback' (Piste Verte)
+        addDynamicRecTrackIfNeeded('playback');
+        showToast("Session enregistrée ! Prise chargée dans la piste verte, utilisez Play/Pause/Espace pour l'écouter.", "success");
+        
+    } else {
+        // Mode classique (non-multipiste) : ouvrir la modale directement
+        const dialog = document.getElementById("modal-recording");
+        if (dialog) {
+            dialog.showModal();
+            document.getElementById("rec-modal-title").innerText = t('web.modal_rec_title') || "Fin de l'Enregistrement";
+            document.getElementById("rec-prepare-container").style.display = "none";
+            document.getElementById("rec-status-container").style.display = "none";
+            document.getElementById("rec-monitoring-container").style.display = "none";
+            document.getElementById("rec-preview-container").style.display = "flex";
+
+            const destChoice = document.getElementById("rec-destination-choice");
+            if (destChoice) destChoice.style.display = "none";
+
+            document.getElementById("btn-rec-start").style.display = "none";
+            document.getElementById("btn-rec-stop").style.display = "none";
+            document.getElementById("btn-rec-retry").style.display = "block";
+            document.getElementById("btn-rec-save").style.display = "block";
+            document.getElementById("btn-rec-modal-close").style.display = "block";
+        }
+    }
 }
 
 function startMonitoringVisualizer() {
@@ -1753,11 +2077,19 @@ async function saveRecording() {
             targetFormat = getActiveMediaFormat();
         }
         
+        const currentItem = localFiles[window.currentPlayingIndex];
+        const isStemAddition = (currentActivePlayer === 'multitrack' && document.getElementById("rad-rec-dest-stems")?.checked);
+        
         const formData = new FormData();
         const filename = `Jam_${timeFormattedForFile()}.${targetFormat}`;
         formData.append("file", currentRecordingBlob, filename);
         
-        const response = await fetch(`/api/local/recordings?target_format=${targetFormat}`, {
+        let url = `/api/local/recordings?target_format=${targetFormat}`;
+        if (isStemAddition && currentItem && currentItem.path) {
+            url += `&parent_multitrack_path=${encodeURIComponent(currentItem.path)}`;
+        }
+        
+        const response = await fetch(url, {
             method: "POST",
             body: formData
         });
@@ -1767,17 +2099,29 @@ async function saveRecording() {
         const result = await response.json();
         
         if (result.status === "ok") {
-            const importResponse = await fetch("/api/local/add_by_path", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ path: result.path })
-            });
-            
-            if (importResponse.ok) {
+            if (isStemAddition) {
+                // Ajouté en tant que stem, recharger le multipiste actuel
                 await loadLocalFiles();
-                showToast(t('web.msg_recording_success') || "Enregistrement ajouté avec succès !", "success");
+                showToast("Nouvelle prise ajoutée en tant que Stem au multipiste !", "success");
+                
+                // Recharger le lecteur multipiste immédiatement pour faire entendre la guitare intégrée !
+                if (typeof playLocal === 'function' && window.currentPlayingIndex !== undefined) {
+                    playLocal(window.currentPlayingIndex);
+                }
             } else {
-                throw new Error("Library import failed");
+                // Sauvegarde classique dans l'applet recordings (bibliothèque)
+                const importResponse = await fetch("/api/local/add_by_path", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ path: result.path })
+                });
+                
+                if (importResponse.ok) {
+                    await loadLocalFiles();
+                    showToast(t('web.msg_recording_success') || "Enregistrement ajouté avec succès !", "success");
+                } else {
+                    throw new Error("Library import failed");
+                }
             }
         } else {
             throw new Error(result.message || "Unknown server error");
@@ -1788,7 +2132,14 @@ async function saveRecording() {
     } finally {
         document.getElementById("btn-rec-retry").disabled = false;
         document.getElementById("btn-rec-save").disabled = false;
+        
+        // Nettoyer la prise temporaire puisque la prise finale est maintenant intégrée ou sauvegardée
         removeDynamicRecTrack();
+        if (window.guitarPlaybackElement) {
+            try { window.guitarPlaybackElement.pause(); } catch(e) {}
+            window.guitarPlaybackElement = null;
+        }
+        
         const dialog = document.getElementById("modal-recording");
         if (dialog) dialog.close();
     }
@@ -8241,6 +8592,15 @@ async function playLocal(index) {
             updatePlayPauseUI();
             saveMultitrackSettings(file);
 
+            // Synchroniser le démarrage de la guitare enregistrée
+            if (window.guitarPlaybackElement) {
+                const ws = window.multitrack.wavesurfers[0];
+                if (ws) {
+                    window.guitarPlaybackElement.currentTime = ws.getCurrentTime();
+                }
+                window.guitarPlaybackElement.play().catch(e => {});
+            }
+
             // Re-apply playback rate to all WebAudio instances upon playback
             // (WebAudio bufferNodes are recreated on play and default back to 1.0)
             const rateStr = document.getElementById("btn-multitrack-speed").innerText.replace("x", "");
@@ -8252,6 +8612,11 @@ async function playLocal(index) {
         window.multitrack.on('pause', () => {
             updatePlayPauseUI();
             saveMultitrackSettings(file); // Save exact stop time
+            
+            // Suspendre la guitare enregistrée
+            if (window.guitarPlaybackElement) {
+                window.guitarPlaybackElement.pause();
+            }
         });
 
         window.multitrack.on('finish', () => {
@@ -10850,6 +11215,8 @@ function updatePlayPauseIcon(type, isPlaying) {
         // --- ARMED RECORDING TRIGGER ---
         if (window.isArmedRecordingActive) {
             stopArmedRecording();
+        } else if (isRecordingSession) {
+            stopRecording();
         }
     }
 
@@ -11293,6 +11660,43 @@ setInterval(() => {
         if (window.currentAutoreplay === true && player && player.getPlayerState() === YT.PlayerState.ENDED) {
              // YT state logic handles replay, but we need to catch the "end" event in the interval if needed
              // Actually, YT onStateChange might be better for "End of media"
+        }
+    }
+
+    // Synchronisation en temps réel de la lecture de la guitare enregistrée
+    if (window.guitarPlaybackElement) {
+        if (currentActivePlayer === 'multitrack' && window.multitrack) {
+            const ws = window.multitrack.wavesurfers[0];
+            if (ws) {
+                const mtTime = ws.getCurrentTime();
+                const isMtPlaying = window.multitrack.isPlaying();
+                
+                // Synchroniser la vitesse (playbackRate)
+                const rateStr = document.getElementById("btn-multitrack-speed")?.innerText.replace("x", "") || "1.0";
+                const rate = parseFloat(rateStr) || 1.0;
+                if (window.guitarPlaybackElement.playbackRate !== rate) {
+                    window.guitarPlaybackElement.playbackRate = rate;
+                }
+                
+                // Synchroniser play/pause
+                if (isMtPlaying && window.guitarPlaybackElement.paused) {
+                    window.guitarPlaybackElement.currentTime = mtTime;
+                    window.guitarPlaybackElement.play().catch(e => {});
+                } else if (!isMtPlaying && !window.guitarPlaybackElement.paused) {
+                    window.guitarPlaybackElement.pause();
+                }
+                
+                // Synchroniser le temps s'il y a un décalage > 80ms
+                const diff = Math.abs(window.guitarPlaybackElement.currentTime - mtTime);
+                if (diff > 0.08) {
+                    window.guitarPlaybackElement.currentTime = mtTime;
+                }
+            }
+        } else {
+            // Si l'utilisateur a changé de morceau, on coupe et on nettoie proprement
+            try { window.guitarPlaybackElement.pause(); } catch(e) {}
+            window.guitarPlaybackElement = null;
+            removeDynamicRecTrack();
         }
     }
 
