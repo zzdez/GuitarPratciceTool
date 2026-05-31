@@ -1544,14 +1544,22 @@ async function startRecording() {
 }
 
 function removeDynamicRecTrack() {
-    document.querySelectorAll(".dynamic-rec-track").forEach(el => el.remove());
-    const spacer = document.getElementById("mt-spacer-rec");
-    if (spacer) spacer.remove();
+    // Multipiste
+    document.querySelectorAll("#mt-header-rec, #mt-waveform-rec, #mt-spacer-rec").forEach(el => el.remove());
+    
+    // Audio Standard
+    const audioRec = document.getElementById("audio-rec-display-row");
+    if (audioRec) audioRec.style.display = "none";
+    
+    // Vidéo Locale
+    const videoRec = document.getElementById("video-rec-display-row");
+    if (videoRec) videoRec.style.display = "none";
+    
     stopMonitoringVisualizer();
 }
 
 function addDynamicRecTrackIfNeeded(forceState) {
-    if (currentActivePlayer !== 'multitrack' || !window.multitrack) return;
+    if (currentActivePlayer === 'youtube') return;
     
     // Déterminer l'état
     let state = 'armed';
@@ -1568,60 +1576,95 @@ function addDynamicRecTrackIfNeeded(forceState) {
         return;
     }
     
-    // Si la piste n'existe pas encore, on la crée
-    let recHeader = document.getElementById("mt-header-rec");
-    let recWaveform = document.getElementById("mt-waveform-rec");
-    const trackHeaders = document.getElementById("multitrack-headers");
-    const waveformsContainer = document.getElementById("multitrack-waveforms");
+    let recHeader = null;
+    let recWaveform = null;
+    let recCanvas = null;
+    let suffix = '';
     
-    if (trackHeaders) {
-        let recSpacer = document.getElementById("mt-spacer-rec");
-        if (!recSpacer) {
-            recSpacer = document.createElement("div");
-            recSpacer.id = "mt-spacer-rec";
-            recSpacer.className = "dynamic-rec-track";
-            recSpacer.style.height = "20px";
-            recSpacer.style.width = "100%";
-            recSpacer.style.boxSizing = "border-box";
-            recSpacer.style.borderTop = "1px solid #333";
-            recSpacer.style.background = "transparent";
-            trackHeaders.appendChild(recSpacer);
+    if (currentActivePlayer === 'multitrack' && window.multitrack) {
+        suffix = '-mt';
+        // Si la piste n'existe pas encore, on la crée
+        let recHeaderEl = document.getElementById("mt-header-rec");
+        let recWaveformEl = document.getElementById("mt-waveform-rec");
+        const trackHeaders = document.getElementById("multitrack-headers");
+        const waveformsContainer = document.getElementById("multitrack-waveforms");
+        
+        if (trackHeaders) {
+            let recSpacer = document.getElementById("mt-spacer-rec");
+            if (!recSpacer) {
+                recSpacer = document.createElement("div");
+                recSpacer.id = "mt-spacer-rec";
+                recSpacer.className = "dynamic-rec-track";
+                recSpacer.style.height = "20px";
+                recSpacer.style.width = "100%";
+                recSpacer.style.boxSizing = "border-box";
+                recSpacer.style.borderTop = "1px solid #333";
+                recSpacer.style.background = "transparent";
+                trackHeaders.appendChild(recSpacer);
+            }
+            
+            if (!recHeaderEl) {
+                recHeaderEl = document.createElement("div");
+                recHeaderEl.className = "track-header dynamic-rec-track";
+                recHeaderEl.id = "mt-header-rec";
+                recHeaderEl.style.boxSizing = "border-box";
+                recHeaderEl.style.height = "70px";
+                trackHeaders.appendChild(recHeaderEl);
+            }
         }
         
-        if (!recHeader) {
-            recHeader = document.createElement("div");
-            recHeader.className = "track-header dynamic-rec-track";
-            recHeader.id = "mt-header-rec";
-            recHeader.style.boxSizing = "border-box";
-            recHeader.style.height = "70px";
-            trackHeaders.appendChild(recHeader);
+        if (!recWaveformEl && waveformsContainer) {
+            recWaveformEl = document.createElement("div");
+            recWaveformEl.className = "dynamic-rec-track";
+            recWaveformEl.id = "mt-waveform-rec";
+            recWaveformEl.style.height = "70px";
+            recWaveformEl.style.width = "100%";
+            recWaveformEl.style.boxSizing = "border-box";
+            recWaveformEl.style.position = "relative";
+            
+            const canvas = document.createElement("canvas");
+            canvas.id = "mt-canvas-rec";
+            canvas.style.width = "100%";
+            canvas.style.height = "100%";
+            canvas.style.display = "block";
+            
+            recWaveformEl.appendChild(canvas);
+            waveformsContainer.appendChild(recWaveformEl);
+            
+            canvas.width = canvas.offsetWidth || waveformsContainer.offsetWidth || 800;
+            canvas.height = 70;
+            clearAndPrepMtCanvas(canvas);
         }
-    }
-    
-    if (!recWaveform && waveformsContainer) {
-        recWaveform = document.createElement("div");
-        recWaveform.className = "dynamic-rec-track";
-        recWaveform.id = "mt-waveform-rec";
-        recWaveform.style.height = "70px";
-        recWaveform.style.width = "100%";
-        recWaveform.style.boxSizing = "border-box";
-        recWaveform.style.position = "relative";
         
-        const recCanvas = document.createElement("canvas");
-        recCanvas.id = "mt-canvas-rec";
-        recCanvas.style.width = "100%";
-        recCanvas.style.height = "100%";
-        recCanvas.style.display = "block";
-        
-        recWaveform.appendChild(recCanvas);
-        waveformsContainer.appendChild(recWaveform);
-        
-        recCanvas.width = recCanvas.offsetWidth || waveformsContainer.offsetWidth || 800;
-        recCanvas.height = 70;
-        clearAndPrepMtCanvas(recCanvas);
+        recHeader = document.getElementById("mt-header-rec");
+        recWaveform = document.getElementById("mt-waveform-rec");
+        recCanvas = document.getElementById("mt-canvas-rec");
+    } else if (currentActivePlayer === 'waveform') {
+        suffix = '-audio';
+        const displayRow = document.getElementById("audio-rec-display-row");
+        if (displayRow) displayRow.style.display = "flex";
+        recHeader = document.getElementById("audio-rec-header");
+        recWaveform = document.getElementById("audio-rec-waveform");
+        recCanvas = document.getElementById("audio-canvas-rec");
+    } else if (currentActivePlayer === 'local') {
+        suffix = '-video';
+        const displayRow = document.getElementById("video-rec-display-row");
+        if (displayRow) displayRow.style.display = "flex";
+        recHeader = document.getElementById("video-rec-header");
+        recWaveform = document.getElementById("video-rec-waveform");
+        recCanvas = document.getElementById("video-canvas-rec");
     }
     
     if (!recHeader) return;
+    
+    // Ajuster taille canvas si besoin
+    if (recCanvas) {
+        const parentW = recWaveform.offsetWidth || recWaveform.clientWidth || 800;
+        if (recCanvas.width !== parentW && parentW > 0) {
+            recCanvas.width = parentW;
+            clearAndPrepMtCanvas(recCanvas);
+        }
+    }
     
     // Mettre à jour les bordures selon l'état pour un look ultra premium
     let borderColor = "#e0a800"; // Jaune pour l'armement
@@ -1657,19 +1700,19 @@ function addDynamicRecTrackIfNeeded(forceState) {
                 <!-- Volume -->
                 <div style="display:flex; align-items:center; gap:5px; width:100%;">
                     <i class="ph ph-speaker-high" style="color:#e0a800; font-size:10px;"></i>
-                    <input type="range" id="rng-rec-dyn-vol" min="0" max="200" value="${savedGain}" style="flex:1; height:3px; accent-color:#e0a800; background:#333;" oninput="handleDynRecVolumeChange(this.value)">
-                    <span id="lbl-rec-dyn-vol" style="font-size:9px; color:#aaa; width:22px; text-align:right;">${savedGain}%</span>
+                    <input type="range" id="rng-rec-dyn-vol${suffix}" min="0" max="200" value="${savedGain}" style="flex:1; height:3px; accent-color:#e0a800; background:#333;" oninput="handleDynRecVolumeChange(this.value)">
+                    <span id="lbl-rec-dyn-vol${suffix}" style="font-size:9px; color:#aaa; width:22px; text-align:right;">${savedGain}%</span>
                 </div>
                 <!-- Panoramique -->
                 <div style="display:flex; align-items:center; gap:5px; width:100%;">
                     <i class="ph ph-arrows-left-right" style="color:#e0a800; font-size:10px;"></i>
-                    <input type="range" id="rng-rec-dyn-pan" min="-1" max="1" step="0.1" value="${savedPan}" style="flex:1; height:3px; accent-color:#e0a800; background:#333;" oninput="handleDynRecPanChange(this.value)">
-                    <span id="lbl-rec-dyn-pan" style="font-size:9px; color:#aaa; width:22px; text-align:right;">${formatPanVal(savedPan)}</span>
+                    <input type="range" id="rng-rec-dyn-pan${suffix}" min="-1" max="1" step="0.1" value="${savedPan}" style="flex:1; height:3px; accent-color:#e0a800; background:#333;" oninput="handleDynRecPanChange(this.value)">
+                    <span id="lbl-rec-dyn-pan${suffix}" style="font-size:9px; color:#aaa; width:22px; text-align:right;">${formatPanVal(savedPan)}</span>
                 </div>
             </div>
             
             <div style="width:100%; background:#222; height:4px; border-radius:2px; margin-top:3px; overflow:hidden;">
-                <div id="mt-rec-vu" style="width:0%; height:100%; background:#e0a800; transition: width 0.1s ease;"></div>
+                <div id="rec-vu${suffix}" style="width:0%; height:100%; background:#e0a800; transition: width 0.1s ease;"></div>
             </div>
         `;
     } else if (state === 'recording') {
@@ -1689,19 +1732,19 @@ function addDynamicRecTrackIfNeeded(forceState) {
                 <!-- Volume -->
                 <div style="display:flex; align-items:center; gap:5px; width:100%;">
                     <i class="ph ph-speaker-high" style="color:#FF4444; font-size:10px;"></i>
-                    <input type="range" id="rng-rec-dyn-vol" min="0" max="200" value="${savedGain}" style="flex:1; height:3px; accent-color:#FF4444; background:#333;" oninput="handleDynRecVolumeChange(this.value)">
-                    <span id="lbl-rec-dyn-vol" style="font-size:9px; color:#aaa; width:22px; text-align:right;">${savedGain}%</span>
+                    <input type="range" id="rng-rec-dyn-vol${suffix}" min="0" max="200" value="${savedGain}" style="flex:1; height:3px; accent-color:#FF4444; background:#333;" oninput="handleDynRecVolumeChange(this.value)">
+                    <span id="lbl-rec-dyn-vol${suffix}" style="font-size:9px; color:#aaa; width:22px; text-align:right;">${savedGain}%</span>
                 </div>
                 <!-- Panoramique -->
                 <div style="display:flex; align-items:center; gap:5px; width:100%;">
                     <i class="ph ph-arrows-left-right" style="color:#FF4444; font-size:10px;"></i>
-                    <input type="range" id="rng-rec-dyn-pan" min="-1" max="1" step="0.1" value="${savedPan}" style="flex:1; height:3px; accent-color:#FF4444; background:#333;" oninput="handleDynRecPanChange(this.value)">
-                    <span id="lbl-rec-dyn-pan" style="font-size:9px; color:#aaa; width:22px; text-align:right;">${formatPanVal(savedPan)}</span>
+                    <input type="range" id="rng-rec-dyn-pan${suffix}" min="-1" max="1" step="0.1" value="${savedPan}" style="flex:1; height:3px; accent-color:#FF4444; background:#333;" oninput="handleDynRecPanChange(this.value)">
+                    <span id="lbl-rec-dyn-pan${suffix}" style="font-size:9px; color:#aaa; width:22px; text-align:right;">${formatPanVal(savedPan)}</span>
                 </div>
             </div>
             
             <div style="width:100%; background:#222; height:4px; border-radius:2px; margin-top:3px; overflow:hidden;">
-                <div id="mt-rec-vu" style="width:0%; height:100%; background:#FF4444; transition: width 0.1s ease;"></div>
+                <div id="rec-vu${suffix}" style="width:0%; height:100%; background:#FF4444; transition: width 0.1s ease;"></div>
             </div>
         `;
     } else if (state === 'playback') {
@@ -1730,14 +1773,14 @@ function addDynamicRecTrackIfNeeded(forceState) {
                 <!-- Volume -->
                 <div style="display:flex; align-items:center; gap:5px; width:100%;">
                     <i class="ph ph-speaker-high" style="color:#28a745; font-size:10px;"></i>
-                    <input type="range" id="rng-rec-play-vol" min="0" max="200" value="${currentPlaybackVol}" style="flex:1; height:3px; accent-color:#28a745; background:#333;" oninput="handlePlayRecVolumeChange(this.value)">
-                    <span id="lbl-rec-play-vol" style="font-size:9px; color:#aaa; width:22px; text-align:right;">${currentPlaybackVol}%</span>
+                    <input type="range" id="rng-rec-play-vol${suffix}" min="0" max="200" value="${currentPlaybackVol}" style="flex:1; height:3px; accent-color:#28a745; background:#333;" oninput="handlePlayRecVolumeChange(this.value)">
+                    <span id="lbl-rec-play-vol${suffix}" style="font-size:9px; color:#aaa; width:22px; text-align:right;">${currentPlaybackVol}%</span>
                 </div>
                 <!-- Panoramique -->
                 <div style="display:flex; align-items:center; gap:5px; width:100%;">
                     <i class="ph ph-arrows-left-right" style="color:#28a745; font-size:10px;"></i>
-                    <input type="range" id="rng-rec-play-pan" min="-1" max="1" step="0.1" value="${currentPlaybackPan}" style="flex:1; height:3px; accent-color:#28a745; background:#333;" oninput="handlePlayRecPanChange(this.value)">
-                    <span id="lbl-rec-play-pan" style="font-size:9px; color:#aaa; width:22px; text-align:right;">${formatPanVal(currentPlaybackPan)}</span>
+                    <input type="range" id="rng-rec-play-pan${suffix}" min="-1" max="1" step="0.1" value="${currentPlaybackPan}" style="flex:1; height:3px; accent-color:#28a745; background:#333;" oninput="handlePlayRecPanChange(this.value)">
+                    <span id="lbl-rec-play-pan${suffix}" style="font-size:9px; color:#aaa; width:22px; text-align:right;">${formatPanVal(currentPlaybackPan)}</span>
                 </div>
             </div>
         `;
@@ -1746,8 +1789,8 @@ function addDynamicRecTrackIfNeeded(forceState) {
 
 function handleDynRecVolumeChange(val) {
     localStorage.setItem("rec_gain", val);
-    const label = document.getElementById("lbl-rec-dyn-vol");
-    if (label) label.innerText = val + "%";
+    document.querySelectorAll("[id^='rng-rec-dyn-vol']").forEach(el => el.value = val);
+    document.querySelectorAll("[id^='lbl-rec-dyn-vol']").forEach(el => el.innerText = val + "%");
     
     // Mettre à jour le gain Web Audio d'entrée si existant
     if (recGuitarGain && audioCtx) {
@@ -1757,8 +1800,8 @@ function handleDynRecVolumeChange(val) {
 
 function handleDynRecPanChange(val) {
     localStorage.setItem("rec_pan", val);
-    const label = document.getElementById("lbl-rec-dyn-pan");
-    if (label) label.innerText = formatPanVal(val);
+    document.querySelectorAll("[id^='rng-rec-dyn-pan']").forEach(el => el.value = val);
+    document.querySelectorAll("[id^='lbl-rec-dyn-pan']").forEach(el => el.innerText = formatPanVal(val));
     
     // Mettre à jour le panner Web Audio d'entrée si existant
     if (recGuitarPanner && audioCtx) {
@@ -1774,8 +1817,8 @@ function formatPanVal(val) {
 }
 
 function handlePlayRecVolumeChange(val) {
-    const label = document.getElementById("lbl-rec-play-vol");
-    if (label) label.innerText = val + "%";
+    document.querySelectorAll("[id^='rng-rec-play-vol']").forEach(el => el.value = val);
+    document.querySelectorAll("[id^='lbl-rec-play-vol']").forEach(el => el.innerText = val + "%");
     
     if (window.guitarPlaybackGainNode && audioCtx) {
         window.guitarPlaybackGainNode.gain.setValueAtTime(parseFloat(val) / 100, audioCtx.currentTime);
@@ -1783,8 +1826,8 @@ function handlePlayRecVolumeChange(val) {
 }
 
 function handlePlayRecPanChange(val) {
-    const label = document.getElementById("lbl-rec-play-pan");
-    if (label) label.innerText = formatPanVal(val);
+    document.querySelectorAll("[id^='rng-rec-play-pan']").forEach(el => el.value = val);
+    document.querySelectorAll("[id^='lbl-rec-play-pan']").forEach(el => el.innerText = formatPanVal(val));
     
     if (window.guitarPlaybackPanNode && audioCtx) {
         window.guitarPlaybackPanNode.pan.setValueAtTime(parseFloat(val), audioCtx.currentTime);
@@ -1867,8 +1910,8 @@ function handleRecordingStop(blob) {
     const previewPlayer = document.getElementById("rec-preview-player");
     if (previewPlayer) previewPlayer.src = audioURL;
     
-    if (currentActivePlayer === 'multitrack' && window.multitrack) {
-        // Mode DAW : Pas de modale, mais conversion du stem en piste de lecture verte !
+    if (currentActivePlayer === 'multitrack' || currentActivePlayer === 'waveform' || currentActivePlayer === 'local') {
+        // Mode DAW & Lecteurs Locaux : Pas de modale immédiate, mais conversion du stem en piste de lecture verte !
         if (window.guitarPlaybackElement) {
             try { window.guitarPlaybackElement.pause(); } catch(e) {}
         }
@@ -1891,12 +1934,12 @@ function handleRecordingStop(blob) {
                 window.guitarPlaybackPanNode.connect(audioCtx.destination);
             }
         } catch(e) {
-            console.warn("[DAW PLAYBACK] Web Audio routing failed, playing directly:", e);
+            console.warn("[PLAYBACK] Web Audio routing failed, playing directly:", e);
         }
         
         // Mettre à jour l'UI avec l'état 'playback' (Piste Verte)
         addDynamicRecTrackIfNeeded('playback');
-        showToast("Session enregistrée ! Prise chargée dans la piste verte, utilisez Play/Pause/Espace pour l'écouter.", "success");
+        showToast("Session enregistrée ! Prise chargée dans la piste verte, utilisez les contrôles principaux pour l'écouter.", "success");
         
     } else {
         // Mode classique (non-multipiste) : ouvrir la modale directement
@@ -1966,51 +2009,74 @@ function startMonitoringVisualizer() {
         // Calcul RMS & mise à jour du mini VU-mètre dans le header d'enregistrement du multipiste
         const rms = Math.sqrt(sumSquares / bufferLength);
         const vuWidth = Math.min(100, Math.round(rms * 250)); // Multiplié pour la réactivité visuelle
-        const vuEl = document.getElementById("mt-rec-vu");
-        if (vuEl) {
-            vuEl.style.width = `${vuWidth}%`;
-        }
         
-        // 2. Dessin en temps réel sur la piste d'enregistrement multitrack (DAW Reaper style)
-        const mtCanvas = document.getElementById("mt-canvas-rec");
-        if (mtCanvas && currentActivePlayer === 'multitrack' && window.multitrack) {
+        let activeVuEl = null;
+        let activeCanvas = null;
+        let mediaTime = null;
+        let duration = 1.0;
+        
+        if (currentActivePlayer === 'multitrack' && window.multitrack) {
+            activeVuEl = document.getElementById("rec-vu-mt");
+            activeCanvas = document.getElementById("mt-canvas-rec");
             const ws = window.multitrack.wavesurfers[0];
             if (ws) {
-                const currentTime = ws.getCurrentTime();
-                const duration = window.multitrack.maxDuration || 1;
-                const ratio = currentTime / duration;
-                
-                // Adapter dynamiquement la largeur interne du canvas si nécessaire sans effacer
-                if (mtCanvas.width !== mtCanvas.offsetWidth && mtCanvas.offsetWidth > 0) {
-                    mtCanvas.width = mtCanvas.offsetWidth;
-                    clearAndPrepMtCanvas(mtCanvas);
-                }
-                
-                // Position X correspondante sur le canvas
-                const targetX = ratio * mtCanvas.width;
-                
-                // Calcul de l'amplitude min/max sur ce buffer
-                let min = 1.0;
-                let max = -1.0;
-                for (let i = 0; i < bufferLength; i++) {
-                    const val = (dataArray[i] - 128) / 128;
-                    if (val < min) min = val;
-                    if (val > max) max = val;
-                }
-                
-                const mtCtx = mtCanvas.getContext("2d");
-                const centerY = mtCanvas.height / 2;
-                const y1 = centerY + min * (mtCanvas.height * 0.45); // la forme d'onde prend max 90% de la hauteur
-                const y2 = centerY + max * (mtCanvas.height * 0.45);
-                
-                // Dessiner le pic vertical
-                mtCtx.strokeStyle = "#FF4444"; // Rouge Reaper
-                mtCtx.lineWidth = 2.5;
-                mtCtx.beginPath();
-                mtCtx.moveTo(targetX, y1);
-                mtCtx.lineTo(targetX, y2);
-                mtCtx.stroke();
+                mediaTime = ws.getCurrentTime();
+                duration = window.multitrack.maxDuration || 1;
             }
+        } else if (currentActivePlayer === 'waveform' && wavesurfer) {
+            activeVuEl = document.getElementById("rec-vu-audio");
+            activeCanvas = document.getElementById("audio-canvas-rec");
+            mediaTime = wavesurfer.getCurrentTime();
+            duration = wavesurfer.getDuration() || 1;
+        } else if (currentActivePlayer === 'local') {
+            activeVuEl = document.getElementById("rec-vu-video");
+            activeCanvas = document.getElementById("video-canvas-rec");
+            const vid = document.getElementById("html5-player");
+            if (vid) {
+                mediaTime = vid.currentTime;
+                duration = vid.duration || 1;
+            }
+        }
+        
+        // Mettre à jour le VU-mètre actif
+        if (activeVuEl) {
+            activeVuEl.style.width = `${vuWidth}%`;
+        }
+        
+        // Dessin de la waveform sur le canvas actif
+        if (activeCanvas && mediaTime !== null && duration > 0) {
+            const ratio = mediaTime / duration;
+            
+            // Adapter dynamiquement la largeur interne du canvas si nécessaire sans effacer
+            if (activeCanvas.width !== activeCanvas.offsetWidth && activeCanvas.offsetWidth > 0) {
+                activeCanvas.width = activeCanvas.offsetWidth;
+                clearAndPrepMtCanvas(activeCanvas);
+            }
+            
+            // Position X correspondante sur le canvas
+            const targetX = ratio * activeCanvas.width;
+            
+            // Calcul de l'amplitude min/max sur ce buffer
+            let min = 1.0;
+            let max = -1.0;
+            for (let i = 0; i < bufferLength; i++) {
+                const val = (dataArray[i] - 128) / 128;
+                if (val < min) min = val;
+                if (val > max) max = val;
+            }
+            
+            const mtCtx = activeCanvas.getContext("2d");
+            const centerY = activeCanvas.height / 2;
+            const y1 = centerY + min * (activeCanvas.height * 0.45); // la forme d'onde prend max 90% de la hauteur
+            const y2 = centerY + max * (activeCanvas.height * 0.45);
+            
+            // Dessiner le pic vertical
+            mtCtx.strokeStyle = "#FF4444"; // Rouge Reaper
+            mtCtx.lineWidth = 2.5;
+            mtCtx.beginPath();
+            mtCtx.moveTo(targetX, y1);
+            mtCtx.lineTo(targetX, y2);
+            mtCtx.stroke();
         }
     }
     
@@ -11688,38 +11754,57 @@ setInterval(() => {
 
     // Synchronisation en temps réel de la lecture de la guitare enregistrée
     if (window.guitarPlaybackElement) {
+        let mediaTime = null;
+        let isPlaying = false;
+        let speedRate = 1.0;
+
         if (currentActivePlayer === 'multitrack' && window.multitrack) {
             const ws = window.multitrack.wavesurfers[0];
             if (ws) {
-                const mtTime = ws.getCurrentTime();
-                const isMtPlaying = window.multitrack.isPlaying();
-                
-                // Synchroniser la vitesse (playbackRate)
+                mediaTime = ws.getCurrentTime();
+                isPlaying = window.multitrack.isPlaying();
                 const rateStr = document.getElementById("btn-multitrack-speed")?.innerText.replace("x", "") || "1.0";
-                const rate = parseFloat(rateStr) || 1.0;
-                if (window.guitarPlaybackElement.playbackRate !== rate) {
-                    window.guitarPlaybackElement.playbackRate = rate;
-                }
-                
-                // Récupérer la latence d'enregistrement configurée pour compenser le décalage à la lecture
-                const latencySeconds = (parseFloat(localStorage.getItem("rec_latency")) || 0) / 1000;
-                
-                // Synchroniser play/pause
-                if (isMtPlaying && window.guitarPlaybackElement.paused) {
-                    window.guitarPlaybackElement.currentTime = mtTime + latencySeconds;
+                speedRate = parseFloat(rateStr) || 1.0;
+            }
+        } else if (currentActivePlayer === 'waveform' && wavesurfer) {
+            mediaTime = wavesurfer.getCurrentTime();
+            isPlaying = wavesurfer.isPlaying();
+            const rateStr = document.getElementById("btn-audio-speed")?.innerText.replace("x", "") || "1.0";
+            speedRate = parseFloat(rateStr) || 1.0;
+        } else if (currentActivePlayer === 'local') {
+            const vid = document.getElementById("html5-player");
+            if (vid) {
+                mediaTime = vid.currentTime;
+                isPlaying = !vid.paused;
+                const rateStr = document.getElementById("btn-video-speed")?.innerText.replace("x", "") || "1.0";
+                speedRate = parseFloat(rateStr) || 1.0;
+            }
+        }
+
+        if (mediaTime !== null) {
+            // Synchroniser la vitesse (playbackRate)
+            if (window.guitarPlaybackElement.playbackRate !== speedRate) {
+                window.guitarPlaybackElement.playbackRate = speedRate;
+            }
+            
+            // Récupérer la latence d'enregistrement configurée pour compenser le décalage à la lecture
+            const latencySeconds = (parseFloat(localStorage.getItem("rec_latency")) || 0) / 1000;
+            
+            // Synchroniser play/pause
+            if (isPlaying && window.guitarPlaybackElement.paused) {
+                window.guitarPlaybackElement.currentTime = mediaTime + latencySeconds;
+                window.guitarLastSeekTime = Date.now();
+                window.guitarPlaybackElement.play().catch(e => {});
+            } else if (!isPlaying && !window.guitarPlaybackElement.paused) {
+                window.guitarPlaybackElement.pause();
+            }
+            
+            // Synchroniser le temps s'il y a un décalage > 80ms (comparé au temps compensé)
+            if (Date.now() - (window.guitarLastSeekTime || 0) > 500) {
+                const diff = Math.abs((window.guitarPlaybackElement.currentTime - latencySeconds) - mediaTime);
+                if (diff > 0.08) {
+                    window.guitarPlaybackElement.currentTime = mediaTime + latencySeconds;
                     window.guitarLastSeekTime = Date.now();
-                    window.guitarPlaybackElement.play().catch(e => {});
-                } else if (!isMtPlaying && !window.guitarPlaybackElement.paused) {
-                    window.guitarPlaybackElement.pause();
-                }
-                
-                // Synchroniser le temps s'il y a un décalage > 80ms (comparé au temps compensé)
-                if (Date.now() - (window.guitarLastSeekTime || 0) > 500) {
-                    const diff = Math.abs((window.guitarPlaybackElement.currentTime - latencySeconds) - mtTime);
-                    if (diff > 0.08) {
-                        window.guitarPlaybackElement.currentTime = mtTime + latencySeconds;
-                        window.guitarLastSeekTime = Date.now();
-                    }
                 }
             }
         } else {
