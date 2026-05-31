@@ -157,10 +157,10 @@
 
             <!-- Custom Video Timeline (Overlay/Below) -->
             <div id="video-timeline-container" class="timeline-row"
-                style="display:none; padding: 0 10px; box-sizing: border-box; background:#121212; position:relative; min-height: 20px; align-items: stretch; margin-bottom: 5px;">
-
+                style="display:none; gap:0; padding: 0 10px; box-sizing: border-box; background:#121212; position:relative; min-height: 20px; align-items: stretch; margin-bottom: 5px;">
+                <div class="timeline-spacer" style="width:200px; flex-shrink:0; background:transparent;"></div>
                 <div id="video-timeline-wrapper" class="timeline-content"
-                    style="background:#1a1a1a; border-radius: 2px; border: 1px solid #333; cursor: crosshair;">
+                    style="flex-grow:1; background:#1a1a1a; border-radius: 2px; border: 1px solid #333; cursor: crosshair; position:relative;">
                     <!-- Progress Bar (legacy/base) -->
                     <div id="video-progress-bar-bg"
                         style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:1; pointer-events:none;">
@@ -201,10 +201,10 @@
             <div id="video-rec-display-row" class="timeline-row dynamic-rec-track"
                 style="display:none; width: 100%; gap:0; padding:0 10px; box-sizing: border-box; align-items: flex-start; margin-top: 10px; margin-bottom: 5px;">
                 <div id="video-rec-header" class="track-header"
-                    style="width:200px; display:flex; flex-direction:column; flex-shrink:0; box-sizing:border-box; height:70px; background:#181818; padding:6px; border-radius:2px 0 0 2px;">
+                    style="width:200px; display:flex; flex-direction:column; flex-shrink:0; box-sizing:border-box; height:76px; background:#181818; padding:6px; border-radius:2px 0 0 2px;">
                     <!-- En-tête injecté via JS -->
                 </div>
-                <div id="video-rec-waveform" style="flex-grow:1; position:relative; background:#1a1a1a; height:70px; border-radius:0 2px 2px 0; overflow:hidden;">
+                <div id="video-rec-waveform" style="flex-grow:1; position:relative; background:#1a1a1a; height:76px; border-radius:0 2px 2px 0; overflow:hidden; box-sizing: border-box;">
                     <canvas id="video-canvas-rec" style="width:100%; height:100%; display:block;"></canvas>
                 </div>
             </div>
@@ -238,9 +238,10 @@
                     </div>
                     <!-- Audio Timeline & Loop Bar Row (NEW) -->
                     <div id="audio-timeline-row" class="timeline-row"
-                        style="display:flex; width: 100%; padding:0 10px; box-sizing: border-box; align-items: stretch; margin-bottom: 5px; min-height: 16px;">
+                        style="display:flex; width: 100%; gap:0; padding:0 10px; box-sizing: border-box; align-items: stretch; margin-bottom: 5px; min-height: 16px;">
+                        <div class="timeline-spacer" style="width:200px; flex-shrink:0; background:transparent;"></div>
                         <div id="audio-timeline-container" class="timeline-content"
-                            style="cursor: crosshair; background: #1a1a1a; border-radius: 2px; border: 1px solid #333;">
+                            style="flex-grow:1; cursor: crosshair; background: #1a1a1a; border-radius: 2px; border: 1px solid #333; position:relative;">
                             <div id="audio-loop-bar" style="width:100%; height:100%; position:relative;">
                                 <!-- Progress Fill -->
                                 <div id="audio-progress-fill"
@@ -261,9 +262,26 @@
                     </div>
 
                     <div id="audio-waveform-row" class="timeline-row"
-                        style="display:flex; width:100%; padding: 0 10px; box-sizing: border-box; height:170px;">
+                        style="display:flex; width:100%; gap:0; padding:0 10px; box-sizing: border-box; align-items: flex-start;">
+                        <div id="audio-play-header" class="track-header"
+                            style="width:200px; display:flex; flex-direction:column; flex-shrink:0; box-sizing:border-box; height:110px; background:#181818; padding:8px; border-radius:2px 0 0 2px; border-left:4px solid var(--accent); border-top:1px solid #333; border-bottom:1px solid #333; border-right:4px solid var(--accent);">
+                            <div class="track-title-row" style="display:flex; align-items:center; justify-content:space-between; width:100%; margin-bottom: 2px;">
+                                <span class="track-title" style="color:var(--accent); font-weight:bold; display:flex; align-items:center; gap:5px; font-size: 0.8em;">
+                                    🎵 LECTURE
+                                </span>
+                            </div>
+                            <!-- Contrôles du Backing Track original -->
+                            <div class="stem-controls" style="display:flex; flex-direction:column; gap:4px; margin-top:6px;">
+                                <!-- Volume Média -->
+                                <div style="display:flex; align-items:center; gap:5px; width:100%;">
+                                    <i class="ph ph-speaker-high" style="color:var(--accent); font-size:10px;"></i>
+                                    <input type="range" id="audio-play-dyn-vol" min="0" max="100" value="100" style="flex:1; height:3px; accent-color:var(--accent); background:#333;" oninput="updateAudioVolume(this.value/100); document.getElementById('audio-volume').value = this.value/100; document.getElementById('audio-volume-percent').innerText = Math.round(this.value) + '%'; syncVolumeToModals(Math.round(this.value));">
+                                    <span id="audio-play-dyn-vol-lbl" style="font-size:9px; color:#aaa; width:22px; text-align:right;">100%</span>
+                                </div>
+                            </div>
+                        </div>
                         <div id="audio-waveform-container" class="timeline-content"
-                            style="height:100%; border: 1px solid #333; border-radius: 2px;">
+                            style="flex-grow:1; height:110px; border-top: 1px solid #333; border-bottom: 1px solid #333; border-right: 1px solid #333; border-radius: 0 2px 2px 0; background:#1a1a1a; position:relative;">
                             <div id="waveform" style="width:100%; height:100%;"></div>
 
                             <!-- A-B LOOP VISUALIZATION FOR AUDIO -->
@@ -286,10 +304,10 @@
                     <div id="audio-rec-display-row" class="timeline-row dynamic-rec-track"
                         style="display:none; width: 100%; gap:0; padding:0 10px; box-sizing: border-box; align-items: flex-start; margin-top: 10px; margin-bottom: 5px;">
                         <div id="audio-rec-header" class="track-header"
-                            style="width:200px; display:flex; flex-direction:column; flex-shrink:0; box-sizing:border-box; height:70px; background:#181818; padding:6px; border-radius:2px 0 0 2px;">
+                            style="width:200px; display:flex; flex-direction:column; flex-shrink:0; box-sizing:border-box; height:76px; background:#181818; padding:6px; border-radius:2px 0 0 2px;">
                             <!-- En-tête injecté via JS -->
                         </div>
-                        <div id="audio-rec-waveform" style="flex-grow:1; position:relative; background:#1a1a1a; height:70px; border-radius:0 2px 2px 0; overflow:hidden;">
+                        <div id="audio-rec-waveform" style="flex-grow:1; position:relative; background:#1a1a1a; height:76px; border-radius:0 2px 2px 0; overflow:hidden; box-sizing: border-box;">
                             <canvas id="audio-canvas-rec" style="width:100%; height:100%; display:block;"></canvas>
                         </div>
                     </div>

@@ -1608,7 +1608,7 @@ function addDynamicRecTrackIfNeeded(forceState) {
                 recHeaderEl.className = "track-header dynamic-rec-track";
                 recHeaderEl.id = "mt-header-rec";
                 recHeaderEl.style.boxSizing = "border-box";
-                recHeaderEl.style.height = "70px";
+                recHeaderEl.style.height = "76px";
                 trackHeaders.appendChild(recHeaderEl);
             }
         }
@@ -1617,7 +1617,7 @@ function addDynamicRecTrackIfNeeded(forceState) {
             recWaveformEl = document.createElement("div");
             recWaveformEl.className = "dynamic-rec-track";
             recWaveformEl.id = "mt-waveform-rec";
-            recWaveformEl.style.height = "70px";
+            recWaveformEl.style.height = "76px";
             recWaveformEl.style.width = "100%";
             recWaveformEl.style.boxSizing = "border-box";
             recWaveformEl.style.position = "relative";
@@ -1632,7 +1632,7 @@ function addDynamicRecTrackIfNeeded(forceState) {
             waveformsContainer.appendChild(recWaveformEl);
             
             canvas.width = canvas.offsetWidth || waveformsContainer.offsetWidth || 800;
-            canvas.height = 70;
+            canvas.height = 76;
             clearAndPrepMtCanvas(canvas);
         }
         
@@ -1674,7 +1674,7 @@ function addDynamicRecTrackIfNeeded(forceState) {
     recHeader.style.borderLeft = `4px solid ${borderColor}`;
     recHeader.style.setProperty('border-top', `1px solid ${borderColor}`, 'important');
     recHeader.style.setProperty('border-bottom', `1px solid ${borderColor}`, 'important');
-    recHeader.style.setProperty('border-right', '1px solid #333', 'important');
+    recHeader.style.setProperty('border-right', `4px solid ${borderColor}`, 'important');
     
     if (recWaveform) {
         recWaveform.style.setProperty('border-top', `1px solid ${borderColor}`, 'important');
@@ -4903,6 +4903,25 @@ function applyWebTheme(theme) {
     document.body.classList.add(`theme-${theme}`);
     const themeDropdown = document.getElementById("setting-theme");
     if (themeDropdown) themeDropdown.value = theme;
+
+    if (wavesurfer && typeof wavesurfer.setOptions === "function") {
+        setTimeout(() => {
+            const rawAccent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#8B5CF6';
+            const hexToRgba = (hex, alpha) => {
+                hex = hex.replace('#', '');
+                if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+                let r = parseInt(hex.substring(0, 2), 16) || 139;
+                let g = parseInt(hex.substring(2, 4), 16) || 92;
+                let b = parseInt(hex.substring(4, 6), 16) || 246;
+                return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+            };
+            wavesurfer.setOptions({
+                waveColor: hexToRgba(rawAccent, 0.25),
+                progressColor: rawAccent,
+                cursorColor: rawAccent
+            });
+        }, 100);
+    }
 }
 
 async function changeWebTheme() {
@@ -6532,11 +6551,34 @@ function closePreviewModal() {
     dialog.style.display = "none"; // FORCE HIDE
 }
 
+function resetRecordingStateOnTrackChange() {
+    console.log("Resetting recording states on track change...");
+    if (isRecordingSession) {
+        try { stopRecording(); } catch (e) {}
+    }
+    if (window.isRecordingArmed) {
+        if (window.guitarStream) {
+            try {
+                window.guitarStream.getTracks().forEach(track => track.stop());
+            } catch (e) {}
+            window.guitarStream = null;
+        }
+        window.isRecordingArmed = false;
+    }
+    document.querySelectorAll('.control-btn.record-arm').forEach(btn => {
+        btn.classList.remove('active', 'recording');
+    });
+    removeDynamicRecTrack();
+}
+
 // --- PLAYER ---
 
 // --- PLAYER CONTROL ---
 function stopAllMedia() {
     console.log("Stopping all media players...");
+    
+    // Réinitialiser proprement l'enregistrement/armement lors de la transition
+    resetRecordingStateOnTrackChange();
     
     // V85: Cleanup orchestrator when stopping all
     if (isSetlistMode && !window.isLiveMode) {
@@ -7305,13 +7347,26 @@ function setMode(mode, targetProfile) {
 }
 function initWaveSurfer() {
     try {
+        const rawAccent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#8B5CF6';
+        const hexToRgba = (hex, alpha) => {
+            hex = hex.replace('#', '');
+            if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+            let r = parseInt(hex.substring(0, 2), 16) || 139;
+            let g = parseInt(hex.substring(2, 4), 16) || 92;
+            let b = parseInt(hex.substring(4, 6), 16) || 246;
+            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        };
+        const dynamicWaveColor = hexToRgba(rawAccent, 0.25);
+        const dynamicProgressColor = rawAccent;
+        const dynamicCursorColor = rawAccent;
+
         wavesurfer = WaveSurfer.create({
             container: '#waveform',
-            waveColor: '#4F4A85',
-            progressColor: '#383351',
+            waveColor: dynamicWaveColor,
+            progressColor: dynamicProgressColor,
             url: null,
-            cursorColor: '#bb86fc',
-            height: 256,
+            cursorColor: dynamicCursorColor,
+            height: 110,
             barWidth: undefined,
             responsive: true,
             normalize: true,
@@ -9252,6 +9307,11 @@ function updateAudioVolume(val) {
     const numVal = parseFloat(val);
     const percentVol = Math.round(numVal * 100);
 
+    const playDynSlider = document.getElementById("audio-play-dyn-vol");
+    if (playDynSlider) playDynSlider.value = percentVol;
+    const playDynLbl = document.getElementById("audio-play-dyn-vol-lbl");
+    if (playDynLbl) playDynLbl.innerText = percentVol + "%";
+
     // Apply physically
     if (wavesurfer && currentActivePlayer === 'waveform') {
         wavesurfer.setVolume(numVal);
@@ -9377,6 +9437,13 @@ function syncVolumeToModals(percentVol) {
         s3.setAttribute('data-initial-value', percentVol);
         const p3 = document.getElementById("mt-modal-volume-percent"); 
         if (p3) p3.innerText = percentVol + "%"; 
+    }
+
+    const playDynSlider = document.getElementById("audio-play-dyn-vol");
+    if (playDynSlider) {
+        playDynSlider.value = percentVol;
+        const playDynLbl = document.getElementById("audio-play-dyn-vol-lbl");
+        if (playDynLbl) playDynLbl.innerText = percentVol + "%";
     }
 }
 
